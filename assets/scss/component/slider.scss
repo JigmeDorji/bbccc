@@ -1,0 +1,174 @@
+.banner{
+    position: relative;
+    overflow: hidden;
+    padding:6.125rem 0 3.125rem 0;
+
+    @media screen and(max-width:767.98px){
+        padding:1.25rem 0;;
+    }
+
+    .shap-01{
+        position: absolute;
+        left: 133px;
+        height: 1000px;
+        width: 100px;
+        background: #d2f8ff;
+        top: -155px;
+        transform: rotate(33deg);
+        z-index:-1;
+
+        @media screen and(max-width:768px){
+            display:none;
+        }
+    }
+
+    .shap-02{
+        position: absolute;
+        left:40%;
+        top:40%;
+        width:200px;
+        height:200px;
+        border:.625rem solid #f2f4ff;
+        z-index:-1;
+        border-radius:50%;
+    }
+
+    .shap-03{
+        position: absolute;
+        top:10%;
+        left:-6.25rem;
+        width:250px;
+        height:250px;
+        border:.625rem solid #f2f4ff;
+        z-index:-1;
+        border-radius:50%;
+
+        @media screen and(max-width:768px){
+            display:none;
+        }
+    }
+
+    .shap{
+        top:0;
+        position: absolute;
+        background:url(../images/shap/shap-01.png) no-repeat;
+        background-position: right;
+        background-size:cover;
+        height:100%;
+        width:100%;
+        z-index:-1;
+    }
+
+    .carousel{
+        position: relative;
+
+        .carousel-indicators{
+            li{
+                height:.625rem;
+                width:.625rem;
+                @include button-color;
+                border-radius:3.125rem;
+                &.active{
+                    background:transparent;
+                    border:.125rem solid $icons-color;
+                }
+            }
+        }
+
+        .carousel-control-prev,.carousel-control-next{
+            opacity:1;
+
+            .carousel-control-prev-icon,.carousel-control-next-icon{
+                position: relative;
+
+                &::before{
+                    position: absolute;
+                    content:"";
+                    height:1.875rem;
+                    width:1.875rem;
+                    left:-.3125rem;
+                    top:-.3125rem;
+                    @include button-color;
+                    z-index:-1;
+                }
+            }
+            
+        }
+
+        .wrapper{
+            display:block;
+            margin:1.25rem 0;
+            padding:1.25rem 0;
+            position: relative;
+
+            @media screen and(max-width:767.98px){
+                margin:0rem;
+            }
+
+            .image{
+                position: relative;
+                z-index:-1;
+            }
+
+            .content{
+                display:block;
+                margin:1.25rem 0;
+
+                h1{
+                    font-size:2.5rem;
+                    color:$heading-color;
+                    letter-spacing:.0625rem;
+                    text-transform:uppercase;
+                    font-weight:800;
+                    margin:.3125rem 0rem 1.25rem 0rem;
+                    line-height:3.125rem;
+
+                    @media screen and(max-width:767.98px){
+                        font-size:1.875rem;
+                        line-height:2.375rem;
+                        margin:.3125rem 0;
+                    }
+
+                    span{
+                        color:$icons-color;
+                    }
+                }
+
+                p{
+                    font-size:1.125rem;
+                    color:#737373;
+                    line-height:1.75rem;
+                    margin:.3125rem 0 1.25rem 0;
+                    text-align:justify;
+                    letter-spacing:.3px;
+                    margin-bottom:1.25rem;
+                    text-transform:capitalize;
+
+                    @media screen and(max-width:767.98px){
+                        font-size:1rem;
+                    }
+                }
+
+                a{
+                    color:$color-primary;
+                    font-size: .9375rem;
+                    padding:.625rem 1.125rem;
+                    @include button-color;
+                    display:inline-block;
+                    text-transform:capitalize;
+                    position: relative;
+                    border-radius:.3125rem;
+                    border:0;
+                    border-bottom:.125rem solid $icons-color;
+                    margin:.625rem 0;
+
+                    @media screen and(max-width:767.98px){
+                        display:block;
+                        width:fit-content;
+                        margin:0 auto;
+                    }
+                }
+            }
+        }
+    }
+}

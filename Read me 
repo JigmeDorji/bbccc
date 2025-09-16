@@ -1,0 +1,12 @@
+Deployment Instructions:
+•	Step 1 : Copy and paste entire folder with name  “restWebsite” in www directory in your local WampServer.
+•	Step 2 : Locate and open the config file with name “config.php” inside directory “restWebsite/include”.
+•	Step 3 : Change “$DB_USER” and “$DB_PASSWORD” as per local database and save it.
+•	Step 4 : Run the database script with file name “dbScript.sql” locate in directory “restWebsite” into your database server.
+•	Step 5 : Go to the browser and type url http://localhost:63342/restWebsite and you will see the website.
+
+
+Admin login Credentials:
+    Admin Username: admin
+    Admin Password: 1234
+

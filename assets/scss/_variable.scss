@@ -1,0 +1,52 @@
+$color-primary:#fff;
+$text-primary:#666666;
+$icons-color:#07249e;
+$heading-color:#232323;
+$background-color:#000000;
+
+@import url(https://fonts.googleapis.com/css2?family=Poppins:wght@200;300;400;500;600;800&display=swap);
+@mixin button-color {
+    background: linear-gradient(180deg, rgba(7,36,158,1) 45%, rgba(6,71,207,1) 87%);
+}
+
+@mixin heading-line{
+    display:block;
+    margin:1.25rem 0;
+    transition: all ease .3s;
+    position: relative;
+    text-align: center;
+}
+
+@mixin h2 {
+    font-size:1.25rem;
+    color:$heading-color;
+    text-transform:uppercase;
+    font-weight:600;
+    letter-spacing:.4px;
+    padding-bottom:.3125rem;
+    position: relative;
+    white-space: nowrap;
+    display:block;
+    width:fit-content;
+    margin:0 auto;
+
+    &::before{
+        position: absolute;
+        content:"";
+        right:-2.375rem;
+        bottom:.8125rem;
+        height:.5rem;
+        width:20%;
+        background:$icons-color;
+        clear: both;
+    }
+}
+
+@mixin same-content {
+    display:block;
+    margin:1.25rem 0;
+    position: relative;
+    transition:all ease .3s;
+    width:100%;
+    
+}
