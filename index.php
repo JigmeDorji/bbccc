@@ -39,375 +39,442 @@ try {
 }
 
 
-
-
 ?>
 <!doctype html>
 <html lang="en">
 
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>To</title>
-    <link rel="stylesheet" href="assets/css/bootstrap.min.css">
-    <link rel="stylesheet" href="assets/font/flaticon.css">
-    <link rel="stylesheet" href="assets/css/plugins/owl.carousel.min.css">
-    <link rel="stylesheet" href="assets/css/style.css"/>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title>Trading || Home 1</title>
+    <meta name="description" content="">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <?php
+    include_once 'include/global_css.php'
+    ?>
+<style>
+    /* Styling for the unique single image container */
+    .about_single_image {
+        position: relative;
+        width: 90%; /* Adjust width as needed */
+        height: 400px; /* Fixed height for consistent look */
+        margin: 30px auto; /* Center the image and provide some vertical space */
+        overflow: hidden;
+        border-radius: 10px; /* Soften the corners */
+        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2); /* Stronger shadow for depth */
+        transform: rotate(-5deg); /* Rotate the image container */
+        transition: transform 0.5s ease-in-out;
+    }
 
+    .about_single_image:hover {
+        transform: rotate(0deg) scale(1.02); /* Straighten and slightly enlarge on hover */
+    }
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-    <style>
-        .feature-card {
-            border: 1px solid #e0e0e0;
-            border-radius: 12px;
-            padding: 30px;
-            text-align: center;
-            transition: 0.3s;
-            height: 100%;
-        }
-        .feature-card:hover {
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
-        }
-        .feature-icon {
-            font-size: 2rem;
-            color: #6610f2;
-            margin-bottom: 15px;
-        }
-        .feature-title {
-            font-weight: 600;
-            font-size: 1.1rem;
-            margin-bottom: 10px;
-        }
-        .feature-desc {
-            color: #6c757d;
-            font-size: 0.95rem;
-        }
+    .about_single_image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover; /* Ensure image covers the area */
+        display: block;
+        transform: rotate(5deg); /* Counter-rotate the image to appear straight inside the rotated container */
+        transition: transform 0.5s ease-in-out;
+    }
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        body {
-            font-family: 'Poppins', sans-serif;
-            background-color: #f5f7fa;
-            color: #1f1f1f;
-        }
-        .contact-wrapper {
-            max-width: 1200px;
-            margin: 60px auto;
-            padding: 20px;
-            display: flex;
-            gap: 40px;
-            flex-wrap: wrap;
-        }
-        .contact-left, .contact-right {
-            background: #fff;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
-            flex: 1 1 450px;
-        }
-        .contact-left h3,
-        .contact-right h3 {
-            margin-bottom: 24px;
-            font-weight: 600;
-            font-size: 24px;
-        }
-        .contact-info p {
-            margin: 12px 0;
-            line-height: 1.6;
-        }
-        .contact-info p span {
-            display: block;
-            font-weight: 500;
-            margin-bottom: 4px;
-        }
-        .social-icons {
-            margin-top: 20px;
-        }
-        .social-icons a {
-            margin-right: 15px;
-            text-decoration: none;
-            font-size: 18px;
-            color: #333;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        .form-row {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-        }
-        .form-group input,
-        .form-group textarea {
+    .about_single_image:hover img {
+        transform: rotate(0deg); /* Straighten image on container hover */
+    }
+
+    /* Responsive adjustments */
+    @media screen and (max-width: 767px) {
+        .about_single_image {
             width: 100%;
-            padding: 14px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 14px;
-            font-family: inherit;
-            background-color: #f9f9f9;
+            height: 300px;
+            margin: 20px 0;
+            transform: rotate(0deg); /* Disable rotation on smaller screens for better fit */
         }
-        .form-group textarea {
-            resize: none;
-            min-height: 120px;
+        .about_single_image:hover {
+            transform: scale(1.02);
         }
-        .btn-submit {
-            padding: 12px 30px;
-            background-color: #3661eb;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            font-weight: 500;
-            font-size: 16px;
-            cursor: pointer;
-            transition: 0.3s;
+        .about_single_image img {
+            transform: rotate(0deg);
         }
-        .btn-submit:hover {
-            background-color: #264ec9;
-        }
-        .section-title {
-            text-align: center;
-            margin-top: 60px;
-        }
-        .section-title h2 {
-            font-size: 32px;
-            margin-bottom: 10px;
-        }
-        .section-title p {
-            font-size: 14px;
-            color: #666;
-        }
-    </style>
-
-
+    }
+</style>
 </head>
 <!-- =================Body Started==================== -->
 <body>
-<!-- *********************************************************** -->
-<!-- //////////////////////header-started/////////////////////// -->
+
+<!--[if lt IE 8]>
+<p class="browserupgrade">You are using an <strong>outdated</strong> browser. Please <a href="http://browsehappy.com/">upgrade
+    your browser</a> to improve your experience.</p>
+<![endif]-->
+
 <?php
 include_once 'include/nav.php'
 ?>
-<!-- //////////////////////header-End/////////////////////// -->
-<!-- ====================================================== -->
-<!-- //////////////////////Main-Started/////////////////////// -->
-<main>
 
-    <section class="banner">
-        <div class="shap"></div>
-        <div class="shap-01"></div>
-        <div class="shap-02"></div>
-        <div class="shap-03"></div>
-        <div id="carouselExampleCaptions" class="carousel slide" data-ride="carousel">
-            <ol class="carousel-indicators">
-                <li data-target="#carouselExampleCaptions" data-slide-to="0" class="active"></li>
-                <li data-target="#carouselExampleCaptions" data-slide-to="1"></li>
-            </ol>
-            <div class="carousel-inner">
-                <!-- First Banner -->
-                <div class="carousel-item active">
-                    <div class="container">
-                        <div class="row">
-                            <div class="col-md-6 col-12">
-                                <div class="wrapper">
-                                    <div class="content">
-                                        <h1><?php echo $banners[0]['title']; ?></h1>
-                                        <p><?php echo $banners[0]['subtitle']; ?></p>
-                                        <a href="contact-us.php">Get Started</a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6 col-12">
-                                <div class="wrapper">
-                                    <div class="image">
-                                        <img src="<?php echo $banners[0]['imgUrl']; ?>">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- Second Banner -->
-                <div class="carousel-item">
-                    <div class="container">
-                        <div class="row">
-                            <div class="col-md-6 col-12">
-                                <div class="wrapper">
-                                    <div class="content">
-                                        <h1><?php echo $banners[1]['title']; ?> </h1>
-                                        <p><?php echo $banners[1]['subtitle']; ?></p>
-                                        <a href="order.php">Order now</a>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6 col-12">
-                                <div class="wrapper">
-                                    <div class="image">
-                                        <img src="<?php echo $banners[1]['imgUrl']; ?>">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <a class="carousel-control-prev" href="#carouselExampleCaptions" role="button" data-slide="prev">
-                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                <span class="sr-only">Previous</span>
-            </a>
-            <a class="carousel-control-next" href="#carouselExampleCaptions" role="button" data-slide="next">
-                <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                <span class="sr-only">Next</span>
-            </a>
-        </div>
-    </section>
-    <!-- ====================================================== -->
-    <!-- ====================================================== -->
 
-    <section class="main-menu py-5">
+<!--Start nav  area -->
+<div class="nav_areas hidden-lg hidden-md">
+    <div class="mobile-menu">
         <div class="container">
-            <div class="text-center mb-5">
-                <h2 class="fw-bold">Our Services</h2>
-                <p class="text-muted">Explore our high-quality, customizable, and regularly updated offerings.</p>
+            <div class="row">
+                <!--nav area-->
+                <div class="col-sm-12 col-xs-12">
+                    <!--  nav menu-->
+                    <nav class="menu">
+                        <ul>
+                            <li><a href="index.html">Home</a>
+                                <ul>
+                                    <li><a href="index-2.html">Home 2</a></li>
+                                </ul>
+                            </li>
+                            <li><a href="about-us.html">About</a></li>
+                            <li><a href="service.html">Service</a></li>
+                            <li><a href="portfolio-grid.html">Project</a>
+                                <ul>
+                                    <li><a href="portfolio-grid.html">Portfolio Grid</a></li>
+                                    <li><a href="portfolio-3column.html">Portfolio 3Column</a></li>
+                                    <li><a href="single-portfolio.html">Single Portfolio</a></li>
+                                </ul>
+                            </li>
+                            <li><a href="team-grid.html">Team</a>
+                                <ul>
+                                    <li><a href="team-grid.html">All Team Member</a></li>
+                                    <li><a href="team-3column.html">Team 3 Column</a></li>
+                                </ul>
+                            </li>
+                            <li><a href="blog.html">Blogs</a>
+                                <ul>
+                                    <li><a href="blog-left-sidebar.html">Blog Left Sidebar</a></li>
+                                    <li><a href="blog-right-sidebar.html">Blog Right Sidebar</a></li>
+                                    <li><a href="video-audio.html">Blog Video & Audio</a></li>
+                                    <li><a href="single-blog.html">Single Blog</a></li>
+                                </ul>
+
+                            </li>
+
+                            <li><a href="contact-us.html">Contact</a></li>
+                        </ul>
+                    </nav>
+                    <!--end  nav menu-->
+                </div>
             </div>
+        </div>
+    </div>
 
-            <div class="container py-5">
-                <div class="row g-4">
+</div>
+<!--end nav area-->
 
-                    <div class="col-md-4 mb-3">
-                        <div class="feature-card">
-                            <div class="feature-icon"><i class="bi bi-bar-chart"></i></div>
-                            <div class="feature-title">Company & Project Registration</div>
-                            <div class="feature-desc">Secure onboarding for your business and its projects.
-                                Design: Icon on the left, heading and short description on the right, in a card layout.
+
+<!-- slider-area start -->
+<section class="main-slider-area" id="home">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="slider">
+                <div id="mainSlider" class="nivoSlider slider-image">
+                    <img src="bbccassests/img/slider/ParoTaktsang.png" alt="main slider" title="#htmlcaption1"/>
+                    <img src="bbccassests/img/slider/shutterstock_687060394-scaled.jpg" alt="main slider"
+                         title="#htmlcaption2"/>
+                    <img src="bbccassests/img/slider/jekhempo%20and%20king.jpg" alt="main slider"
+                         title="#htmlcaption3"/>
+                </div>
+
+                <!-- Slide 1 -->
+                <div id="htmlcaption1" class="nivo-html-caption slider-caption-1">
+                    <div class="slide1-text">
+                        <div class="middle-text margin_left">
+                            <div class="cap-title wow slideInRight" data-wow-duration="1.1s" data-wow-delay="0s">
+                                <h2><span class="no-p-laft">Bhutanese Buddhist & Cultural Centre</span></h2>
+                            </div>
+                            <div class="cap-title ctitle1 wow slideInRight" data-wow-duration="2s" data-wow-delay="0s">
+                                <h3><span class="no-p-laft">Serving the Bhutanese Community in Canberra</span></h3>
+                            </div>
+                            <div class="cap-dec wow slideInRight" data-wow-duration="3s" data-wow-delay="0s">
+                                <p>BBCC provides spiritual and pastoral services, rituals, and teachings to Bhutanese
+                                    residents in Canberra and nearby NSW towns, fostering unity, identity, and harmony.
+                                    These services are open to all interested individuals.</p>
+                            </div>
+                            <div class="cap-readmore wow bounceInUp smore" data-wow-duration="3s" data-wow-delay="1s">
+                                <a href="about-us.php" class="actice-button">Learn More</a> <a href="contact-us.php">Contact Us</a>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <div class="col-md-4 mb-3">
-                        <div class="feature-card">
-                            <div class="feature-icon"><i class="bi bi-layers"></i></div>
-                            <div class="feature-title">Expense Management</div>
-                            <div class="feature-desc">Record, categorize, and analyze expenses by project.
-                                Design: Use an icon and a small chart/graph placeholder next to the text.
+                <!-- Slide 2 -->
+                <div id="htmlcaption2" class="nivo-html-caption slider-caption-1">
+                    <div class="slide1-text text-center">
+                        <div class="middle-text">
+                            <div class="cap-title wow zoomIn" data-wow-duration=".9s" data-wow-delay=".5s">
+                                <h3><span>Preserving Bhutanese Identity & Culture</span></h3>
+                            </div>
+                            <div class="cap-dec wow zoomIn" data-wow-duration="1.1s" data-wow-delay=".5s">
+                                <p>BBCC offers weekly Bhutanese language and cultural classes for children, regular
+                                    Dharma teachings, TARA practice, and Doenchoe sessions to preserve our unique
+                                    heritage within the ACT’s diverse community.</p>
+                            </div>
+                            <div class="cap-readmore wow zoomIn smore" data-wow-duration="1.5s" data-wow-delay=".5s">
+                                <a href="#">Get Started</a>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <div class="col-md-4 mb-3">
-                        <div class="feature-card">
-                            <div class="feature-icon"><i class="bi bi-layout-text-sidebar"></i></div>
-                            <div class="feature-title">Financial Reporting</div>
-                            <div class="feature-desc">Real-time financial dashboards and exportable reports.
-                                Design: Showcase a card with a mock dashboard or graph preview.</div>
-                        </div>
-                    </div>
-
-                    <div class="col-md-4 mb-3">
-                        <div class="feature-card">
-                            <div class="feature-icon"><i class="bi bi-lightning-charge"></i></div>
-                            <div class="feature-title">User Roles & Access Control</div>
-                            <div class="feature-desc">Define roles (Admin, Manager, Staff) with custom access.
-                                Design: Use a roles icon and a UI preview of permission toggles.
+                <!-- Slide 3 -->
+                <div id="htmlcaption3" class="nivo-html-caption slider-caption-1">
+                    <div class="slide1-text">
+                        <div class="middle-text margin_left">
+                            <div class="cap-title wow slideInRight" data-wow-duration="1.1s" data-wow-delay="0s">
+                                <h2><span class="no-p-laft">Building the Future</span></h2>
+                            </div>
+                            <div class="cap-title ctitle1 wow slideInRight" data-wow-duration="2s" data-wow-delay="0s">
+                                <h3><span class="no-p-laft">A Bhutanese Temple in Canberra</span></h3>
+                            </div>
+                            <div class="cap-dec wow slideInRight" data-wow-duration="3s" data-wow-delay="0s">
+                                <p>BBCC plans to establish a Bhutanese Temple in Canberra as a vibrant centre for
+                                    ceremonies, meditation, counselling, and cultural activities, promoting wellbeing
+                                    and spiritual guidance for the community.</p>
+                            </div>
+                            <div class="cap-readmore wow bounceInUp smore" data-wow-duration="3s" data-wow-delay="1s">
+                                <a href="#" class="actice-button">Learn More</a> <a href="#">Contact Us</a>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <div class="col-md-4 mb-3">
-                        <div class="feature-card">
-                            <div class="feature-icon"><i class="bi bi-sliders"></i></div>
-                            <div class="feature-title">Multi-Project Switching</div>
-                            <div class="feature-desc">Seamlessly switch between projects with role-based access.
-                                Design: Add a dropdown-style mock UI showing project switching.
-                            </div>
-                        </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- slider-area end -->
+
+
+<!-- FEATURE AREA  -->
+<div class="feature_area home_2">
+    <div class="container">
+        <div class="row">
+            <!-- SECTION  TITLE  -->
+            <div class="col-md-12">
+                <div class="section_title">
+                    <h2>What We <span>Do ?</span></h2>
+                    <img src="bbccassests/img/logo/line-2.png" alt="" />
+                    <p>BBCC provides spiritual and pastoral services, rituals, and teachings to Bhutanese residents in Canberra.</p>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <!-- SINGLE FEATURE ITEM  -->
+            <div class="col-md-4 col-sm-6 col-xs-12">
+                <div class="single_feature">
+                    <div class="feature_icon">
+                        <i class="fa fa-truck "></i>
                     </div>
-
-                    <div class="col-md-4 mb-3">
-                        <div class="feature-card">
-                            <div class="feature-icon"><i class="bi bi-arrow-clockwise"></i></div>
-                            <div class="feature-title">Timeline View</div>
-                            <div class="feature-desc">View project spending across a timeline or phase-wise.
-                                Design: Add a horizontal timeline UI or Gantt-style preview.</div>
-                        </div>
+                    <div class="feature_content">
+                        <h3>Spiritual Services</h3>
+                        <p>Offering private household rituals, group teachings, meditation sessions, and Dharma
+                            teachings to support the spiritual wellbeing of our community members.</p>
                     </div>
-
+                </div>
+            </div>
+            <!-- SINGLE FEATURE ITEM  -->
+            <div class="col-md-4 col-sm-6 col-xs-12">
+                <div class="single_feature">
+                    <div class="feature_icon">
+                        <i class="fa fa-heartbeat "></i>
+                    </div>
+                    <div class="feature_content">
+                        <h3>Cultural Preservation</h3>
+                        <p>Weekly Bhutanese language and cultural classes, TARA practice, and Doenchoe sessions to preserve and promote Bhutanese identity within the ACT community.</p>
+                    </div>
+                </div>
+            </div>
+            <!-- SINGLE FEATURE ITEM  -->
+            <div class="col-md-4 col-sm-6 col-xs-12">
+                <div class="single_feature">
+                    <div class="feature_icon">
+                        <i class="fa fa-code "></i>
+                    </div>
+                    <div class="feature_content">
+                        <h3>Community Events</h3>
+                        <p>Organizing ceremonies, rituals, and religious practices on important Buddhist days, fostering unity, harmony, and a supportive community environment.</p>
+                    </div>
                 </div>
             </div>
 
         </div>
-    </section>
+    </div>
+</div>
 
 
-    <section class="bg-001">
-        <div class="container">
-            <div class="section-title">
-                <h2>Let’s Stay Connected</h2>
-                <p>It is a long-established fact that meaningful connections drive innovation. Reach out to explore how we can craft strategic tech solutions tailored to your business.</p>
-            </div>
-
-            <div class="contact-wrapper">
-
-                <!-- Contact Info Left -->
-                <div class="contact-left">
-                    <div class="contact-info">
-                        <p><span>Email Address</span>tobgaytechstrat@gmail.com</p>
-                        <p><span>Office Location</span>76/A, Babesa, Thimphu, Bhutan</p>
-                        <p><span>Phone Number</span>+975 8754 3433 223</p>
-                        <p><span>Skype Email</span>example@yourmail.com</p>
-                        <p><span>Social Media</span></p>
-                        <div class="social-icons">
-                            <a href="#"><strong>f</strong></a>
-                            <a href="#"><strong>t</strong></a>
-                            <a href="#"><strong>in</strong></a>
-                            <a href="#"><strong>Behance</strong></a>
-                        </div>
-                    </div>
+<!-- ABOUT AREA  -->
+<div class="about_area" id="about">
+    <div class="container">
+        <div class="row">
+            <!-- Left Side: Skills / Focus Areas -->
+            <div class="col-md-6">
+                <div class="about_single_image">
+                    <img src="bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png" alt="Beautiful view of Bhutan" />
                 </div>
-
-                <!-- Contact Form Right -->
-                <div class="contact-right">
-                    <form action="contact-us.php" method="POST">
-                        <div class="form-row">
-                            <div class="form-group" style="flex: 1;">
-                                <input type="text" name="name" placeholder="Full name" required>
-                            </div>
-                            <div class="form-group" style="flex: 1;">
-                                <input type="email" name="email" placeholder="Email address" required>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group" style="flex: 1;">
-                                <input type="text" name="phone" placeholder="Phone number">
-                            </div>
-                            <div class="form-group" style="flex: 1;">
-                                <input type="text" name="subject" placeholder="Subject">
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <textarea name="message" placeholder="Message"></textarea>
-                        </div>
-                        <button type="submit" class="btn-submit">Send Message</button>
-                    </form>
+            </div>
+            <!-- Right Side: About BBCC -->
+            <div class="col-md-6">
+                <div class="about_history">
+                    <h3>About <span>BBCC</span></h3>
+                    <h4>Serving the Bhutanese Community in Canberra</h4>
+                    <p>The Bhutanese Buddhist and Cultural Centre (BBCC) is dedicated to providing spiritual guidance,
+                        cultural preservation, and pastoral support to Bhutanese residents in Canberra and nearby NSW
+                        towns. Our focus is on fostering unity, harmony, and the preservation of Bhutanese identity
+                        within a diverse community.</p>
+                    <p class="about_pra_2">BBCC offers weekly language and cultural classes for children, regular Dharma
+                        teachings, meditation sessions, and special programs such as TARA practice and Doenchoe. These
+                        services nurture spiritual growth, provide support during life’s challenges, and build a vibrant
+                        Bhutanese community in the ACT.</p>
+                </div>
+                <div class="read_more_btn">
+                    <a href="about-us.php">Read More</a>
                 </div>
             </div>
         </div>
-    </section>
+    </div>
+</div>
+
+<!-- BLOG AREA -->
+<div class="blog_area" id="blog">
+    <div class="container">
+        <div class="row">
+            <!-- SECTION  TITLE  -->
+            <div class="col-md-12">
+                <div class="section_title">
+                    <h2>Upcoming <span>Events</span></h2>
+                    <img src="bbccassests/img/logo/line-1.png" alt=""/>
+                    <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut
+                        labore et dolo magna</p>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <!-- SINGLE BLOG ITEM  -->
+            <div class="col-md-6">
+                <div class="single_blog">
+                    <div class="blog_thumb">
+                        <a href="single-blog.html">
+                            <img src="bbccassests/img/blog/3.jpg" alt=""/>
+                        </a>
+                    </div>
+                    <!-- BLOG CONTENT -->
+                    <div class="blog_content">
+                        <div class="content_title">
+                            <h3><a href="single-blog.html">Learnig and installation</a></h3>
+                        </div>
+                        <div class="blog_post_meta">
+                            <span class="meta_date"><i class="fa fa-calendar-o "></i>05 Jun 2017</span>
+                            <span class="meta_like"><i class="fa fa-comment"></i>240</span>
+                            <span class="meta_comments"><i class="fa fa-tag"></i>400</span>
+                        </div>
+                        <div class="blog_desc">
+                            <p>Lorem ipsum dolor sit amet, consectetur adip elit, sed do eiusmod tempor incididunt loren
+                                labore et dolore magna aliqua. Ut enim asan minim veniam, quis nostrud </p>
+                        </div>
+                        <div class="blog_readmore">
+                            <a href="single-blog.html">Read More</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- SINGLE BLOG ITEM  -->
+            <div class="col-md-6">
+                <div class="single_blog">
+                    <div class="blog_thumb">
+                        <a href="single-blog.html">
+                            <img src="bbccassests/img/blog/4.jpg" alt=""/>
+                        </a>
+                    </div>
+                    <!-- BLOG CONTENT -->
+                    <div class="blog_content">
+                        <div class="content_title">
+                            <h3><a href="single-blog.html">Wiring and installation</a></h3>
+                        </div>
+                        <div class="blog_post_meta">
+                            <span class="meta_date"><i class="fa fa-calendar-o "></i>05 Jun 2017</span>
+                            <span class="meta_like"><i class="fa fa-comment"></i>240</span>
+                            <span class="meta_comments"><i class="fa fa-tag"></i>400</span>
+                        </div>
+                        <div class="blog_desc">
+                            <p>Lorem ipsum dolor sit amet, consectetur adip elit, sed do eiusmod tempor incididunt loren
+                                labore et dolore magna aliqua. Ut enim asan minim veniam, quis nostrud </p>
+                        </div>
+                        <div class="blog_readmore">
+                            <a href="single-blog.html">Read More</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- SINGLE BLOG ITEM  -->
+            <div class="col-md-6">
+                <div class="single_blog">
+                    <div class="blog_thumb">
+                        <a href="single-blog.html">
+                            <img src="bbccassests/img/blog/2.jpg" alt=""/>
+                        </a>
+                    </div>
+                    <!-- BLOG CONTENT -->
+                    <div class="blog_content">
+                        <div class="content_title">
+                            <h3><a href="single-blog.html">Reading and Declaration</a></h3>
+                        </div>
+                        <div class="blog_post_meta">
+                            <span class="meta_date"><i class="fa fa-calendar-o "></i>05 Jun 2017</span>
+                            <span class="meta_like"><i class="fa fa-comment"></i>240</span>
+                            <span class="meta_comments"><i class="fa fa-tag"></i>400</span>
+                        </div>
+                        <div class="blog_desc">
+                            <p>Lorem ipsum dolor sit amet, consectetur adip elit, sed do eiusmod tempor incididunt loren
+                                labore et dolore magna aliqua. Ut enim asan minim veniam, quis nostrud </p>
+                        </div>
+                        <div class="blog_readmore">
+                            <a href="single-blog.html">Read More</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- SINGLE BLOG ITEM  -->
+            <div class="col-md-6">
+                <div class="single_blog">
+                    <div class="blog_thumb">
+                        <a href="single-blog.html">
+                            <img src="img/blog/5.jpg" alt=""/>
+                        </a>
+                    </div>
+                    <!-- BLOG CONTENT -->
+                    <div class="blog_content">
+                        <div class="content_title">
+                            <h3><a href="single-blog.html">Loren and installation</a></h3>
+                        </div>
+                        <div class="blog_post_meta">
+                            <span class="meta_date"><i class="fa fa-calendar-o "></i>05 Jun 2017</span>
+                            <span class="meta_like"><i class="fa fa-comment"></i>240</span>
+                            <span class="meta_comments"><i class="fa fa-tag"></i>400</span>
+                        </div>
+                        <div class="blog_desc">
+                            <p>Lorem ipsum dolor sit amet, consectetur adip elit, sed do eiusmod tempor incididunt loren
+                                labore et dolore magna aliqua. Ut enim asan minim veniam, quis nostrud </p>
+                        </div>
+                        <div class="blog_readmore">
+                            <a href="single-blog.html">Read More</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 
+<!-- FOOTER AREA  -->
+<?php include_once 'include/footer.php'; ?>
 
-</main>
-<!-- //////////////////////Main-End/////////////////////// -->
-<!-- ====================================================== -->
-<!-- //////////////////////Footer-Started/////////////////////// -->
-<?php
-include_once 'include/footer.php'
-?>
-<!-- *********************************************************** -->
+<?php include_once 'include/global_js.php'; ?>
+
 </body>
 <!-- =================Body End==================== -->

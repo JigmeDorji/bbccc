@@ -85,77 +85,313 @@ if ($userName && $password) {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Restaurant Login</title>
-    <link rel="stylesheet" href="https://unpkg.com/bootstrap@5.3.2/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://unpkg.com/bs-brain@2.0.3/components/logins/login-5/assets/css/login-5.css">
-    <link rel="stylesheet" href="assets/font/flaticon.css">
-    <link rel="stylesheet" href="assets/css/plugins/owl.carousel.min.css">
-    <link rel="stylesheet" href="assets/css/style.css" />
+    <title>Login</title>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --primary-color: #2D67F2;
+            --text-color: #1a202c;
+            --secondary-text-color: #718096;
+            --border-color: #e2e8f0;
+            --background-color: #f7fafc;
+            --card-background: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+
+        .login-container {
+            display: flex;
+            width: 100%;
+            max-width: 100%;
+            background-color: var(--card-background);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .login-form-container {
+            flex: 1;
+            padding: 4rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .form-content {
+            margin-bottom: 2rem;
+        }
+
+        .login-form-container h2 {
+            font-size: 2.25rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .login-form-container p {
+            color: var(--secondary-text-color);
+            font-size: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .input-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(45, 103, 242, 0.2);
+        }
+
+        .form-options {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.875rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .remember-me {
+            display: flex;
+            align-items: center;
+        }
+
+        .remember-me input {
+            width: auto;
+            margin-right: 0.5rem;
+            accent-color: var(--primary-color);
+        }
+
+        .forgot-password {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .login-button {
+            width: 100%;
+            padding: 1rem;
+            background-color: var(--primary-color);
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+
+        .login-button:hover {
+            background-color: #2354cf;
+        }
+
+        .divider {
+            text-align: center;
+            margin: 2rem 0;
+            font-size: 0.875rem;
+            color: var(--secondary-text-color);
+            position: relative;
+        }
+
+        .divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 40%;
+            height: 1px;
+            background-color: var(--border-color);
+        }
+
+        .divider::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: 0;
+            width: 40%;
+            height: 1px;
+            background-color: var(--border-color);
+        }
+
+        .social-login {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .social-button {
+            flex: 1;
+            padding: 0.75rem;
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .social-button:hover {
+            background-color: var(--background-color);
+            border-color: var(--primary-color);
+        }
+
+        .social-button i {
+            font-size: 1.5rem;
+        }
+
+        .signup-link {
+            text-align: center;
+            font-size: 0.875rem;
+            color: var(--secondary-text-color);
+            margin-top: auto;
+        }
+
+        .signup-link a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .login-image-container {
+            flex: 1;
+            background-image: url('bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png');
+            background-size: cover;
+            background-position: center;
+            border-radius: 0 12px 12px 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            align-items: flex-start;
+            padding: 2.5rem;
+            position: relative;
+            color: white;
+        }
+
+        .login-image-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.1));
+            z-index: 1;
+            border-radius: 0 12px 12px 0;
+        }
+
+        .overlay-text {
+            position: relative;
+            z-index: 2;
+        }
+
+        .overlay-text h3 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .overlay-text p {
+            font-size: 1rem;
+            font-weight: 400;
+        }
+
+        @media (max-width: 768px) {
+            .login-container {
+                flex-direction: column;
+                width: 100%;
+                max-width: 450px;
+                border-radius: 12px;
+            }
+            .login-form-container {
+                padding: 2rem 1.5rem;
+            }
+            .login-image-container {
+                display: none;
+            }
+        }
+    </style>
+
+    <?php
+    include_once 'include/global_css.php'
+    ?>
+
+
 </head>
 <body>
-<?php include_once 'include/nav.php' ?>
-<br><br>
-<main>
-    <section class="p-3 p-md-4 p-xl-5">
-        <div class="container">
-            <div class="card border-light-subtle shadow-sm">
-                <div class="row g-0">
-                    <div class="col-12 col-md-6 text-bg-primary">
-                        <div class="d-flex align-items-center justify-content-center h-100">
-                            <div class="col-10 col-xl-8 py-3">
-                                <h3 class="fw-bold text-warning m-0" style="font-family: Tahoma, Geneva, Verdana, sans-serif;">
-                                    Welcome <span class="text-light">Back</span></h3>
-<!--                                <img src="assets/images/logo/banner1.png" alt="Logo">-->
-                                <hr class="border-primary-subtle mb-4">
-                                <p class="lead m-0">Your trusted partner in digital transformation. We engineer smart, scalable, and secure technology solutions to power your business forward.</p>
+
+<?php
+include_once 'include/nav.php'
+?>
+<div class="blog_area section_padding">
+    <div class="container">
+        <div class="login-container">
+            <div class="login-form-container">
+                <div class="form-content">
+                    <h2>Welcome Back</h2>
+                    <p>Please enter your details to sign in.</p>
+
+                    <form action="login.php" method="post">
+                        <div class="input-group">
+
+                            <label for="email">User Name </label>
+                            <input type="text" name="userName" id="userName" placeholder="username" required>
+                        </div>
+                        <div class="input-group">
+                            <label for="password">Password</label>
+                            <input type="password" name="password" id="password" placeholder="••••••••" required>
+                        </div>
+                        <div class="form-options">
+                            <div class="remember-me">
+                                <input type="checkbox" id="remember">
+                                <label for="remember">Remember me</label>
                             </div>
+                            <a href="#" class="forgot-password">Forgot Password?</a>
                         </div>
-                    </div>
-                    <div class="col-12 col-md-6">
-                        <div class="card-body p-3 p-md-4 p-xl-5">
-                            <h3 class="mb-5">Log in</h3>
-                            <form action="login.php" method="post">
-                                <div class="row gy-3 gy-md-4 overflow-hidden">
-                                    <div class="col-12">
-                                        <label for="userName" class="form-label">Username<span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control" name="userName" id="userName" required value="<?= htmlspecialchars($userName ?? '') ?>">
-                                    </div>
-                                    <div class="col-12">
-                                        <label for="password" class="form-label">Password<span class="text-danger">*</span></label>
-                                        <input type="password" class="form-control" name="password" id="password" required>
-                                    </div>
-                                    <div class="col-12">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" name="remember_me" id="remember_me" value="1">
-                                            <label class="form-check-label text-secondary" for="remember_me">
-                                                Keep me logged in
-                                            </label>
-                                        </div>
-                                    </div>
-                                    <div class="col-12">
-                                        <div class="d-grid">
-                                            <button class="btn bsb-btn-xl btn-primary" type="submit">Log in now</button>
-                                        </div>
-                                    </div>
+                        <button type="submit" class="login-button">Sign In</button>
+                    </form>
 
-                                    <?php if (!empty($login_error)) : ?>
-                                        <div class="col-12">
-                                            <div class="alert alert-danger" role="alert">
-                                                Username or password is wrong, please try again!
-                                            </div>
-                                        </div>
-                                    <?php endif; ?>
 
-                                </div>
-                            </form>
-                        </div>
-                    </div>
+                </div>
+
+                <div class="signup-link">
+                    Don't have an account? <a href="#">Sign Up</a>
+                </div>
+            </div>
+
+            <div class="login-image-container">
+                <div class="overlay-text">
+                    <h3>Your Place of Peace</h3>
+                    <p>Find guidance and tranquility within a supportive community dedicated to spiritual growth, meditation, and overall wellbeing.</p>
                 </div>
             </div>
         </div>
-    </section>
-</main>
+    </div>
+    <br> <br> <br> <br> <br> <br> <br> <br> <br>
 
-<?php include_once 'include/footer.php' ?>
+<?php
+include_once 'include/footer.php';
+include_once 'include/global_js.php';
+?>
 </body>
 </html>

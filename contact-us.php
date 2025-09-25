@@ -72,110 +72,8 @@ echo "<script>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>Contact Us</title>
-    <link rel="stylesheet" href="assets/css/bootstrap.min.css">
-    <link rel="stylesheet" href="assets/font/flaticon.css">
-    <link rel="stylesheet" href="assets/css/plugins/owl.carousel.min.css">
-    <link rel="stylesheet" href="assets/css/style.css">
 
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        body {
-            font-family: 'Poppins', sans-serif;
-            background-color: #f5f7fa;
-            color: #1f1f1f;
-        }
-        .contact-wrapper {
-            max-width: 1200px;
-            margin: 60px auto;
-            padding: 20px;
-            display: flex;
-            gap: 40px;
-            flex-wrap: wrap;
-        }
-        .contact-left, .contact-right {
-            background: #fff;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
-            flex: 1 1 450px;
-        }
-        .contact-left h3,
-        .contact-right h3 {
-            margin-bottom: 24px;
-            font-weight: 600;
-            font-size: 24px;
-        }
-        .contact-info p {
-            margin: 12px 0;
-            line-height: 1.6;
-        }
-        .contact-info p span {
-            display: block;
-            font-weight: 500;
-            margin-bottom: 4px;
-        }
-        .social-icons {
-            margin-top: 20px;
-        }
-        .social-icons a {
-            margin-right: 15px;
-            text-decoration: none;
-            font-size: 18px;
-            color: #333;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        .form-row {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-        }
-        .form-group input,
-        .form-group textarea {
-            width: 100%;
-            padding: 14px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            font-size: 14px;
-            font-family: inherit;
-            background-color: #f9f9f9;
-        }
-        .form-group textarea {
-            resize: none;
-            min-height: 120px;
-        }
-        .btn-submit {
-            padding: 12px 30px;
-            background-color: #3661eb;
-            color: #fff;
-            border: none;
-            border-radius: 8px;
-            font-weight: 500;
-            font-size: 16px;
-            cursor: pointer;
-            transition: 0.3s;
-        }
-        .btn-submit:hover {
-            background-color: #264ec9;
-        }
-        .section-title {
-            text-align: center;
-            margin-top: 60px;
-        }
-        .section-title h2 {
-            font-size: 32px;
-            margin-bottom: 10px;
-        }
-        .section-title p {
-            font-size: 14px;
-            color: #666;
-        }
-    </style>
+    <?php include_once 'include/global_css.php'; ?>
 
 </head>
 <body>
@@ -183,76 +81,107 @@ echo "<script>
 <?php include_once 'include/nav.php'; ?>
 
 <main>
-    <section class="abt-01">
+    <div class="hero_brd_area">
+        <div class="container">
+            <div class="hero_content">
+                <h2 class="wow fadeInUp" data-wow-delay="0.3s">Contact Us</h2>
+                <ul class="wow fadeInUp" data-wow-delay="0.5s">
+                    <li><a href="index.html">Home</a></li>
+                    <li>/</li>
+                    <li>Contact Us</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="contact_area contact_us">
         <div class="container">
             <div class="row">
-                <div class="col-12">
-                    <div class="seting">
-                        <h3>Contact Us</h3>
-                        <ol>
-                            <li>Home <i class="flaticon-double-right-arrow"></i></li>
-                            <li>Contact Us</li>
-                        </ol>
+                <div class="col-md-12">
+                    <div class="section_title">
+                        <h2>Our <span>Contact</span></h2>
+                        <img src="img/logo/line-1.png" alt="" />
+                        <p>It is a long-established fact that meaningful connections drive innovation. Reach out to explore how we can craft strategic tech solutions tailored to your business.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <form id="contact-form" action="contact-us.php" method="POST">
+                    <div class="col-md-5">
+                        <div class="contact_form">
+                            <div class="input_boxes">
+                                <input type="text" name="name" placeholder="Full name" required />
+                            </div>
+                            <div class="input_boxes">
+                                <input type="email" name="email" placeholder="Email address" required />
+                            </div>
+                            <div class="input_boxes">
+                                <input type="text" name="phone" placeholder="Phone number" />
+                            </div>
+                            <div class="input_boxes">
+                                <input type="text" name="subject" placeholder="Subject" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-7">
+                        <div class="message_form">
+                            <div class="input_boxes textarea">
+                                <textarea class="message_box" name="message" placeholder="Message"></textarea>
+                            </div>
+                            <button type="submit" class="sbuton">Send Message</button>
+                        </div>
+                    </div>
+                </form>
+                <div class="col-md-12">
+                    <p class="form-messege"></p>
+                </div>
+            </div>
+            <div class="row">
+                <div class="company_information">
+                    <div class="col-md-4">
+                        <div class="single_contact">
+                            <div class="address">
+                                <div class="contact_icon">
+                                    <i class="fa fa-map-marker"></i>
+                                </div>
+                                <div class="address_content">
+                                    <h3>Office Location</h3>
+                                    <p>76/A, Babesa, Thimphu, Bhutan</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="single_contact">
+                            <div class="address">
+                                <div class="contact_icon">
+                                    <i class="fa fa-phone"></i>
+                                </div>
+                                <div class="address_content">
+                                    <h3>Phone Number:</h3>
+                                    <p>+975 8754 3433 223</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="single_contact">
+                            <div class="address">
+                                <div class="contact_icon">
+                                    <i class="fa fa-envelope-o"></i>
+                                </div>
+                                <div class="address_content">
+                                    <h3>Email Address</h3>
+                                    <p>tobgaytechstrat@gmail.com</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-    </section>
-
-    <section class="bg-001">
-        <div class="container">
-            <div class="section-title">
-                <h2>Let’s Stay Connected</h2>
-                <p>It is a long-established fact that meaningful connections drive innovation. Reach out to explore how we can craft strategic tech solutions tailored to your business.</p>
-            </div>
-
-            <div class="contact-wrapper">
-
-                <!-- Contact Info Left -->
-                <div class="contact-left">
-                    <div class="contact-info">
-                        <p><span>Email Address</span>tobgaytechstrat@gmail.com</p>
-                        <p><span>Office Location</span>76/A, Babesa, Thimphu, Bhutan</p>
-                        <p><span>Phone Number</span>+975 8754 3433 223</p>
-                        <p><span>Skype Email</span>example@yourmail.com</p>
-                        <p><span>Social Media</span></p>
-                        <div class="social-icons">
-                            <a href="#"><strong>f</strong></a>
-                            <a href="#"><strong>t</strong></a>
-                            <a href="#"><strong>in</strong></a>
-                            <a href="#"><strong>Behance</strong></a>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Contact Form Right -->
-                <div class="contact-right">
-                    <form action="contact-us.php" method="POST">
-                        <div class="form-row">
-                            <div class="form-group" style="flex: 1;">
-                                <input type="text" name="name" placeholder="Full name" required>
-                            </div>
-                            <div class="form-group" style="flex: 1;">
-                                <input type="email" name="email" placeholder="Email address" required>
-                            </div>
-                        </div>
-                        <div class="form-row">
-                            <div class="form-group" style="flex: 1;">
-                                <input type="text" name="phone" placeholder="Phone number">
-                            </div>
-                            <div class="form-group" style="flex: 1;">
-                                <input type="text" name="subject" placeholder="Subject">
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <textarea name="message" placeholder="Message"></textarea>
-                        </div>
-                        <button type="submit" class="btn-submit">Send Message</button>
-                    </form>
-                </div>
-            </div>
-        </div>
-    </section>
+    </div>
 </main>
 
 <?php include_once 'include/footer.php'; ?>
