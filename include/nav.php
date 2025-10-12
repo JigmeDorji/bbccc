@@ -98,7 +98,7 @@ echo '
                     <!--  nav menu-->
                     <nav class="menu">
                         <ul class="navid">
-                            <li class="current"><a href="index.php">Home</a></li>
+                            <li><a href="index.php">Home</a></li>
                             <li><a href="about-us.php">About</a></li>
                             <li><a href="menuItem.php">Service</a></li>
                           

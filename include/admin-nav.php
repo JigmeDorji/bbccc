@@ -26,7 +26,7 @@ function isCompanyAdmin() {
         <div class="sidebar-brand-icon rotate-n-15">
             <i class="fas fa-building"></i>
         </div>
-        <div class="sidebar-brand-text mx-3">Tobgay Tech Strat</div>
+        <div class="sidebar-brand-text mx-3">Bhutanese Centre</div>
     </a>
 
     <hr class="sidebar-divider my-0">
@@ -41,48 +41,6 @@ function isCompanyAdmin() {
 
     <hr class="sidebar-divider">
 
-    <?php if (isSystemOwner()): ?>
-        <!-- Company Management -->
-        <li class="nav-item">
-            <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseCompany"
-               aria-expanded="true" aria-controls="collapseCompany">
-                <i class="fas fa-building"></i>
-                <span>Company Management</span>
-            </a>
-            <div id="collapseCompany" class="collapse <?= in_array($currentPage, ['companySetup.php', 'projectSetup.php', 'userSetup.php']) ? 'show' : '' ?>">
-                <div class="bg-white py-2 collapse-inner rounded">
-                    <a class="collapse-item <?= ($currentPage == 'companySetup.php') ? 'active' : '' ?>" href="companySetup.php">Create Company</a>
-                    <a class="collapse-item <?= ($currentPage == 'projectSetup.php') ? 'active' : '' ?>" href="projectSetup.php">Setup Project</a>
-                    <a class="collapse-item <?= ($currentPage == 'userSetup.php') ? 'active' : '' ?>" href="userSetup.php">Create User</a>
-                </div>
-            </div>
-        </li>
-    <?php elseif (!isSystemOwner()): ?>
-        <!-- Only User Setup -->
-        <li class="nav-item">
-            <a class="nav-link <?= ($currentPage == 'userSetup.php') ? 'active' : '' ?>" href="userSetup.php">
-                <i class="fas fa-user-cog"></i>
-                <span>User Setup</span>
-            </a>
-        </li>
-    <?php endif; ?>
-
-    <!-- Transaction (Both Roles) -->
-    <li class="nav-item">
-        <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseAccounting"
-           aria-expanded="true" aria-controls="collapseAccounting">
-            <i class="fas fa-book"></i>
-            <span>Transaction</span>
-        </a>
-        <div id="collapseAccounting" class="collapse <?= in_array($currentPage, ['createAccHead.php', 'createSubAccHead.php', 'createJournalEntry.php', 'generateStatement.php']) ? 'show' : '' ?>">
-            <div class="bg-white py-2 collapse-inner rounded">
-                <a class="collapse-item <?= ($currentPage == 'createAccHead.php') ? 'active' : '' ?>" href="createAccHead.php">Create Acc Head</a>
-                <a class="collapse-item <?= ($currentPage == 'createSubAccHead.php') ? 'active' : '' ?>" href="createSubAccHead.php">Create Sub Acc Head</a>
-                <a class="collapse-item <?= ($currentPage == 'createJournalEntry.php') ? 'active' : '' ?>" href="createJournalEntry.php">Transaction Entry</a>
-                <a class="collapse-item <?= ($currentPage == 'generateStatement.php') ? 'active' : '' ?>" href="generateStatement.php">Generate Statement</a>
-            </div>
-        </div>
-    </li>
 
     <?php if (isSystemOwner()): ?>
         <!-- Website Settings -->

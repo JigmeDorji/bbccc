@@ -135,192 +135,31 @@ if (isset($_GET['export']) && $_GET['export'] === 'excel') {
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>Admin Rest</title>
+    <title>Admin</title>
 
     <!-- Custom fonts for this template-->
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
     <!-- Custom styles for this template-->
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
 </head>
+
 <body id="page-top">
+    <div id="wrapper">
+        <?php include_once 'include/admin-nav.php'; ?>
 
-<!-- Page Wrapper -->
-<div id="wrapper">
-    <?php include_once 'include/admin-nav.php'; ?>
-    <div id="content-wrapper" class="d-flex flex-column">
-        <div id="content">
-            <?php include_once 'include/admin-header.php'; ?>
+        <div id="content-wrapper" class="d-flex flex-column">
+            <div id="content">
+                <?php include_once 'include/admin-header.php'; ?>
 
-            <div id="content-wrapper" class="d-flex flex-column">
-                <div id="content">
-                    <?php include_once 'include/admin-header.php'; ?>
-                    <div class="container-fluid">
-                        <div class="container-fluid">
-                            <h1 class="h3 mb-2 text-gray-900">Report</h1>
-                            <div class="row">
-                                <!-- LEFT COLUMN: Compact Table -->
-                                <div class="col-md-7">
-                                    <div class="card shadow mb-4">
-                                        <div class="card-header py-2 bg-info text-white d-flex justify-content-between align-items-center">
-                                            <h6 class="m-0 font-weight-bold">Account Summary</h6>
-                                            <a href="?export=excel" class="btn btn-success btn-sm">
-                                                <i class="fas fa-file-excel"></i> Export Excel
-                                            </a>
-                                        </div>
-                                        <div class="card-body" style="font-size: 13px; max-height: 700px; overflow-y: auto;">
-                                            <table class="table table-sm table-bordered table-hover">
-                                                <thead class="thead-light">
-                                                <tr>
-                                                    <th>Sl.No</th>
-                                                    <th>Particulars</th>
-                                                    <th>Net Value (Nu.)</th>
-                                                    <th>Total (Nu.)</th>
-                                                </tr>
-                                                </thead>
-                                                <tbody>
-                                                <?php
-                                                $sectionLabel = 'A';
-                                                foreach ($groupedReport as $typeName => $items):
-                                                    $isIncome = strtoupper($typeName) === 'INCOME/RECEIPTS';
-                                                    $sectionColor = $isIncome ? 'table-primary' : 'table-danger';
-                                                    $totalColor = $isIncome ? 'table-success' : 'table-warning';
-                                                    ?>
-                                                    <tr class="<?= $sectionColor ?>">
-                                                        <td><?= $sectionLabel ?></td>
-                                                        <td colspan="3"><strong><?= htmlspecialchars($typeName) ?></strong></td>
-                                                    </tr>
-                                                    <?php
-                                                    $i = 1;
-                                                    foreach ($items as $entry): ?>
-                                                        <tr>
-                                                            <td><?= $i++ ?></td>
-                                                            <td><?= htmlspecialchars($entry['name']) ?></td>
-                                                            <td><?= number_format($entry['amount'], 2) ?></td>
-                                                            <td></td>
-                                                        </tr>
-                                                    <?php endforeach; ?>
-                                                    <tr class="<?= $totalColor ?> font-weight-bold">
-                                                        <td colspan="3" class="text-right">Total</td>
-                                                        <td><?= number_format($totals[$typeName], 2) ?></td>
-                                                    </tr>
-                                                    <?php $sectionLabel = chr(ord($sectionLabel) + 1); ?>
-                                                <?php endforeach; ?>
-                                                <!-- Remaining Fund Balance -->
-                                                <tr class="table-info font-weight-bold">
-                                                    <td><?= $sectionLabel ?></td>
-                                                    <td>Remaining Fund Balance</td>
-                                                    <td></td>
-                                                    <td><?= number_format($remaining, 2) ?></td>
-                                                </tr>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- RIGHT COLUMN: Charts stacked -->
-                                <div class="col-md-5">
-                                    <div class="card shadow mb-4">
-                                        <div class="card-header py-2 bg-secondary text-white">
-                                            <h6 class="m-0 font-weight-bold">Income vs Expenses</h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <canvas id="incomeExpenseChart" height="200"></canvas>
-                                        </div>
-                                    </div>
-
-                                    <div class="card shadow mb-4">
-                                        <div class="card-header py-2 bg-secondary text-white">
-                                            <h6 class="m-0 font-weight-bold">Account Head Details</h6>
-                                        </div>
-                                        <div class="card-body">
-                                            <canvas id="detailedBarChart" height="300"></canvas>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <div class="container-fluid">
+                    <!-- Your main content here -->
                 </div>
-                <?php include_once 'include/admin-footer.php'; ?>
             </div>
+
+            <!-- Footer (only once) -->
+            <?php include_once 'include/admin-footer.php'; ?>
         </div>
-        <?php include_once 'include/admin-footer.php'; ?>
     </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js@2.9.4"></script>
-<script>
-    const grouped = <?= json_encode($groupedReport); ?>;
-    const income = <?= $income ?>;
-    const totalExpenses = <?= $totalExpenses ?>;
-    const remaining = <?= $remaining ?>;
-
-    const ctx1 = document.getElementById('incomeExpenseChart').getContext('2d');
-    new Chart(ctx1, {
-        type: 'doughnut',
-        data: {
-            labels: ['Income', 'Expenses', 'Remaining'],
-            datasets: [{
-                data: [
-                    income,
-                    totalExpenses,
-                    remaining
-                ],
-                backgroundColor: ['#28a745', '#dc3545', '#ffc107'],
-                borderWidth: 1
-            }]
-        },
-        options: {
-            title: {
-                display: true,
-                text: 'Income vs Expenses vs Balance'
-            }
-        }
-    });
-
-    // Bar Chart: Combined "Expenses" and "Income"
-    const labels = [];
-    const data = [];
-    const colors = [];
-
-    Object.entries(grouped).forEach(([group, heads]) => {
-        let labelGroup = group;
-        if (group === 'DIRECT EXPENSES' || group === 'INDIRECT EXPENSES') {
-            labelGroup = 'EXPENSES';
-        }
-
-        heads.forEach(entry => {
-            labels.push(entry.name);
-            data.push(entry.amount);
-            colors.push(labelGroup === 'INCOME/RECEIPTS' ? '#007bff' : '#e83e8c'); // blue for income, pink for expenses
-        });
-    });
-
-    const ctx2 = document.getElementById('detailedBarChart').getContext('2d');
-    new Chart(ctx2, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Amount (Nu.)',
-                data: data,
-                backgroundColor: colors
-            }]
-        },
-        options: {
-            title: {
-                display: true,
-                text: 'Account Head Details'
-            },
-            legend: { display: false },
-            scales: {
-                yAxes: [{
-                    ticks: { beginAtZero: true }
-                }]
-            }
-        }
-    });
-</script>
 </body>
+
 </html>

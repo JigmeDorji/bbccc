@@ -32,36 +32,6 @@ require_login();
 <!-- Topbar -->
 <!-- Topbar -->
 <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow pt-4">
-
-    <!-- Centered Company Name and Project Switch -->
-    <div class="mx-auto d-flex flex-column justify-content-center align-items-center">
-
-        <h4 class="m-0 font-weight-light text-primary text-center">
-            <?php echo htmlentities(logged_in_companyName()); ?>
-        </h4>
-
-        <?php if ($_SESSION['role'] === 'Company Admin'): ?>
-            <form action="/include/switch_project.php" method="POST" class="form-inline mt-2">
-                <div class="form-group d-flex align-items-center">
-                    <label for="projectID" class="mr-2 mb-0 small text-primary font-weight-bold">Switch Project:</label>
-                    <select name="projectID" id="projectID" onchange="this.form.submit()" class="form-control form-control-sm">
-                        <?php foreach ($_SESSION['projects'] as $proj): ?>
-                            <option value="<?= $proj['projectID'] ?>" <?= $proj['projectID'] == $_SESSION['projectID'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($proj['projectName']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-            </form>
-        <?php elseif ($_SESSION['role'] === 'Manager' || $_SESSION['role'] === 'Staff'): ?>
-            <div class="mt-2">
-                <span class="small text-primary font-weight-bold">Project:</span>
-                <span class="small"><?= htmlspecialchars($_SESSION['projectName']) ?></span>
-            </div>
-        <?php endif; ?>
-
-    </div>
-
     <!-- Topbar Navbar -->
     <ul class="navbar-nav ml-auto">
         <!-- Nav Item - User Information -->
