@@ -171,56 +171,6 @@ include_once 'include/nav.php'
         <div class="row">
             <div class="slider">
                 <div id="mainSlider" class="nivoSlider slider-image">
-                    <?php foreach ($banners as $index => $banner): ?>
-                        <img src="<?php echo htmlspecialchars($banner['image_path']); ?>" 
-                             alt="main slider" 
-                             title="#htmlcaption<?php echo $index + 1; ?>" />
-                    <?php endforeach; ?>
-                </div>
-
-                <?php foreach ($banners as $index => $banner): ?>
-                    <div id="htmlcaption<?php echo $index + 1; ?>" class="nivo-html-caption slider-caption-1">
-                        <div class="slide1-text <?php echo ($index % 2 == 1) ? 'text-center' : ''; ?>">
-                            <div class="middle-text <?php echo ($index % 2 == 0) ? 'margin_left' : ''; ?>">
-                                <div class="cap-title wow slideInRight" data-wow-duration="1.1s" data-wow-delay="0s">
-                                    <h2><span class="no-p-laft"><?php echo htmlspecialchars($banner['title']); ?></span></h2>
-                                </div>
-                                <?php if (!empty($banner['subtitle'])): ?>
-                                    <div class="cap-title ctitle1 wow slideInRight" data-wow-duration="2s" data-wow-delay="0s">
-                                        <h3><span class="no-p-laft"><?php echo htmlspecialchars($banner['subtitle']); ?></span></h3>
-                                    </div>
-                                <?php endif; ?>
-                                <div class="cap-dec wow slideInRight" data-wow-duration="3s" data-wow-delay="0s">
-                                    <p><?php echo htmlspecialchars($banner['description']); ?></p>
-                                </div>
-                                <div class="cap-readmore wow bounceInUp smore" data-wow-duration="3s" data-wow-delay="1s">
-                                    <?php if (!empty($banner['link1'])): ?>
-                                        <a href="<?php echo htmlspecialchars($banner['link1']); ?>" class="actice-button">Learn More</a>
-                                    <?php endif; ?>
-                                    <?php if (!empty($banner['link2'])): ?>
-                                        <a href="<?php echo htmlspecialchars($banner['link2']); ?>">Contact Us</a>
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-
-            </div>
-        </div>
-    </div>
-</section>
-<!-- slider-area end -->
-
-
-
-
-<!-- slider-area start -->
-<section class="main-slider-area" id="home">
-    <div class="container-fluid">
-        <div class="row">
-            <div class="slider">
-                <div id="mainSlider" class="nivoSlider slider-image">
                     <img src="bbccassests/img/slider/ParoTaktsang.png" alt="main slider" title="#htmlcaption1"/>
                     <img src="bbccassests/img/slider/shutterstock_687060394-scaled.jpg" alt="main slider"
                          title="#htmlcaption2"/>

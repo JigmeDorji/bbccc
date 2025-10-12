@@ -23,11 +23,17 @@ function isCompanyAdmin() {
 
     <!-- Sidebar - Brand -->
     <a class="sidebar-brand d-flex align-items-center justify-content-center" href="index-admin.php">
+    <div class="sidebar-brand-icon">
+        <img src="bbccassests/img/logo5.jpg" alt="Bhutanese Centre Logo" style="height: 40px; width: auto;">
+    </div>
+    <div class="sidebar-brand-text mx-3">Bhutanese Centre</div>
+</a>
+    <!-- <a class="sidebar-brand d-flex align-items-center justify-content-center" href="index-admin.php">
         <div class="sidebar-brand-icon rotate-n-15">
             <i class="fas fa-building"></i>
         </div>
         <div class="sidebar-brand-text mx-3">Bhutanese Centre</div>
-    </a>
+    </a> -->
 
     <hr class="sidebar-divider my-0">
 
