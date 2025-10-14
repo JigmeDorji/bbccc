@@ -64,15 +64,12 @@ include_once 'include/nav.php'
     <div class="container">
         <div class="about_us_content wow fadeInUp" data-wow-delay="0.3s">
             <div class="img-col">
-                <img src="bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png" alt="Bhutanese Buddhist and Cultural Centre">
+                <img src="<?php echo $aboutData['imgUrl'];?>" alt="Bhutanese Buddhist and Cultural Centre">
             </div>
             <div class="text-col">
                 <h3>A Glimpse into Our Journey</h3>
+                <p><?php echo $aboutData['description'];?>
                 <p>
-                    The Bhutanese Buddhist and Cultural Centre (BBCC) is dedicated to serving the Bhutanese community and all interested individuals in Canberra and surrounding areas. Our core objective is to offer spiritual services and pastoral care, ensuring the wellbeing of our community members. We strive to preserve and promote Bhutanese identity and culture for future generations.
-                </p>
-                <p>
-                    Our services include regular spiritual rituals, group teachings, and engaging programs for children and elders. We hold weekly Bhutanese language and cultural classes for children and organize special practices like TARA and Doenchoe sessions to maintain our unique heritage within the culturally diverse community of the ACT. We also offer spiritual guidance, meditation sessions, and counseling with qualified Buddhist masters.
                 </p>
             </div>
 

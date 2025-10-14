@@ -171,27 +171,22 @@ include_once 'include/nav.php'
         <div class="row">
             <div class="slider">
                 <div id="mainSlider" class="nivoSlider slider-image">
-                    <img src="bbccassests/img/slider/ParoTaktsang.png" alt="main slider" title="#htmlcaption1"/>
-                    <img src="bbccassests/img/slider/shutterstock_687060394-scaled.jpg" alt="main slider"
+                    <img src="<?php echo $banners[0]['imgUrl']; ?>" alt="main slider" title="#htmlcaption1"/>
+                    <img src="<?php echo $banners[1]['imgUrl']; ?>" alt="main slider"
                          title="#htmlcaption2"/>
-                    <img src="bbccassests/img/slider/Monk.png" alt="main slider"
-                         title="#htmlcaption3"/>
                 </div>
+
+               
 
                 <!-- Slide 1 -->
                 <div id="htmlcaption1" class="nivo-html-caption slider-caption-1">
                     <div class="slide1-text">
                         <div class="middle-text margin_left">
-                            <div class="cap-title wow slideInRight" data-wow-duration="1.1s" data-wow-delay="0s">
-                                <h2><span class="no-p-laft">Bhutanese Buddhist & Cultural Centre</span></h2>
-                            </div>
                             <div class="cap-title ctitle1 wow slideInRight" data-wow-duration="2s" data-wow-delay="0s">
-                                <h3><span class="no-p-laft">Serving the Bhutanese Community in Canberra</span></h3>
+                                <h3><span class="no-p-laft"><?php echo $banners[0]['title']; ?></span></h3>
                             </div>
                             <div class="cap-dec wow slideInRight" data-wow-duration="3s" data-wow-delay="0s">
-                                <p>BBCC provides spiritual and pastoral services, rituals, and teachings to Bhutanese
-                                    residents in Canberra and nearby NSW towns, fostering unity, identity, and harmony.
-                                    These services are open to all interested individuals.</p>
+                                <p><?php echo $banners[0]['subtitle']; ?></p>
                             </div>
                             <div class="cap-readmore wow bounceInUp smore" data-wow-duration="3s" data-wow-delay="1s">
                                 <a href="about-us.php" class="actice-button">Learn More</a> <a href="contact-us.php">Contact Us</a>
@@ -219,33 +214,12 @@ include_once 'include/nav.php'
                     </div>
                 </div>
 
-                <!-- Slide 3 -->
-                <div id="htmlcaption3" class="nivo-html-caption slider-caption-1">
-                    <div class="slide1-text">
-                        <div class="middle-text margin_left">
-                            <div class="cap-title wow slideInRight" data-wow-duration="1.1s" data-wow-delay="0s">
-                                <h2><span class="no-p-laft">Building the Future</span></h2>
-                            </div>
-                            <div class="cap-title ctitle1 wow slideInRight" data-wow-duration="2s" data-wow-delay="0s">
-                                <h3><span class="no-p-laft">A Bhutanese Temple in Canberra</span></h3>
-                            </div>
-                            <div class="cap-dec wow slideInRight" data-wow-duration="3s" data-wow-delay="0s">
-                                <p>BBCC plans to establish a Bhutanese Temple in Canberra as a vibrant centre for
-                                    ceremonies, meditation, counselling, and cultural activities, promoting wellbeing
-                                    and spiritual guidance for the community.</p>
-                            </div>
-                            <div class="cap-readmore wow bounceInUp smore" data-wow-duration="3s" data-wow-delay="1s">
-                                <a href="#" class="actice-button">Learn More</a> <a href="#">Contact Us</a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                
 
             </div>
         </div>
     </div>
 </section>
-
 <!-- slider-area end -->
 
 
@@ -442,7 +416,7 @@ include_once 'include/nav.php'
                 <div class="single_blog">
                     <div class="blog_thumb">
                         <a href="single-blog.html">
-                            <img src="img/blog/5.jpg" alt=""/>
+                        <img src="bbccassests/img/blog/2.jpg" alt=""/>
                         </a>
                     </div>
                     <!-- BLOG CONTENT -->

@@ -24,7 +24,7 @@ function isCompanyAdmin() {
     <!-- Sidebar - Brand -->
     <a class="sidebar-brand d-flex align-items-center justify-content-center" href="index-admin.php">
     <div class="sidebar-brand-icon">
-        <img src="bbccassests/img/logo5.jpg" alt="Bhutanese Centre Logo" style="height: 40px; width: auto;">
+        <img src="bbccassests/img/logo/logo5.jpg" alt="Bhutanese Centre Logo" class="img-thumbnail">
     </div>
     <div class="sidebar-brand-text mx-3">Bhutanese Centre</div>
 </a>
@@ -48,7 +48,6 @@ function isCompanyAdmin() {
     <hr class="sidebar-divider">
 
 
-    <?php if (isSystemOwner()): ?>
         <!-- Website Settings -->
         <li class="nav-item">
             <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseWebsite"
@@ -80,7 +79,7 @@ function isCompanyAdmin() {
                 </div>
             </div>
         </li>
-    <?php endif; ?>
+  
 
 </ul>
 <!-- End of Sidebar -->

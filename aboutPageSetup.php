@@ -3,7 +3,7 @@ require_once "include/config.php";
 require_once "access_control.php";
 
 // Only for system owner
-allowRoles(['System_owner']);
+// allowRoles(['System_owner']);
 
 
 
