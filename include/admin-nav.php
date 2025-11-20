@@ -10,7 +10,7 @@ $userRole = $_SESSION['role'] ?? ''; // Expected values: 'system_owner', 'compan
 
 // Utility functions
 function isSystemOwner() {
-    return ($_SESSION['role'] ?? '') === 'System_owner';
+    return ($_SESSION['role'] ?? '') === 'Administrator';
 }
 
 function isCompanyAdmin() {
@@ -55,12 +55,14 @@ function isCompanyAdmin() {
                 <i class="fas fa-cogs"></i>
                 <span>Website Settings</span>
             </a>
-            <div id="collapseWebsite" class="collapse <?= in_array($currentPage, ['bannerSetup.php', 'aboutPageSetup.php', 'menuSetup.php', 'ourTeamSetup.php']) ? 'show' : '' ?>">
+            <div id="collapseWebsite" class="collapse <?= in_array($currentPage, ['bannerSetup.php', 'aboutPageSetup.php', 'serviceSetup.php', 'ourTeamSetup.php','viewFeedback.php']) ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <a class="collapse-item <?= ($currentPage == 'bannerSetup.php') ? 'active' : '' ?>" href="bannerSetup.php">Setup Banner</a>
                     <a class="collapse-item <?= ($currentPage == 'aboutPageSetup.php') ? 'active' : '' ?>" href="aboutPageSetup.php">Setup About Page</a>
-                    <a class="collapse-item <?= ($currentPage == 'menuSetup.php') ? 'active' : '' ?>" href="menuSetup.php">Setup Our Services</a>
-                    <a class="collapse-item <?= ($currentPage == 'ourTeamSetup.php') ? 'active' : '' ?>" href="ourTeamSetup.php">Our Team Setup</a>
+                    <a class="collapse-item <?= ($currentPage == 'serviceSetup.php') ? 'active' : '' ?>" href="serviceSetup.php">Post Event</a>
+                    <a class="collapse-item <?= ($currentPage == 'ourTeamSetup.php') ? 'active' : '' ?>" href="ourTeamSetup.php">Team Setup</a>
+                    <a class="collapse-item <?= ($currentPage == 'viewFeedback.php') ? 'active' : '' ?>" href="viewFeedback.php">Contact Messages</a>
+
                 </div>
             </div>
         </li>
@@ -70,12 +72,12 @@ function isCompanyAdmin() {
             <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseOrders"
                aria-expanded="true" aria-controls="collapseOrders">
                 <i class="fas fa-box"></i>
-                <span>Orders & Feedback</span>
+                <span>Dzo Class Management</span>
             </a>
             <div id="collapseOrders" class="collapse <?= in_array($currentPage, ['viewOrder.php', 'viewFeedback.php']) ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
-                    <a class="collapse-item <?= ($currentPage == 'viewOrder.php') ? 'active' : '' ?>" href="viewOrder.php">View Order</a>
-                    <a class="collapse-item <?= ($currentPage == 'viewFeedback.php') ? 'active' : '' ?>" href="viewFeedback.php">View Messages</a>
+                    <!-- <a class="collapse-item <?= ($currentPage == 'viewOrder.php') ? 'active' : '' ?>" href="viewOrder.php">View Order</a> -->
+                    <a class="collapse-item <?= ($currentPage == '#') ? 'active' : '' ?>" href="#">Dzo Classes</a>
                 </div>
             </div>
         </li>

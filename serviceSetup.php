@@ -1,10 +1,10 @@
 <?php
 require_once "include/config.php";
 
-require_once "access_control.php";
+//require_once "access_control.php";
 
 // Only for system owner
-allowRoles(['System_owner']);
+//allowRoles(['Administrator']);
 
 
 
@@ -178,12 +178,12 @@ echo "<script>
             <div class="container-fluid">
 
                 <!-- Page Heading -->
-                <h1 class="h3 mb-2 text-gray-800">Menu Setup</h1>
+                <h1 class="h3 mb-2 text-gray-800">Event Setup</h1>
 
                 <!-- DataTales Example -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
-                        <h6 class="m-0 font-weight-bold text-primary">Menu List</h6>
+                        <h6 class="m-0 font-weight-bold text-primary">Event List</h6>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -191,8 +191,8 @@ echo "<script>
                                 <thead>
                                 <tr>
                                     <th>ID</th>
-                                    <th>Menu Name</th>
-                                    <th>Menu Detail</th>
+                                    <th>Event Name</th>
+                                    <th>Event Detail</th>
                                     <th>Image</th>
                                     <th>Price</th>
                                     <th>Actions</th>
@@ -230,13 +230,13 @@ echo "<script>
                 <!-- Form -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
-                        <h6 class="m-0 font-weight-bold text-primary">Menu Setup</h6>
+                        <h6 class="m-0 font-weight-bold text-primary">Event Setup</h6>
                     </div>
                     <div class="card-body">
                         <form action="menuSetup.php<?php echo isset($_GET['edit']) ? '?edit='.$_GET['edit'] : ''; ?>" method="POST" enctype="multipart/form-data">
                             <div class="form-group row">
                                 <div class="col-md-3">
-                                    <label class="col-form-label">Menu Name :</label>
+                                    <label class="col-form-label">Event Name :</label>
                                 </div>
                                 <div class="col-md-9">
                                     <input type="text" class="form-control" name="menuName"
@@ -245,7 +245,7 @@ echo "<script>
                             </div>
                             <div class="form-group row">
                                 <div class="col-md-3">
-                                    <label class="col-form-label">Menu Detail :</label>
+                                    <label class="col-form-label">Event Detail :</label>
                                 </div>
                                 <div class="col-md-9">
                                     <textarea class="form-control" name="menuDetail"
@@ -254,7 +254,7 @@ echo "<script>
                             </div>
                             <div class="form-group row">
                                 <div class="col-md-3">
-                                    <label class="col-form-label">Current Image :</label>
+                                    <label class="col-form-label">Image :</label>
                                 </div>
                                 <div class="col-md-9">
                                     <?php if ($existing_menuImgUrl): ?>
@@ -286,7 +286,7 @@ echo "<script>
                                 <div class="col-md-3">
                                 </div>
                                 <div class="col-md-9">
-                                    <button type="submit" class="btn btn-primary">Submit</button>
+                                    <button type="submit" class="btn btn-primary">Submit Event</button>
                                 </div>
                             </div>
                         </form>

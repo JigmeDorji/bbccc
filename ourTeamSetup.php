@@ -1,9 +1,9 @@
 <?php
 require_once "include/config.php";
-require_once "access_control.php";
+// require_once "access_control.php";
 
 // Only for system owner
-allowRoles(['System_owner']);
+// allowRoles(['System_owner']);
 
 
 
@@ -150,7 +150,7 @@ echo "<script>
     <meta name="description" content="">
     <meta name="author" content="">
 
-    <title>Admin Rest - Team Setup</title>
+    <title>Team Setup</title>
 
     <!-- Custom fonts for this template-->
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">

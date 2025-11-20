@@ -161,6 +161,304 @@ echo '
         }
 </style>
 
+<!-- Home pages css  -->
+<style>
+    /* Styling for the unique single image container */
+    .about_single_image {
+        position: relative;
+        width: 90%; /* Adjust width as needed */
+        height: 400px; /* Fixed height for consistent look */
+        margin: 30px auto; /* Center the image and provide some vertical space */
+        overflow: hidden;
+        border-radius: 10px; /* Soften the corners */
+        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2); /* Stronger shadow for depth */
+        transform: rotate(-5deg); /* Rotate the image container */
+        transition: transform 0.5s ease-in-out;
+    }
+
+    .about_single_image:hover {
+        transform: rotate(0deg) scale(1.02); /* Straighten and slightly enlarge on hover */
+    }
+
+    .about_single_image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover; /* Ensure image covers the area */
+        display: block;
+        transform: rotate(5deg); /* Counter-rotate the image to appear straight inside the rotated container */
+        transition: transform 0.5s ease-in-out;
+    }
+
+    .about_single_image:hover img {
+        transform: rotate(0deg); /* Straighten image on container hover */
+    }
+
+    /* Responsive adjustments */
+    @media screen and (max-width: 767px) {
+        .about_single_image {
+            width: 100%;
+            height: 300px;
+            margin: 20px 0;
+            transform: rotate(0deg); /* Disable rotation on smaller screens for better fit */
+        }
+        .about_single_image:hover {
+            transform: scale(1.02);
+        }
+        .about_single_image img {
+            transform: rotate(0deg);
+        }
+    }
+.hero-slider {
+    position: relative;
+    width: 100%;
+    height: 520px;
+    overflow: hidden;
+}
+
+.hero-slide {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+}
+
+.hero-slide.active {
+    opacity: 1;
+}
+
+/* HERO CONTAINER */
+.hero-container {
+    width: 100%;
+    height: 520px;
+    display: flex;
+    background: #ffffff;
+}
+
+.hero-left {
+    width: 55%;
+    padding: 80px 60px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Fly in animation */
+@keyframes flyIn {
+    0% { opacity: 0; transform: translateY(30px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+.hero-left h1,
+.hero-left p,
+.hero-left .hero-btn {
+    opacity: 0;
+}
+
+.hero-slide.active .hero-left h1 {
+    animation: flyIn 0.6s forwards;
+    animation-delay: 0.2s;
+}
+
+.hero-slide.active .hero-left p {
+    animation: flyIn 0.6s forwards;
+    animation-delay: 0.5s;
+}
+
+.hero-slide.active .hero-left .hero-btn {
+    animation: flyIn 0.6s forwards;
+    animation-delay: 0.8s;
+}
+
+/* Text Styling */
+.hero-left h1 {
+    font-size: 48px;
+    font-weight: 800;
+    color: #7a1f16;
+    line-height: 1.15;
+    margin: 0;
+}
+
+.hero-left p {
+    margin-top: 25px;
+    font-size: 18px;
+    max-width: 550px;
+    line-height: 1.6;
+}
+
+.hero-btn {
+    margin-top: 35px;
+    background: #7a1f16;
+    color: #fff;
+    padding: 15px 35px;
+    display: inline-block;
+    font-size: 18px;
+    font-weight: 700;
+    text-decoration: none;
+    border-radius: 4px;
+}
+
+.hero-btn:hover {
+    background: #a72b20;
+}
+
+/* Right Image */
+.hero-right {
+    width: 45%;
+    clip-path: polygon(20% 0, 100% 0, 100% 100%, 0% 100%);
+}
+
+.hero-right img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+}
+
+/* Slow image zoom-out animation */
+@keyframes imageZoomOut {
+    0% {
+        opacity: 0;
+        transform: scale(1.2);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.hero-slide.active .hero-right img {
+    animation: imageZoomOut 2s ease-out forwards;
+    animation-delay: 0.3s;
+}
+
+/* Slider Counter (dots) */
+.slider-counter {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 12px;
+    z-index: 10;
+}
+
+.slider-counter .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background:gray;
+    cursor: pointer;
+    transition: background 0.3s, transform 0.2s;
+}
+
+.slider-counter .dot:hover {
+    transform: scale(1.2);
+    background: #7a1f16;
+}
+
+.slider-counter .dot.active {
+    background: #7a1f16;
+}
+
+/* ---------------- Tablet + Mobile (Unified Layout) ---------------- */
+@media (max-width: 992px) {
+
+    /* Slider height */
+    .hero-slider {
+        height: 450px;
+    }
+
+    /* Stack content vertically */
+    .hero-container {
+        height: 450px;
+        flex-direction: column;
+    }
+
+    /* Text area */
+    .hero-left {
+        width: 100%;
+        padding: 40px 20px;
+        text-align: center;
+        justify-content: flex-start;
+    }
+
+    .hero-left h1 {
+        font-size: 32px;
+    }
+
+    .hero-left p {
+        font-size: 16px;
+        margin-top: 15px;
+    }
+
+    .hero-btn {
+        margin: 20px auto 0 auto;
+        padding: 12px 28px;
+        font-size: 16px;
+    }
+
+    /* Image section */
+    .hero-right {
+        width: 100%;
+        clip-path: none;
+    }
+
+    .hero-right img {
+        width: 100%;
+        height: 220px;
+        object-fit: cover;
+    }
+
+    /* Slider dots */
+    .slider-counter {
+        bottom: 12px;
+        gap: 10px;
+    }
+
+    .slider-counter .dot {
+        width: 10px;
+        height: 10px;
+    }
+}
+
+/* ---------------- Mobile Optimization (extra small screens) ---------------- */
+@media (max-width: 576px) {
+
+    /* Reduce total height slightly for small phones */
+    .hero-slider {
+        height: 420px;
+    }
+
+    .hero-container {
+        height: 420px;
+    }
+
+    .hero-left h1 {
+        font-size: 26px;
+    }
+
+    .hero-left p {
+        font-size: 14px;
+    }
+
+    .hero-right img {
+        height: 200px;
+    }
+}
+
+.blog_thumb img {
+    width: 220px;      /* fixed width */
+    height: 299px;     /* fixed height */
+    object-fit: cover; /* crop image without stretching */
+    object-position: center;
+    display: block;
+}
+
+
+
+</style>
+
 
 '
 ?>

@@ -22,7 +22,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         $stmt->execute();
 
-        $message = "Form data saved successfully!";
+        $message = "Thank you for contacting us. A member of our support team will be in touch soon.";
     } catch (Exception $e) {
         $message = "Error: " . $e->getMessage();
     }
@@ -33,7 +33,7 @@ echo "<script>
     document.addEventListener('DOMContentLoaded', function() {
         if ('$message' !== '') {
             Swal.fire({
-                icon: '" . ($message == 'Form data saved successfully!' ? 'success' : 'error') . "',
+                icon: '" . ($message == 'Thank you for contacting us. A member of our support team will be in touch soon.' ? 'success' : 'error') . "',
                 title: '$message',
                 showConfirmButton: false,
                 timer: 1500
@@ -42,27 +42,6 @@ echo "<script>
     });
 </script>";
 ?>
-
-
-
-
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Contact Us</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
-
-</head>
-<body>
-
-
-
-</body>
-</html>
-
 
 
 
@@ -111,23 +90,32 @@ echo "<script>
                     <div class="col-md-5">
                         <div class="contact_form">
                             <div class="input_boxes">
-                                <input type="text" name="name" placeholder="Full name" required />
+                                <label>Full Name</label>
+                                <input type="text" class="form-control" name="name"  required />
                             </div>
                             <div class="input_boxes">
-                                <input type="email" name="email" placeholder="Email address" required />
+                                                                <label>Email address</label>
+
+                                <input type="email" class="form-control" name="email" placeholder="Enter Email address" required />
                             </div>
                             <div class="input_boxes">
-                                <input type="text" name="phone" placeholder="Phone number" />
+                                                                <label>Phone number</label>
+
+                                <input type="text" class="form-control" name="phone" placeholder="Enter phone number" />
                             </div>
-                            <div class="input_boxes">
-                                <input type="text" name="subject" placeholder="Subject" />
-                            </div>
+                            
                         </div>
                     </div>
                     <div class="col-md-7">
+                        <div class="input_boxes">
+                                                                <label>Subject</label>
+
+                                <input type="text" class="form-control" placeholder="Enter phone number" name="subject" />
+                            </div>
                         <div class="message_form">
                             <div class="input_boxes textarea">
-                                <textarea class="message_box" name="message" placeholder="Message"></textarea>
+                                <label>Message</label>
+                                <textarea class="message_box form-control" name="message" placeholder="Enter Message"></textarea>
                             </div>
                             <button type="submit" class="sbuton">Send Message</button>
                         </div>

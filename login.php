@@ -6,6 +6,19 @@ require_once "include/utils.php";
 $userName = get_or_default($_POST, 'userName', '');
 $password = get_or_default($_POST, 'password', '');
 
+
+// --- REMEMBER ME: Load username from cookie if available ---
+if (!empty($_COOKIE['remember_user'])) {
+    $userName = $_COOKIE['remember_user'];
+} else {
+    $userName = get_or_default($_POST, 'userName', '');
+}
+
+$password = get_or_default($_POST, 'password', '');
+
+
+
+
 if ($userName && $password) {
     $conn = mysqli_connect($DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME);
 
@@ -64,6 +77,16 @@ if ($userName && $password) {
                     $_SESSION['projectID'] = $_SESSION['projects'][0]['projectID'];
 
 
+
+// --- REMEMBER ME: Save username in cookie ---
+if (!empty($_POST['remember'])) {
+    setcookie("remember_user", $userName, time() + (86400 * 30), "/"); // 30 days
+} else {
+    setcookie("remember_user", "", time() - 3600, "/"); // delete if unchecked
+}
+
+
+
                     header('Location: index-admin.php');
                     exit;
                 } else {
@@ -90,246 +113,226 @@ if ($userName && $password) {
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-        :root {
-            --primary-color: #2D67F2;
-            --text-color: #1a202c;
-            --secondary-text-color: #718096;
-            --border-color: #e2e8f0;
-            --background-color: #f7fafc;
-            --card-background: #ffffff;
-        }
+:root {
+    --primary-color: #2D67F2;
+    --text-color: #1a202c;
+    --secondary-text-color: #718096;
+    --border-color: #e2e8f0;
+    --background-color: #f7fafc;
+    --card-background: #ffffff;
+}
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background: var(--background-color);
+}
+
+/* MAIN CONTAINER */
+.login-container {
+    display: flex;
+    width: 100%;
+    max-width: 1100px;
+    margin: auto;
+    background-color: var(--card-background);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+/* FORM AREA */
+.login-form-container {
+    flex: 1;
+    padding: 4rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.form-content {
+    margin-bottom: 2rem;
+}
+
+.login-form-container h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.login-form-container p {
+    color: var(--secondary-text-color);
+    margin-bottom: 2rem;
+}
+
+.input-group {
+    margin-bottom: 1.5rem;
+}
+
+.input-group label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.input-group input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.2s ease-in-out;
+}
+
+.input-group input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(45, 103, 242, 0.2);
+}
+
+/* OPTIONS */
+.form-options {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+    margin-bottom: 1.5rem;
+}
+
+.remember-me {
+    display: flex;
+    align-items: center;
+}
+
+.remember-me input {
+    width: auto;
+    margin-right: 0.5rem;
+    accent-color: var(--primary-color);
+}
+
+/* BUTTON */
+.login-button {
+    width: 100%;
+    padding: 1rem;
+    background-color: var(--primary-color);
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.login-button:hover {
+    background-color: #2354cf;
+}
+
+/* RIGHT IMAGE AREA */
+.login-image-container {
+    flex: 1;
+    background-image: url('bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png');
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    padding: 3rem;
+    color: white;
+    display: flex;
+    justify-content: flex-end;
+    flex-direction: column;
+}
+
+.login-image-container::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.7), rgba(0,0,0,0.1));
+}
+
+.overlay-text {
+    position: relative;
+    z-index: 2;
+}
+
+/* SIGNUP */
+.signup-link {
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--secondary-text-color);
+    margin-top: 1rem;
+}
+
+.signup-link a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+/* Fix checkbox + label alignment */
+.remember-me {
+    display: flex;
+    align-items: center;
+    gap: 6px;          /* small spacing between box and text */
+}
+
+.remember-me input {
+    margin: 0;         /* remove browser default offset */
+    transform: translateY(-1px);  /* perfect visual alignment */
+}
+
+.remember-me label {
+    margin: 0;
+    line-height: 1;
+    cursor: pointer;
+}
 
 
-        .login-container {
-            display: flex;
-            width: 100%;
-            max-width: 100%;
-            background-color: var(--card-background);
-            border-radius: 12px;
-            overflow: hidden;
-        }
+/* ===============================
+     RESPONSIVE DESIGN
+   =============================== */
 
-        .login-form-container {
-            flex: 1;
-            padding: 4rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
+/* Tablets */
+@media (max-width: 992px) {
+    .login-container {
+        max-width: 90%;
+    }
+    .login-form-container {
+        padding: 3rem 2rem;
+    }
+}
 
-        .form-content {
-            margin-bottom: 2rem;
-        }
+/* Mobile */
+@media (max-width: 768px) {
+    .login-container {
+        flex-direction: column;
+        max-width: 450px;
+        margin: auto;
+    }
+    .login-image-container {
+        height: 250px;
+        display: block;
+        border-radius: 0;
+    }
+    .overlay-text h3 {
+        font-size: 1.5rem;
+    }
+}
 
-        .login-form-container h2 {
-            font-size: 2.25rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-        }
+/* Small mobile */
+@media (max-width: 480px) {
+    .login-form-container {
+        padding: 1.5rem;
+    }
+    .login-form-container h2 {
+        font-size: 1.6rem;
+    }
+    .overlay-text h3 {
+        font-size: 1.3rem;
+    }
+}
 
-        .login-form-container p {
-            color: var(--secondary-text-color);
-            font-size: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .input-group {
-            margin-bottom: 1.5rem;
-        }
-
-        .input-group label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-        }
-
-        .input-group input {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 1rem;
-            transition: all 0.2s ease-in-out;
-        }
-
-        .input-group input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(45, 103, 242, 0.2);
-        }
-
-        .form-options {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.875rem;
-            margin-bottom: 1.5rem;
-        }
-
-        .remember-me {
-            display: flex;
-            align-items: center;
-        }
-
-        .remember-me input {
-            width: auto;
-            margin-right: 0.5rem;
-            accent-color: var(--primary-color);
-        }
-
-        .forgot-password {
-            color: var(--primary-color);
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        .login-button {
-            width: 100%;
-            padding: 1rem;
-            background-color: var(--primary-color);
-            color: white;
-            font-size: 1rem;
-            font-weight: 600;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background-color 0.2s ease-in-out;
-        }
-
-        .login-button:hover {
-            background-color: #2354cf;
-        }
-
-        .divider {
-            text-align: center;
-            margin: 2rem 0;
-            font-size: 0.875rem;
-            color: var(--secondary-text-color);
-            position: relative;
-        }
-
-        .divider::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 0;
-            width: 40%;
-            height: 1px;
-            background-color: var(--border-color);
-        }
-
-        .divider::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            right: 0;
-            width: 40%;
-            height: 1px;
-            background-color: var(--border-color);
-        }
-
-        .social-login {
-            display: flex;
-            justify-content: space-between;
-            gap: 1rem;
-        }
-
-        .social-button {
-            flex: 1;
-            padding: 0.75rem;
-            background-color: transparent;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease-in-out;
-        }
-
-        .social-button:hover {
-            background-color: var(--background-color);
-            border-color: var(--primary-color);
-        }
-
-        .social-button i {
-            font-size: 1.5rem;
-        }
-
-        .signup-link {
-            text-align: center;
-            font-size: 0.875rem;
-            color: var(--secondary-text-color);
-            margin-top: auto;
-        }
-
-        .signup-link a {
-            color: var(--primary-color);
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        .login-image-container {
-            flex: 1;
-            background-image: url('bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png');
-            background-size: cover;
-            background-position: center;
-            border-radius: 0 12px 12px 0;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-            align-items: flex-start;
-            padding: 2.5rem;
-            position: relative;
-            color: white;
-        }
-
-        .login-image-container::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(to top, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.1));
-            z-index: 1;
-            border-radius: 0 12px 12px 0;
-        }
-
-        .overlay-text {
-            position: relative;
-            z-index: 2;
-        }
-
-        .overlay-text h3 {
-            font-size: 2rem;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-        }
-
-        .overlay-text p {
-            font-size: 1rem;
-            font-weight: 400;
-        }
-
-        @media (max-width: 768px) {
-            .login-container {
-                flex-direction: column;
-                width: 100%;
-                max-width: 450px;
-                border-radius: 12px;
-            }
-            .login-form-container {
-                padding: 2rem 1.5rem;
-            }
-            .login-image-container {
-                display: none;
-            }
-        }
     </style>
 
     <?php
@@ -355,7 +358,9 @@ include_once 'include/nav.php'
                         <div class="input-group">
 
                             <label for="email">User Name </label>
-                            <input type="text" name="userName" id="userName" placeholder="username" required>
+<input type="text" name="userName" id="userName" 
+       placeholder="username" 
+       value="<?php echo htmlspecialchars($userName); ?>" required>
                         </div>
                         <div class="input-group">
                             <label for="password">Password</label>
@@ -363,8 +368,9 @@ include_once 'include/nav.php'
                         </div>
                         <div class="form-options">
                             <div class="remember-me">
-                                <input type="checkbox" id="remember">
+                                <input type="checkbox" id="remember" name="remember" <?php if(!empty($_COOKIE['remember_user'])) echo "checked"; ?>>
                                 <label for="remember">Remember me</label>
+
                             </div>
                             <a href="#" class="forgot-password">Forgot Password?</a>
                         </div>
@@ -375,7 +381,7 @@ include_once 'include/nav.php'
                 </div>
 
                 <div class="signup-link">
-                    Don't have an account? <a href="#">Sign Up</a>
+                    Don't have student account? <a href="parentAccountSetup.php">Sign Up</a>
                 </div>
             </div>
 

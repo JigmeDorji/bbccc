@@ -33,7 +33,7 @@ function is_logged_in() {
  * (Adjust this condition to your needs)
  */
 function is_admin() {
-    return is_logged_in() && (logged_in_userid() === 'admin');
+    return is_logged_in() && (logged_in_userid() === 'Admin');
 }
 
 /**

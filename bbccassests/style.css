@@ -96,7 +96,7 @@ h6 {
     padding: 0;
 }
 h3 {
-    font-size: 18px;
+    font-size: 15px;
     text-transform: uppercase;
     font-weight: 600;
 }
@@ -145,7 +145,7 @@ HEADER TOP CSS
 ======================*/
 
 .header_top {
-    background: #666666 none repeat scroll 0 0;
+    background: #7a1f16 none repeat scroll 0 0;
     border-bottom: 1px solid #f0f0f0;
     overflow: hidden;
     padding: 9px 0 11px;
@@ -162,7 +162,7 @@ HEADER TOP CSS
 }
 .header_top p span i,
 .header_top p a i {
-    color: #881b12;
+    color: #f0f0f0;
     font-size: 16px;
     margin-right: 10px;
 }
@@ -1762,12 +1762,12 @@ FOOTER  AREA CSS
 ======================*/
 
 .footer_area {
-    background: #333333 none repeat scroll 0 0;
+    background: #7a1f16 none repeat scroll 0 0;
     padding: 85px 0 90px;
     text-align: center;
 }
 .footer_title > h5 {
-    color: #881b12;
+    color: #f0f0f0;
     font-size: 36px;
     font-weight: 600;
     text-transform: capitalize;
@@ -1783,8 +1783,8 @@ FOOTER  AREA CSS
     display: inline-block;
 }
 .footer_social a {
-    border: 1px solid #881b12;
-    color: #881b12;
+    border: 1px solid #f0f0f0;
+    color: #f0f0f0;
     display: block;
     font-size: 20px;
     height: 35px;

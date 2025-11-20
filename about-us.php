@@ -36,6 +36,14 @@ try {
     include_once 'include/global_css.php'
     ?>
     <style>
+.team_thumb img {
+    width: 100%;
+    height: 280px; /* adjust to your preferred height */
+    object-fit: cover; 
+    object-position: center;
+    display: block;
+    border-radius: 5px; /* optional */
+}
 
 
     </style>
@@ -121,21 +129,22 @@ include_once 'include/nav.php'
         <div class="row">
             <div class="team_wrap">
                 <!-- single team -->
-                <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
+
+                <?php foreach ($teamData as $teamMember): ?>
+                    <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
                     <div class="single_team">
                         <div class="team_thumb">
-                            <img src="bbccassests/img/team/1.jpg" alt=""/>
+                            <img src="<?php echo $teamMember['imgUrl']; ?>" alt="<?php echo $teamMember['Name']; ?>"/>
                             <div class="team_content">
                                 <div class="team_content_hover">
                                     <div class="team_info">
-                                        <h3>Choki Wangmo</h3>
-                                        <span>Founder & Spiritual Head</span>
+                                        <h3><?php echo $teamMember['Name']; ?></h3>
+                                        <span><?php echo $teamMember['designation']; ?></span>
                                     </div>
                                     <div class="team_social">
                                         <div class="team_social_icon">
                                             <a href="#"><i class="fa fa-facebook"></i></a>
-                                            <a href="#"><i class="fa fa-twitter"></i></a>
-                                            <a href="#"><i class="fa fa-pinterest"></i></a>
+                                            <a href="#"><i class="fa fa-instagram"></i></a>
                                             <a href="#"><i class="fa fa-linkedin"></i></a>
                                         </div>
                                     </div>
@@ -143,79 +152,8 @@ include_once 'include/nav.php'
                             </div>
                         </div>
                     </div>
-                </div>
-                <!-- single team -->
-                <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
-                    <div class="single_team">
-                        <div class="team_thumb">
-                            <img src="bbccassests/img/team/2.jpg" alt=""/>
-                            <div class="team_content">
-                                <div class="team_content_hover">
-                                    <div class="team_info">
-                                        <h3>Phurba Dorji</h3>
-                                        <span>President</span>
-                                    </div>
-                                    <div class="team_social">
-                                        <div class="team_social_icon">
-                                            <a href="#"><i class="fa fa-facebook"></i></a>
-                                            <a href="#"><i class="fa fa-twitter"></i></a>
-                                            <a href="#"><i class="fa fa-pinterest"></i></a>
-                                            <a href="#"><i class="fa fa-linkedin"></i></a>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                     </div>
-                </div>
-                <!-- single team -->
-                <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
-                    <div class="single_team">
-                        <div class="team_thumb">
-                            <img src="bbccassests/img/team/3.jpg" alt=""/>
-                            <div class="team_content">
-                                <div class="team_content_hover">
-                                    <div class="team_info">
-                                        <h3>Tashi Lhamo</h3>
-                                        <span>Vice President</span>
-                                    </div>
-                                    <div class="team_social">
-                                        <div class="team_social_icon">
-                                            <a href="#"><i class="fa fa-facebook"></i></a>
-                                            <a href="#"><i class="fa fa-twitter"></i></a>
-                                            <a href="#"><i class="fa fa-pinterest"></i></a>
-                                            <a href="#"><i class="fa fa-linkedin"></i></a>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- single team -->
-                <div class="col-lg-3 col-md-3 col-sm-6 col-xs-12">
-                    <div class="single_team">
-                        <div class="team_thumb">
-                            <img src="bbccassests/img/team/4.jpg" alt=""/>
-                            <div class="team_content">
-                                <div class="team_content_hover">
-                                    <div class="team_info">
-                                        <h3>Karma Wangchuk</h3>
-                                        <span>Adviser</span>
-                                    </div>
-                                    <div class="team_social">
-                                        <div class="team_social_icon">
-                                            <a href="#"><i class="fa fa-facebook"></i></a>
-                                            <a href="#"><i class="fa fa-twitter"></i></a>
-                                            <a href="#"><i class="fa fa-pinterest"></i></a>
-                                            <a href="#"><i class="fa fa-linkedin"></i></a>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <?php endforeach; ?>
             </div>
         </div>
     </div>
@@ -230,3 +168,9 @@ include_once 'include/global_js.php';
 ?>
 </body>
 </html>
+
+
+
+
+
+

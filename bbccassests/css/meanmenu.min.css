@@ -1,6 +1,6 @@
 a.meanmenu-reveal{display:none}
 .mean-container .mean-bar {
-  background: #0F99DE;
+  background: #7a1f16;
   float: left;
   min-height: 42px;
   padding: 4px 0 0;
@@ -104,7 +104,7 @@ a.meanmenu-reveal{display:none}
   border-top: 3px solid #2bcdc1;
 }
 .mean-container .mean-nav ul li a {
-  background: #444;
+  background: #7a1f16;
   color: #fff;
   display: block;
 }

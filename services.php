@@ -44,7 +44,7 @@ try {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Menus</title>
+    <title>services</title>
     <?php
     include_once 'include/global_css.php'
     ?>
