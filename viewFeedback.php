@@ -38,7 +38,7 @@ try {
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Admin Rest - Contact View</title>
+    <title>View Feedback</title>
 
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
@@ -61,7 +61,7 @@ document.addEventListener("DOMContentLoaded", function () {
             timer: 1500
         }).then(() => {
             if (reload) {
-                window.location.href = "contactView.php";
+                window.location.href = "viewFeedback.php";
             }
         });
     }
@@ -111,11 +111,11 @@ document.addEventListener("DOMContentLoaded", function () {
                                         <td><?= $contact['message']; ?></td>
 
                                         <td>
-                                            <a href="contactView.php?delete=<?= $contact['id']; ?>"
-                                               class="btn btn-danger btn-sm"
-                                               onclick="return confirm('Are you sure you want to delete this contact?')">
-                                                Delete
-                                            </a>
+                                            <a href="#" 
+                                                class="btn btn-danger btn-sm delete-feedback-btn" 
+                                                data-id="<?= $contact['id']; ?>">
+                                                    Delete
+                                                </a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -134,6 +134,36 @@ document.addEventListener("DOMContentLoaded", function () {
 
     </div>
 </div>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const deleteButtons = document.querySelectorAll(".delete-feedback-btn");
+
+    deleteButtons.forEach(btn => {
+        btn.addEventListener("click", function (e) {
+            e.preventDefault();
+
+            const feedbackId = this.getAttribute("data-id");
+
+            Swal.fire({
+                title: "Are you sure?",
+                text: "This feedback entry will be permanently deleted.",
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonColor: "#d33",
+                cancelButtonColor: "#3085d6",
+                confirmButtonText: "Yes, delete it",
+                cancelButtonText: "Cancel"
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = "viewFeedback.php?delete=" + feedbackId;
+                }
+            });
+        });
+    });
+});
+</script>
 
 </body>
 </html>

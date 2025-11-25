@@ -171,10 +171,21 @@ include_once 'include/nav.php'
                     <?php echo $menu['menuName']; ?>
                 </h1>
 
-                <div class="blog-meta">
-                    <span><i class="fa fa-calendar"></i> <?php echo date('d M Y'); ?></span>
-                    <span><i class="fa fa-user"></i> BBCC Admin</span>
-                </div>
+               <div class="blog-meta">
+
+    <?php
+        // Format event start date & time
+        $eventDate = "Date Not Set";
+        if (!empty($menu['eventStartDateTime'])) {
+            $eventDate = date("d M Y – g:i A", strtotime($menu['eventStartDateTime']));
+        }
+    ?>
+
+    <span><i class="fa fa-calendar"></i> <?php echo $eventDate; ?></span>
+    <span><i class="fa fa-user"></i> Admin</span>
+
+</div>
+
 
                 <div class="blog-content">
                     <p><?php echo nl2br($menu['menuDetail']); ?></p>

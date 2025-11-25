@@ -95,7 +95,7 @@ include_once 'include/nav.php'
     <div class="hero-slide active">
         <div class="hero-container">
             <div class="hero-left">
-                <h1><?php echo $banners[0]['title']; ?></h1>
+                <h3><?php echo strtoupper($banners[0]['title']); ?></h3>
                 <p><?php echo $banners[0]['subtitle']; ?></p>
  <div class="read_more_btn">
                     <a href="parentAccountSetup.php">Register for dzongkha class</a>
@@ -110,7 +110,7 @@ include_once 'include/nav.php'
     <div class="hero-slide">
         <div class="hero-container">
             <div class="hero-left">
-                <h1><?php echo $banners[1]['title']; ?></h1>
+                <h3><?php echo strtoupper($banners[1]['title']); ?></h3>
                 <p><?php echo $banners[1]['subtitle']; ?></p>
  <div class="read_more_btn">
                     <a href="parentAccountSetup.php">Register for dzongkha class</a>
@@ -235,46 +235,55 @@ include_once 'include/nav.php'
             </div>
         </div>
         <div class="row">
+
     <?php foreach ($menus as $menu): ?>
-    <?php 
-        // Limit text to 120 characters
-        $shortDetail = substr($menu['menuDetail'], 0, 120) . '...';
-    ?>
-    <div class="col-md-6">
-        <div class="single_blog">
-            <div class="blog_thumb">
-                <a href="event_detail.php?id=<?php echo $menu['id']; ?>">
-                    <img src="<?php echo $menu['menuImgUrl']; ?>" alt=""/>
-                </a>
+<?php 
+    // Limit text to 120 characters
+    $shortDetail = substr($menu['menuDetail'], 0, 120) . '...';
+
+    // Format Event Date/Time
+    $formattedDate = "No Date Set";
+    if (!empty($menu['eventStartDateTime'])) {
+        $formattedDate = date("d M Y – g:i A", strtotime($menu['eventStartDateTime']));
+    }
+?>
+<div class="col-md-6">
+    <div class="single_blog">
+        <div class="blog_thumb">
+            <a href="event_detail.php?id=<?php echo $menu['id']; ?>">
+                <img src="<?php echo $menu['menuImgUrl']; ?>" alt=""/>
+            </a>
+        </div>
+
+        <div class="blog_content">
+            <div class="content_title">
+                <h3>
+                    <a href="event_detail.php?id=<?php echo $menu['id']; ?>">
+                        <?php echo $menu['menuName']; ?>
+                    </a>
+                </h3>
             </div>
 
-            <div class="blog_content">
-                <div class="content_title">
-                    <h3>
-                        <a href="event_detail.php?id=<?php echo $menu['id']; ?>">
-                            <?php echo $menu['menuName']; ?>
-                        </a>
-                    </h3>
-                </div>
-
-                <div class="blog_post_meta">
-                    <span class="meta_date"><i class="fa fa-calendar-o"></i>05 Jun 2017</span>
-                    <span class="meta_like"><i class="fa fa-comment"></i>240</span>
-                    <span class="meta_comments"><i class="fa fa-tag"></i>400</span>
-                </div>
-
-                <div class="blog_desc">
-                    <p><?php echo $shortDetail; ?></p>
-                </div>
-
-                <div class="blog_readmore">
-                    <a href="event_detail.php?id=<?php echo $menu['id']; ?>">Read More</a>
-                </div>
+            <div class="blog_post_meta">
+                <span class="meta_date">
+                    <i class="fa fa-calendar-o"></i>
+                    <?php echo $formattedDate; ?>
+                </span>
 
             </div>
+
+            <div class="blog_desc">
+                <p><?php echo $shortDetail; ?></p>
+            </div>
+
+            <div class="blog_readmore">
+                <a href="event_detail.php?id=<?php echo $menu['id']; ?>">Read More</a>
+            </div>
+
         </div>
     </div>
-    <?php endforeach; ?>
+</div>
+<?php endforeach; ?>
 </div>
     </div>
 </div>

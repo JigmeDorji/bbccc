@@ -210,8 +210,11 @@ echo "<script>
                                         <td>
                                             <a href="ourTeamSetup.php?edit=<?php echo $team['id']; ?>"
                                                class="btn btn-info btn-sm">Edit</a>
-                                            <a href="ourTeamSetup.php?delete=<?php echo $team['id']; ?>"
-                                               class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this team member?')">Delete</a>
+                                               <a href="#" 
+                                                class="btn btn-danger btn-sm delete-team-btn"
+                                                data-id="<?php echo $team['id']; ?>">
+                                                    Delete
+                                                </a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -287,5 +290,35 @@ echo "<script>
         ?>
     </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const deleteButtons = document.querySelectorAll(".delete-team-btn");
+
+    deleteButtons.forEach(btn => {
+        btn.addEventListener("click", function (e) {
+            e.preventDefault();
+
+            const teamId = this.getAttribute("data-id");
+
+            Swal.fire({
+                title: "Are you sure?",
+                text: "This team member will be permanently deleted.",
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonColor: "#d33",
+                cancelButtonColor: "#3085d6",
+                confirmButtonText: "Yes, delete",
+                cancelButtonText: "Cancel"
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    window.location.href = "ourTeamSetup.php?delete=" + teamId;
+                }
+            });
+        });
+    });
+});
+</script>
 </body>
+
 </html>

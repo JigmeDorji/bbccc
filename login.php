@@ -39,8 +39,11 @@ if ($userName && $password) {
     if (mysqli_stmt_execute($stmt)) {
         $result = mysqli_stmt_get_result($stmt);
         $row = mysqli_fetch_assoc($result);
+         echo '<script>alert("hi");</script>';
 
         if ($row) {
+                                  
+
             $db_password = $row['password'];
 
             // For better security, consider using password_hash and password_verify here
@@ -51,10 +54,9 @@ if ($userName && $password) {
                 $is_hashed = preg_match('/^\$2[ayb]\$|\$argon2/', $db_password);
 
                 // Verify password accordingly
-                if (
-                    ($is_hashed && password_verify($password, $db_password)) ||
-                    (!$is_hashed && $password === $db_password)
-                ) {
+                if ( ($is_hashed && password_verify($password, $db_password)) ||(!$is_hashed && $password === $db_password)) {
+                       echo "<script>alert('Condition TRUE: Password matched');</script>";
+
                     // Optional: Upgrade plain password to hashed version
                     if (!$is_hashed) {
                         $new_hashed_password = password_hash($password, PASSWORD_DEFAULT);
@@ -78,18 +80,20 @@ if ($userName && $password) {
 
 
 
-// --- REMEMBER ME: Save username in cookie ---
-if (!empty($_POST['remember'])) {
-    setcookie("remember_user", $userName, time() + (86400 * 30), "/"); // 30 days
-} else {
-    setcookie("remember_user", "", time() - 3600, "/"); // delete if unchecked
-}
+                    // --- REMEMBER ME: Save username in cookie ---
+                    if (!empty($_POST['remember'])) {
+                        setcookie("remember_user", $userName, time() + (86400 * 30), "/"); // 30 days
+                    } else {
+                        setcookie("remember_user", "", time() - 3600, "/"); // delete if unchecked
+                    }
 
 
 
                     header('Location: index-admin.php');
                     exit;
                 } else {
+                        echo "<script>alert('Condition FALSE: Password incorrect');</script>";
+
                     $login_error = true;
                 }
             }else {
@@ -333,6 +337,17 @@ body {
     }
 }
 
+.error-box {
+    background: #ffdddd;
+    border: 1px solid #ff5c5c;
+    color: #b30000;
+    padding: 12px;
+    margin-bottom: 15px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+
     </style>
 
     <?php
@@ -354,7 +369,11 @@ include_once 'include/nav.php'
                     <h2>Welcome Back</h2>
                     <p>Please enter your details to sign in.</p>
 
-                    <form action="login.php" method="post">
+            <?php if (!empty($login_error)): ?>
+                <div class="error-box">Invalid username or password.</div>
+            <?php endif; ?>
+
+            <form action="login.php" method="post">
                         <div class="input-group">
 
                             <label for="email">User Name </label>
