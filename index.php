@@ -95,7 +95,7 @@ include_once 'include/nav.php'
     <div class="hero-slide active">
         <div class="hero-container">
             <div class="hero-left">
-                <h3><?php echo strtoupper($banners[0]['title']); ?></h3>
+                <h1><?php echo strtoupper($banners[0]['title']); ?></h1>
                 <p><?php echo $banners[0]['subtitle']; ?></p>
  <div class="read_more_btn">
                     <a href="parentAccountSetup.php">Register for dzongkha class</a>
@@ -110,7 +110,7 @@ include_once 'include/nav.php'
     <div class="hero-slide">
         <div class="hero-container">
             <div class="hero-left">
-                <h3><?php echo strtoupper($banners[1]['title']); ?></h3>
+                <h1><?php echo strtoupper($banners[1]['title']); ?></h1>
                 <p><?php echo $banners[1]['subtitle']; ?></p>
  <div class="read_more_btn">
                     <a href="parentAccountSetup.php">Register for dzongkha class</a>
