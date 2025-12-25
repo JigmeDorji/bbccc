@@ -5,7 +5,7 @@ session_start();
 // one change in here and all the connection strings will work without errors.
 $DB_HOST = "localhost";
 $DB_USER = "root";
-$DB_PASSWORD = "jigme@17490773";// enter your db password
-$DB_NAME = "restWeb_db";
+$DB_PASSWORD ="";// enter your db password
+$DB_NAME = "bbcc_db";
 ?>
 
