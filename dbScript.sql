@@ -130,3 +130,42 @@ CREATE TABLE `user` (
                         `createdDate` varchar(45) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
                         PRIMARY KEY (`userid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+INSERT INTO users
+(userid, username, password, companyID, projectID, role, createdDate)
+VALUES
+(1, 'Admin', '$2y$12$INkIANLsUlItw45nxll2t.dAWV.QGNLqbaRQUKBGH.cUjt.VaPvNq', 1, 1, 'Administrator', '2025-07-21 10:58:51'),
+
+(2, 'jigme', '$2y$12$BkfL3DQppxrU46c6zS5tD.0sCeChzJ2domBZ4tmHx..mwEIQblUu2', 2, 4, 'Admin', '2025-07-25 05:50:13'),
+
+(3, 'sonam', '$2y$12$i.q0uRm0PMLJ3IBVm95EdOissq14I7qhwjI/FkAajMJkWNByRV8oC', 3, 3, 'Company Admin', '2025-07-25 08:20:24'),
+
+(5, 'znk', '$2y$12$7KTIYfKqIAWRCihi50Cf0.nl.S0.EIs4DmPV6wqZ2RlGoeGgfiEdC', 1, 1, 'Staff', '2025-07-29 02:46:27');
+
+
+
+
+INSERT INTO banners
+(id, imgUrl, title, subtitle)
+VALUES
+(1,
+ 'uploads/banner/Gemini_Generated_Image_eenj50eenj50eenj.png',
+ 'A Spiritual and Cultural Home for the Bhutanese Communityy',
+ 'Offering regular rituals, teachings, and pastoral support while nurturing language, culture, and heritage for a thriving Bhutanese community in the ACT.y'
+),
+
+(2,
+ 'uploads/banner/Monk.png',
+ 'Preserving Bhutanese Identity & Culture',
+ 'BBCC offers weekly Bhutanese language and cultural classes for children, regular Dharma teachings, TARA practice, and Doenchoe sessions to preserve our unique heritage within the ACT’s diverse community.'
+),
+
+(5,
+ 'uploads/banner/Screenshot 2025-03-24 at 6.06.40 PM.png',
+ 'A Bhutanese Temple in Canberra',
+ 'BBCC plans to establish a Bhutanese Temple in Canberra as a vibrant centre for ceremonies, meditation, counselling, and cultural activities, promoting wellbeing and spiritual guidance for the community.'
+);
+
+changes
+
