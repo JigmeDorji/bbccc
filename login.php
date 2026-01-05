@@ -18,31 +18,25 @@ $password = get_or_default($_POST, 'password', '');
 
 
 
-
 if ($userName && $password) {
     $conn = mysqli_connect($DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME);
 
-    $query = "select u.userid, 
+    $query ="select u.userid, 
        u.username, 
        u.password, 
        u.companyID, 
-       u.projectID, 
-       c.companyName, 
-       u.role,
-       p.projectName
-    FROM user u  
-    inner join company c on u.companyID=c.companyID 
-    inner join project p on p.projectID=u.projectID WHERE userName=?";
+       u.role
+       FROM user u WHERE userName=?";
     $stmt = mysqli_prepare($conn, $query);
     mysqli_stmt_bind_param($stmt, "s", $userName);
 
     if (mysqli_stmt_execute($stmt)) {
         $result = mysqli_stmt_get_result($stmt);
         $row = mysqli_fetch_assoc($result);
-         echo '<script>alert("hi");</script>';
 
         if ($row) {
                                   
+         echo '<script>alert("hi");</script>';
 
             $db_password = $row['password'];
 

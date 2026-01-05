@@ -24,19 +24,44 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $password   = password_hash($password_plain, PASSWORD_DEFAULT);
 
         // Insert Query
-        $stmt = $pdo->prepare("
+       // Start transaction
+        $pdo->beginTransaction();
+
+        // Generate user ID (example: P000123456)
+        $userid = 'P' . substr(uniqid(), -9);
+
+        // Insert into parents table
+        $stmtParents = $pdo->prepare("
             INSERT INTO parents (full_name, email, phone, address, occupation, username, password)
             VALUES (:full_name, :email, :phone, :address, :occupation, :username, :password)
         ");
 
-        $stmt->bindParam(':full_name', $full_name);
-        $stmt->bindParam(':email', $email);
-        $stmt->bindParam(':phone', $phone);
-        $stmt->bindParam(':address', $address);
-        $stmt->bindParam(':occupation', $occupation);
-        $stmt->bindParam(':username', $username);
-        $stmt->bindParam(':password', $password);
-        //$stmt->execute();
+        $stmtParents->execute([
+            ':full_name'  => $full_name,
+            ':email'      => $email,
+            ':phone'      => $phone,
+            ':address'    => $address,
+            ':occupation' => $occupation,
+            ':username'   => $username,
+            ':password'   => $password
+        ]);
+
+        // Insert into user table
+        $stmtUser = $pdo->prepare("
+            INSERT INTO user (userid, username, password, role, createdDate)
+            VALUES (:userid, :username, :password, :role, :createdDate)
+        ");
+
+        $stmtUser->execute([
+            ':userid'      => $userid,
+            ':username'    => $username,
+            ':password'    => $password,
+            ':role'        => 'parent',
+            ':createdDate' => date('Y-m-d H:i:s')
+        ]);
+
+        // Commit transaction
+        $pdo->commit();
 
         // Send Welcome Email using PHPMailer
         $mail = new PHPMailer(true);

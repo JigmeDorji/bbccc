@@ -5,16 +5,17 @@ require_login();
 
 $currentPage = basename($_SERVER['PHP_SELF']); // Detect current page name
 
-// Sample user role (you should fetch this from the database/session)
-$userRole = $_SESSION['role'] ?? ''; // Expected values: 'system_owner', 'company_admin'
-
-// Utility functions
+// Role helpers (based on your stored values)
 function isSystemOwner() {
     return ($_SESSION['role'] ?? '') === 'Administrator';
 }
 
 function isCompanyAdmin() {
     return ($_SESSION['role'] ?? '') === 'company_admin';
+}
+
+function isParent() {
+    return strtolower($_SESSION['role'] ?? '') === 'parent';
 }
 ?>
 
@@ -23,17 +24,11 @@ function isCompanyAdmin() {
 
     <!-- Sidebar - Brand -->
     <a class="sidebar-brand d-flex align-items-center justify-content-center" href="index-admin.php">
-    <div class="sidebar-brand-icon">
-        <img src="bbccassests/img/logo/logo5.jpg" alt="Bhutanese Centre Logo" class="img-thumbnail">
-    </div>
-    <div class="sidebar-brand-text mx-3">Bhutanese Centre</div>
-</a>
-    <!-- <a class="sidebar-brand d-flex align-items-center justify-content-center" href="index-admin.php">
-        <div class="sidebar-brand-icon rotate-n-15">
-            <i class="fas fa-building"></i>
+        <div class="sidebar-brand-icon">
+            <img src="bbccassests/img/logo/logo5.jpg" alt="Bhutanese Centre Logo" class="img-thumbnail">
         </div>
         <div class="sidebar-brand-text mx-3">Bhutanese Centre</div>
-    </a> -->
+    </a>
 
     <hr class="sidebar-divider my-0">
 
@@ -45,8 +40,10 @@ function isCompanyAdmin() {
         </a>
     </li>
 
-    <hr class="sidebar-divider">
+    <!-- Everything below is hidden for Parent role -->
+    <?php if (!isParent()) { ?>
 
+        <hr class="sidebar-divider">
 
         <!-- Website Settings -->
         <li class="nav-item">
@@ -55,33 +52,54 @@ function isCompanyAdmin() {
                 <i class="fas fa-cogs"></i>
                 <span>Website Settings</span>
             </a>
-            <div id="collapseWebsite" class="collapse <?= in_array($currentPage, ['bannerSetup.php', 'aboutPageSetup.php', 'serviceSetup.php', 'ourTeamSetup.php','viewFeedback.php']) ? 'show' : '' ?>">
+
+            <div id="collapseWebsite" class="collapse <?= in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','serviceSetup.php','ourTeamSetup.php','viewFeedback.php']) ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <a class="collapse-item <?= ($currentPage == 'bannerSetup.php') ? 'active' : '' ?>" href="bannerSetup.php">Setup Banner</a>
                     <a class="collapse-item <?= ($currentPage == 'aboutPageSetup.php') ? 'active' : '' ?>" href="aboutPageSetup.php">Setup About Page</a>
                     <a class="collapse-item <?= ($currentPage == 'serviceSetup.php') ? 'active' : '' ?>" href="serviceSetup.php">Post Event</a>
                     <a class="collapse-item <?= ($currentPage == 'ourTeamSetup.php') ? 'active' : '' ?>" href="ourTeamSetup.php">Team Setup</a>
                     <a class="collapse-item <?= ($currentPage == 'viewFeedback.php') ? 'active' : '' ?>" href="viewFeedback.php">Contact Messages</a>
-
                 </div>
             </div>
         </li>
 
-        <!-- Orders & Feedback -->
+        <!-- Dzo Class Management -->
         <li class="nav-item">
             <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseOrders"
                aria-expanded="true" aria-controls="collapseOrders">
                 <i class="fas fa-box"></i>
                 <span>Dzo Class Management</span>
             </a>
-            <div id="collapseOrders" class="collapse <?= in_array($currentPage, ['viewOrder.php', 'viewFeedback.php']) ? 'show' : '' ?>">
+
+            <div id="collapseOrders" class="collapse <?= in_array($currentPage, ['viewOrder.php']) ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
-                    <!-- <a class="collapse-item <?= ($currentPage == 'viewOrder.php') ? 'active' : '' ?>" href="viewOrder.php">View Order</a> -->
                     <a class="collapse-item <?= ($currentPage == '#') ? 'active' : '' ?>" href="#">Dzo Classes</a>
                 </div>
             </div>
         </li>
+
+    <?php } ?>
+
   
+
+
+      <!-- ===================== -->
+    <!-- Parent-only menu -->
+    <!-- ===================== -->
+    <?php if (isParent()) { ?>
+
+    <hr class="sidebar-divider">
+
+    <li class="nav-item <?= ($currentPage == 'studentSetup.php') ? 'active' : '' ?>">
+        <a class="nav-link" href="studentSetup.php">
+            <i class="fas fa-user-graduate"></i>
+            <span>Add Student</span>
+        </a>
+    </li>
+
+<?php } ?>
+
 
 </ul>
 <!-- End of Sidebar -->
