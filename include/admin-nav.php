@@ -74,8 +74,12 @@ function isParent() {
 
             <div id="collapseOrders" class="collapse <?= in_array($currentPage, ['viewOrder.php']) ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
-                    <a class="collapse-item <?= ($currentPage == '#') ? 'active' : '' ?>" href="#">Dzo Classes</a>
+                    <a class="collapse-item <?= ($currentPage == 'dzoClassManagement.php') ? 'active' : '' ?>" href="dzoClassManagement.php">
+                    Dzo Classes
+                    </a>
                 </div>
+                    
+
             </div>
         </li>
 
