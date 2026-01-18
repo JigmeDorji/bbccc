@@ -81,8 +81,6 @@ if ($userName && $password) {
                         setcookie("remember_user", "", time() - 3600, "/"); // delete if unchecked
                     }
 
-
-
                     header('Location: index-admin.php');
                     exit;
                 } else {
@@ -389,12 +387,10 @@ include_once 'include/nav.php'
                         </div>
                         <button type="submit" class="login-button">Sign In</button>
                     </form>
-
-
                 </div>
 
                 <div class="signup-link">
-                    Don't have student account? <a href="parentAccountSetup.php">Sign Up</a>
+                    Don't have account? <a href="parentAccountSetup.php">Sign Up</a>
                 </div>
             </div>
 

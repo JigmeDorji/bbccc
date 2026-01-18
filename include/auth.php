@@ -3,7 +3,8 @@
 /**
  * Log in a particular user and store extra info
  */
-function login($userid, $username, $companyID, $projectID,$companyName,$projectName,$role) {
+
+function login($userid, $username, $companyID, $projectID, $companyName, $projectName, $role, $email = null) {
     $_SESSION['userid'] = $userid;
     $_SESSION['username'] = $username;
     $_SESSION['companyID'] = $companyID;
@@ -11,6 +12,10 @@ function login($userid, $username, $companyID, $projectID,$companyName,$projectN
     $_SESSION['companyName'] = $companyName;
     $_SESSION['projectName'] = $projectName;
     $_SESSION['role'] = $role;
+
+    if ($email !== null) {
+        $_SESSION['email'] = $email;
+    }
 }
 
 /**
