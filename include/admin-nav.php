@@ -11,7 +11,6 @@ function isParent() { return strtolower($_SESSION['role'] ?? '') === 'parent'; }
 ?>
 
 <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
-
     <a class="sidebar-brand d-flex align-items-center justify-content-center" href="index-admin.php">
         <div class="sidebar-brand-icon">
             <img src="bbccassests/img/logo/logo5.jpg" alt="Bhutanese Centre Logo" class="img-thumbnail">
@@ -70,6 +69,13 @@ function isParent() { return strtolower($_SESSION['role'] ?? '') === 'parent'; }
     <!-- Parent-only menu -->
     <?php if (isParent()) { ?>
         <hr class="sidebar-divider">
+        <li class="nav-item <?= ($currentPage == 'parentProfile.php') ? 'active' : '' ?>">
+            <a class="nav-link" href="parentProfile.php">
+                <i class="fas fa-user"></i>
+                <span>My Profile</span>
+            </a>
+        </li>
+        
         <li class="nav-item <?= ($currentPage == 'studentSetup.php') ? 'active' : '' ?>">
             <a class="nav-link" href="studentSetup.php">
                 <i class="fas fa-user-graduate"></i>
