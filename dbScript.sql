@@ -175,6 +175,57 @@ CREATE TABLE `students` (
 ) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 
+-- Create password_reset table
+
+CREATE TABLE `password_resets` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_email` varchar(190) NOT NULL,
+  `token_hash` varchar(255) NOT NULL,
+  `expires_at` datetime NOT NULL,
+  `used_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL,
+  `request_ip` varchar(45) DEFAULT NULL,
+  `user_agent` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_email` (`user_email`),
+  KEY `idx_expires` (`expires_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- Create parent_profile_update_log table
+
+CREATE TABLE `parent_profile_update_log` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `parent_id` int NOT NULL,
+  `updated_by_userid` varchar(10) NOT NULL,
+  `updated_at` datetime NOT NULL,
+  `old_data` json DEFAULT NULL,
+  `new_data` json DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `parent_id` (`parent_id`),
+  KEY `updated_by_userid` (`updated_by_userid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+SELECT * FROM bbcc_db.parent_profile_update_log;
+
+-- Create parent_profile_audit table
+
+CREATE TABLE `parent_profile_audit` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `parentId` int NOT NULL,
+  `userId` varchar(10) DEFAULT NULL,
+  `action` varchar(50) NOT NULL DEFAULT 'UPDATE_PROFILE',
+  `changed_fields` text,
+  `old_data` json DEFAULT NULL,
+  `new_data` json DEFAULT NULL,
+  `ip_address` varchar(45) DEFAULT NULL,
+  `user_agent` varchar(255) DEFAULT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+
+
 -- Insert values here
 
 INSERT INTO users

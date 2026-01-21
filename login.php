@@ -349,7 +349,7 @@ if (!empty($userName) && !empty($password)) {
                                 <input type="checkbox" id="remember" name="remember" <?php if(!empty($_COOKIE['remember_user'])) echo "checked"; ?>>
                                 <label for="remember">Remember me</label>
                             </div>
-                            <a href="#" class="forgot-password">Forgot Password?</a>
+                            <a href="forgotPassword.php" class="forgot-password">Forgot Password?</a>
                         </div>
 
                         <button type="submit" class="login-button">Sign In</button>
