@@ -1,20 +1,18 @@
 <?php
+// include/admin-header.php
 require_once "include/config.php";
 require_once "include/auth.php";
 require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
+$profileUrl = ($role === 'parent') ? 'parentProfile.php' : 'adminProfile.php';
 ?>
-<html>
-<head>
-    <style>
-        body { font-size: 0.85rem !important; }
-        table, input, select, label, .form-control, .btn, .card, .accordion { font-size: 0.85rem !important; }
-        h1, h6 { font-size: 1rem !important; }
-        .topbar .mx-auto { text-align: center; }
-    </style>
-</head>
-</html>
+<style>
+    body { font-size: 0.85rem !important; }
+    table, input, select, label, .form-control, .btn, .card, .accordion { font-size: 0.85rem !important; }
+    h1, h6 { font-size: 1rem !important; }
+    .topbar .mx-auto { text-align: center; }
+</style>
 
 <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow pt-4">
     <ul class="navbar-nav ml-auto">
@@ -33,23 +31,14 @@ $role = strtolower($_SESSION['role'] ?? '');
             </a>
 
             <div class="dropdown-menu dropdown-menu-right shadow animated--grow-in" aria-labelledby="userDropdown">
-
-                <!-- ✅ My Profile (go to parentProfile.php for parents, else you can create adminProfile.php later) -->
-                <?php if ($role === 'parent'): ?>
-                    <a class="dropdown-item" href="parentProfile.php">
-                        <i class="fas fa-user fa-sm fa-fw mr-2 text-gray-400"></i>
-                        My Profile
-                    </a>
-                <?php else: ?>
-                    <a class="dropdown-item" href="parentProfile.php">
-                        <i class="fas fa-user fa-sm fa-fw mr-2 text-gray-400"></i>
-                        My Profile
-                    </a>
-                <?php endif; ?>
+                <a class="dropdown-item" href="<?php echo htmlspecialchars($profileUrl, ENT_QUOTES, 'UTF-8'); ?>">
+                    <i class="fas fa-user fa-sm fa-fw mr-2 text-gray-400"></i>
+                    My Profile
+                </a>
 
                 <div class="dropdown-divider"></div>
 
-                <!-- ✅ Logout should stay POST -->
+                <!-- Logout stays POST -->
                 <form action="logout.php" method="POST" style="margin:0;">
                     <button type="submit" class="dropdown-item">
                         <i class="fas fa-sign-out-alt fa-sm fa-fw mr-2 text-gray-400"></i>

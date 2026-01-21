@@ -131,6 +131,51 @@ CREATE TABLE `user` (
                         PRIMARY KEY (`userid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- Create parents table
+
+CREATE TABLE `parents` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `full_name` varchar(150) NOT NULL,
+  `gender` varchar(20) DEFAULT NULL,
+  `email` varchar(150) NOT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `address` text,
+  `occupation` varchar(100) DEFAULT NULL,
+  `username` varchar(100) NOT NULL,
+  `password` varchar(255) NOT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `email` (`email`),
+  UNIQUE KEY `username` (`username`)
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Create students table
+
+CREATE TABLE `students` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `student_id` varchar(50) NOT NULL,
+  `student_name` varchar(150) NOT NULL,
+  `dob` date DEFAULT NULL,
+  `gender` varchar(20) DEFAULT NULL,
+  `medical_issue` text,
+  `class_option` varchar(30) DEFAULT NULL,
+  `payment_plan` varchar(30) DEFAULT NULL,
+  `payment_amount` decimal(10,2) DEFAULT NULL,
+  `payment_reference` varchar(150) DEFAULT NULL,
+  `payment_proof` varchar(255) DEFAULT NULL,
+  `registration_date` date DEFAULT NULL,
+  `approval_status` varchar(30) DEFAULT 'Pending',
+  `parentId` int DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `student_id` (`student_id`),
+  KEY `fk_students_parent` (`parentId`),
+  CONSTRAINT `fk_students_parent` FOREIGN KEY (`parentId`) REFERENCES `parents` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+
+-- Insert values here
 
 INSERT INTO users
 (userid, username, password, companyID, projectID, role, createdDate)
@@ -142,7 +187,6 @@ VALUES
 (3, 'sonam', '$2y$12$i.q0uRm0PMLJ3IBVm95EdOissq14I7qhwjI/FkAajMJkWNByRV8oC', 3, 3, 'Company Admin', '2025-07-25 08:20:24'),
 
 (5, 'znk', '$2y$12$7KTIYfKqIAWRCihi50Cf0.nl.S0.EIs4DmPV6wqZ2RlGoeGgfiEdC', 1, 1, 'Staff', '2025-07-29 02:46:27');
-
 
 
 
@@ -167,5 +211,8 @@ VALUES
  'BBCC plans to establish a Bhutanese Temple in Canberra as a vibrant centre for ceremonies, meditation, counselling, and cultural activities, promoting wellbeing and spiritual guidance for the community.'
 );
 
-changes
+-- Add any changes here
+
+
+
 

@@ -17,7 +17,10 @@ try {
         "mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME,
         $DB_USER,
         $DB_PASSWORD,
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+        ]
     );
 } catch (Exception $e) {
     die("DB connection failed: " . $e->getMessage());
@@ -45,6 +48,7 @@ if (isset($_GET['action'], $_GET['student'])) {
 
     if ($studentId > 0 && in_array($action, ['approve', 'reject'], true)) {
         $newStatus = ($action === 'approve') ? 'Approved' : 'Rejected';
+
         $stmt = $pdo->prepare("UPDATE students SET approval_status = :st WHERE id = :id");
         $stmt->execute([':st' => $newStatus, ':id' => $studentId]);
 
@@ -71,8 +75,16 @@ if (isset($_GET['view'])) {
             LIMIT 1
         ");
         $stmtView->execute([':id' => $viewId]);
-        $viewStudent = $stmtView->fetch(PDO::FETCH_ASSOC);
+        $viewStudent = $stmtView->fetch();
     }
+}
+
+function badge_class($st) {
+    $st = strtolower($st ?? '');
+    if ($st === 'pending') return 'warning';
+    if ($st === 'approved') return 'success';
+    if ($st === 'rejected') return 'danger';
+    return 'secondary';
 }
 
 // FETCH ALL
@@ -86,15 +98,20 @@ $stmt = $pdo->prepare("
     ORDER BY s.id DESC
 ");
 $stmt->execute();
-$students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$students = $stmt->fetchAll();
 
-function badge_class($st) {
-    $st = strtolower($st ?? '');
-    if ($st === 'pending') return 'warning';
-    if ($st === 'approved') return 'success';
-    if ($st === 'rejected') return 'danger';
-    return 'secondary';
-}
+/**
+ * ✅ Load page-specific scripts via admin-footer.php (no duplicate jQuery/Bootstrap)
+ */
+$pageScripts = [
+    "https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js",
+    "https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap4.min.js",
+    "https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js",
+    "https://cdn.datatables.net/buttons/2.4.2/js/buttons.bootstrap4.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js",
+    "https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js",
+    "https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js",
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -104,19 +121,45 @@ function badge_class($st) {
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>Dzo Class Management</title>
 
+    <!-- SB Admin 2 CSS -->
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
+
+    <!-- DataTables (Bootstrap 4) + Buttons -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap4.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.bootstrap4.min.css">
+
+    <!-- SweetAlert -->
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <style>
+        .summary-card .label { font-size: 12px; font-weight: 700; text-transform: uppercase; }
+        .summary-card .value { font-size: 30px; font-weight: 800; line-height: 1.1; }
+
+        .filters-box { background:#f8f9fc; border:1px solid #e3e6f0; padding:12px; border-radius:8px; }
+        .filters-box label { font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+
+        .status-tabs .btn { margin-right: 6px; }
+        .status-tabs .btn.active { box-shadow: inset 0 0 0 2px rgba(0,0,0,.08); }
+
+        .dt-buttons .btn { margin-right: 6px; margin-bottom: 6px; }
+
+        td.wrap { white-space: normal !important; max-width: 240px; }
+
+        /* Ensure topbar dropdown stays above tables */
+        .topbar { position: relative; z-index: 2000; }
+        .dropdown-menu { z-index: 3000; }
+    </style>
 </head>
 
 <body id="page-top">
 <div id="wrapper">
 
-    <?php include_once 'include/admin-nav.php'; ?>
+    <?php include 'include/admin-nav.php'; ?>
 
     <div id="content-wrapper" class="d-flex flex-column">
         <div id="content">
-            <?php include_once 'include/admin-header.php'; ?>
+            <?php include 'include/admin-header.php'; ?>
 
             <div class="container-fluid">
                 <h1 class="h3 mb-2 text-gray-800">Dzo Class Management</h1>
@@ -126,35 +169,114 @@ function badge_class($st) {
                     const msg = <?php echo json_encode($message); ?>;
                     const reload = <?php echo $reloadPage ? 'true' : 'false'; ?>;
                     if (msg) {
-                        Swal.fire({ icon: msg.toLowerCase().startsWith('error') ? 'error':'success', title: msg, showConfirmButton: false, timer: 1400 })
-                        .then(() => { if (reload) window.location.href = 'dzoClassManagement.php'; });
+                        Swal.fire({
+                            icon: msg.toLowerCase().startsWith('error') ? 'error' : 'success',
+                            title: msg,
+                            showConfirmButton: false,
+                            timer: 1400
+                        }).then(() => {
+                            if (reload) window.location.href = 'dzoClassManagement.php';
+                        });
                     }
                 });
                 </script>
 
-                <div class="alert alert-info shadow-sm">
-                    <strong>Note:</strong>
-                    <ul class="mb-0">
-                        <li>Approve only after checking payment proof/reference.</li>
-                        <li>Parents can edit/delete only while Pending.</li>
-                        <li>Use Attendance menu to mark attendance for Approved students.</li>
-                    </ul>
+                <!-- Summary Cards (OVERALL TOTALS) -->
+                <div class="row mb-3">
+                    <div class="col-lg-3 mb-3">
+                        <div class="card shadow summary-card">
+                            <div class="card-body">
+                                <div class="label text-primary">Total</div>
+                                <div class="value" id="sumTotal">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 mb-3">
+                        <div class="card shadow summary-card">
+                            <div class="card-body">
+                                <div class="label text-warning">Pending</div>
+                                <div class="value" id="sumPending">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 mb-3">
+                        <div class="card shadow summary-card">
+                            <div class="card-body">
+                                <div class="label text-success">Approved</div>
+                                <div class="value" id="sumApproved">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-3 mb-3">
+                        <div class="card shadow summary-card">
+                            <div class="card-body">
+                                <div class="label text-danger">Rejected</div>
+                                <div class="value" id="sumRejected">0</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
+                <!-- Filters -->
+                <div class="filters-box mb-3">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between">
+                        <div class="status-tabs mb-2">
+                            <button class="btn btn-sm btn-primary active" type="button" data-status="all">All</button>
+                            <button class="btn btn-sm btn-warning" type="button" data-status="pending">Pending</button>
+                            <button class="btn btn-sm btn-success" type="button" data-status="approved">Approved</button>
+                            <button class="btn btn-sm btn-danger" type="button" data-status="rejected">Rejected</button>
+                        </div>
+
+                        <div class="mb-2">
+                            <a href="attendanceManagement.php" class="btn btn-success btn-sm">
+                                <i class="fas fa-clipboard-check"></i> Attendance
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-3 mb-2">
+                            <label>Search Column</label>
+                            <select class="form-control" id="colSelect">
+                                <option value="-1">All Columns</option>
+                                <option value="2">Student ID</option>
+                                <option value="3">Student Name</option>
+                                <option value="11">Parent</option>
+                                <option value="7">Reference</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6 mb-2">
+                            <label>Search</label>
+                            <input type="text" class="form-control" id="searchBox" placeholder="Type anything... (instant)">
+                        </div>
+
+                        <div class="col-md-3 mb-2">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-secondary btn-block" id="resetBtn" type="button">
+                                Reset Filters
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="small text-muted mt-2">
+                        Tip: Use the export buttons (Copy/Excel/CSV/Print) above the table.
+                    </div>
+                </div>
+
+                <!-- Table -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                        <h6 class="m-0 font-weight-bold text-primary">All Enrollments</h6>
-                        <a href="attendanceManagement.php" class="btn btn-success btn-sm">
-                            <i class="fas fa-clipboard-check"></i> Attendance
-                        </a>
+                        <h6 class="m-0 font-weight-bold text-primary">Enrollments</h6>
                     </div>
 
                     <div class="card-body">
                         <div class="table-responsive">
-                            <table class="table table-bordered" width="100%" cellspacing="0">
+                            <table id="enrollTable" class="table table-bordered" width="100%" cellspacing="0">
                                 <thead>
                                 <tr>
                                     <th>#</th>
+                                    <th>DB ID</th>
                                     <th>Student ID</th>
                                     <th>Name</th>
                                     <th>Class</th>
@@ -172,15 +294,14 @@ function badge_class($st) {
                                 <?php foreach ($students as $i => $s): ?>
                                     <?php $st = strtolower($s['approval_status'] ?? ''); ?>
                                     <tr>
-                                        <td><?php echo (int)($i+1); ?></td>
+                                        <td><?php echo (int)($i + 1); ?></td>
+                                        <td><?php echo (int)($s['id'] ?? 0); ?></td>
                                         <td><?php echo htmlspecialchars($s['student_id'] ?? ''); ?></td>
                                         <td><?php echo htmlspecialchars($s['student_name'] ?? ''); ?></td>
                                         <td><?php echo htmlspecialchars($s['class_option'] ?? '-'); ?></td>
                                         <td><?php echo htmlspecialchars($s['payment_plan'] ?? '-'); ?></td>
-                                        <td><?php echo isset($s['payment_amount']) ? '$'.htmlspecialchars($s['payment_amount']) : '-'; ?></td>
-                                        <td style="max-width:220px; white-space:normal;">
-                                            <?php echo htmlspecialchars($s['payment_reference'] ?? '-'); ?>
-                                        </td>
+                                        <td><?php echo isset($s['payment_amount']) ? '$' . htmlspecialchars($s['payment_amount']) : '-'; ?></td>
+                                        <td class="wrap"><?php echo htmlspecialchars($s['payment_reference'] ?? '-'); ?></td>
                                         <td>
                                             <?php if (!empty($s['payment_proof'])): ?>
                                                 <a href="<?php echo htmlspecialchars($s['payment_proof']); ?>" target="_blank">View</a>
@@ -227,12 +348,14 @@ function badge_class($st) {
                     </div>
                 </div>
 
+                <!-- View details -->
                 <?php if ($viewStudent): ?>
                     <div class="card shadow mb-4">
                         <div class="card-header py-3 d-flex justify-content-between align-items-center">
                             <h6 class="m-0 font-weight-bold text-primary">Enrollment Details</h6>
                             <a href="dzoClassManagement.php" class="btn btn-secondary btn-sm">Close</a>
                         </div>
+
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-md-6">
@@ -250,9 +373,7 @@ function badge_class($st) {
                                     <p><strong>Proof:</strong>
                                         <?php if (!empty($viewStudent['payment_proof'])): ?>
                                             <a href="<?php echo htmlspecialchars($viewStudent['payment_proof']); ?>" target="_blank">View proof</a>
-                                        <?php else: ?>
-                                            -
-                                        <?php endif; ?>
+                                        <?php else: ?>-<?php endif; ?>
                                     </p>
                                     <p><strong>Status:</strong> <?php echo htmlspecialchars($viewStudent['approval_status'] ?? '-'); ?></p>
                                 </div>
@@ -284,12 +405,109 @@ function badge_class($st) {
             </div>
         </div>
 
-        <?php include_once 'include/admin-footer.php'; ?>
+        <?php include 'include/admin-footer.php'; ?>
     </div>
 </div>
 
 <script>
-document.addEventListener("DOMContentLoaded", function () {
+function updateSummaryOverall(dt) {
+    // Overall totals: ignore filtering/search
+    const rows = dt.rows({ search: 'none' }).data();
+
+    let total = rows.length;
+    let pending = 0, approved = 0, rejected = 0;
+
+    for (let i = 0; i < rows.length; i++) {
+        const statusHtml = rows[i][10] || "";
+        const text = $("<div>").html(statusHtml).text().trim().toLowerCase();
+
+        if (text === 'pending') pending++;
+        else if (text === 'approved') approved++;
+        else if (text === 'rejected') rejected++;
+    }
+
+    $('#sumTotal').text(total);
+    $('#sumPending').text(pending);
+    $('#sumApproved').text(approved);
+    $('#sumRejected').text(rejected);
+}
+
+$(document).ready(function () {
+
+    const dt = $('#enrollTable').DataTable({
+        pageLength: 10,
+        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "All"]],
+        order: [[1, 'desc']],
+        columnDefs: [
+            { targets: [1], visible: false },
+            { targets: [12], orderable: false }
+        ],
+        dom: "<'row mb-2'<'col-md-6'B><'col-md-6 text-md-right'l>>" +
+             "<'row'<'col-12'tr>>" +
+             "<'row mt-2'<'col-md-5'i><'col-md-7'p>>",
+        buttons: [
+            { extend: 'copyHtml5', className: 'btn btn-sm btn-outline-primary' },
+            { extend: 'csvHtml5', className: 'btn btn-sm btn-outline-primary' },
+            { extend: 'excelHtml5', className: 'btn btn-sm btn-outline-primary' },
+            { extend: 'print', className: 'btn btn-sm btn-outline-primary' }
+        ]
+    });
+
+    // Calculate totals ONCE (keep constant)
+    updateSummaryOverall(dt);
+
+    // Search box
+    $('#searchBox').on('input', function () {
+        const col = parseInt($('#colSelect').val(), 10);
+        const val = this.value;
+
+        dt.columns().search('');
+
+        if (col === -1) {
+            dt.search(val).draw();
+        } else {
+            dt.search('');
+            dt.column(col).search(val).draw();
+        }
+    });
+
+    $('#colSelect').on('change', function () {
+        $('#searchBox').trigger('input');
+    });
+
+    // Status tabs (column 10)
+    $('.status-tabs button').on('click', function () {
+        $('.status-tabs button').removeClass('active');
+        $(this).addClass('active');
+
+        const st = ($(this).data('status') || 'all').toLowerCase();
+
+        dt.search('');
+        dt.columns().search('');
+        $('#searchBox').val('');
+
+        if (st === 'all') {
+            dt.column(10).search('').draw();
+        } else {
+            dt.column(10).search(st, true, false).draw();
+        }
+    });
+
+    // Reset
+    $('#resetBtn').on('click', function () {
+        $('.status-tabs button').removeClass('active');
+        $('.status-tabs button[data-status="all"]').addClass('active');
+
+        $('#colSelect').val('-1');
+        $('#searchBox').val('');
+
+        dt.search('');
+        dt.columns().search('');
+        dt.column(10).search('');
+        dt.draw();
+    });
+
+    // SweetAlert Delete
     document.querySelectorAll(".delete-btn").forEach(btn => {
         btn.addEventListener("click", function (e) {
             e.preventDefault();
@@ -311,6 +529,7 @@ document.addEventListener("DOMContentLoaded", function () {
             });
         });
     });
+
 });
 </script>
 
