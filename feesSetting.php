@@ -5,16 +5,11 @@ require_login();
 
 /**
  * ✅ Admin-only guard
- * Adjust role names to match your system.
- * Common ones in your project: Administrator, company_admin
  */
 $role = strtolower(trim($_SESSION['role'] ?? ''));
-
-// If your system uses "Administrator" (capital A) in DB/session, strtolower makes it "administrator"
 $allowedRoles = ['administrator', 'company_admin', 'system_owner'];
 
 if (!in_array($role, $allowedRoles, true)) {
-    // Parents and any other roles are blocked
     header("Location: index-admin.php");
     exit;
 }
@@ -37,9 +32,6 @@ try {
 } catch (Exception $e) {
     die("DB connection failed: " . $e->getMessage());
 }
-
-// ✅ OPTIONAL DEBUG (TEMPORARY): uncomment to confirm page is reached
-// die("feesSettings.php reached | role={$role} | user=" . ($_SESSION['username'] ?? 'none'));
 
 // Load settings
 $stmt = $pdo->query("SELECT * FROM fees_settings WHERE id = 1 LIMIT 1");
@@ -72,6 +64,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $due_term3 = $due_term3 === '' ? null : $due_term3;
         $due_term4 = $due_term4 === '' ? null : $due_term4;
 
+        // ✅ Amounts (NEW)
+        $amount_termwise   = (float)($_POST['amount_termwise'] ?? 0);
+        $amount_halfyearly = (float)($_POST['amount_halfyearly'] ?? 0);
+        $amount_yearly     = (float)($_POST['amount_yearly'] ?? 0);
+
+        if ($amount_termwise < 0 || $amount_halfyearly < 0 || $amount_yearly < 0) {
+            throw new Exception("Amounts cannot be negative.");
+        }
+
         $upd = $pdo->prepare("
             UPDATE fees_settings
             SET bank_name = :bank_name,
@@ -82,7 +83,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 due_term1 = :due_term1,
                 due_term2 = :due_term2,
                 due_term3 = :due_term3,
-                due_term4 = :due_term4
+                due_term4 = :due_term4,
+                amount_termwise = :amount_termwise,
+                amount_halfyearly = :amount_halfyearly,
+                amount_yearly = :amount_yearly
             WHERE id = 1
         ");
         $upd->execute([
@@ -95,6 +99,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ':due_term2' => $due_term2,
             ':due_term3' => $due_term3,
             ':due_term4' => $due_term4,
+            ':amount_termwise' => $amount_termwise,
+            ':amount_halfyearly' => $amount_halfyearly,
+            ':amount_yearly' => $amount_yearly,
         ]);
 
         $message = "Fees settings updated successfully.";
@@ -161,6 +168,7 @@ function h($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
                 <form method="POST">
                     <div class="row">
+                        <!-- BANK DETAILS -->
                         <div class="col-lg-6 mb-3">
                             <div class="card shadow">
                                 <div class="card-header py-3">
@@ -199,10 +207,11 @@ function h($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
                             </div>
                         </div>
 
+                        <!-- DUE DATES + AMOUNTS -->
                         <div class="col-lg-6 mb-3">
                             <div class="card shadow">
                                 <div class="card-header py-3">
-                                    <h6 class="m-0 font-weight-bold text-primary">Due Dates</h6>
+                                    <h6 class="m-0 font-weight-bold text-primary">Due Dates & Fees Amounts</h6>
                                 </div>
                                 <div class="card-body">
                                     <div class="box">
@@ -213,6 +222,32 @@ function h($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
                                                 <li><strong>TERM3 = HALF2</strong></li>
                                             </ul>
                                         </div>
+
+                                        <!-- ✅ AMOUNTS (NEW) -->
+                                        <div class="form-row">
+                                            <div class="form-group col-md-4">
+                                                <label>Term-wise Amount</label>
+                                                <input type="number" step="0.01" min="0" class="form-control"
+                                                       name="amount_termwise"
+                                                       value="<?php echo h($settings['amount_termwise'] ?? '65.00'); ?>">
+                                            </div>
+
+                                            <div class="form-group col-md-4">
+                                                <label>Half-yearly Amount</label>
+                                                <input type="number" step="0.01" min="0" class="form-control"
+                                                       name="amount_halfyearly"
+                                                       value="<?php echo h($settings['amount_halfyearly'] ?? '125.00'); ?>">
+                                            </div>
+
+                                            <div class="form-group col-md-4">
+                                                <label>Yearly Amount</label>
+                                                <input type="number" step="0.01" min="0" class="form-control"
+                                                       name="amount_yearly"
+                                                       value="<?php echo h($settings['amount_yearly'] ?? '250.00'); ?>">
+                                            </div>
+                                        </div>
+
+                                        <hr>
 
                                         <div class="form-group">
                                             <label>Due Date — Term 1 (also Half 1 + Yearly)</label>
@@ -234,7 +269,7 @@ function h($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
                                             <input type="date" class="form-control" name="due_term4" value="<?php echo h($settings['due_term4'] ?? ''); ?>">
                                         </div>
 
-                                        <div class="hint">Parents will see the due date beside each installment.</div>
+                                        <div class="hint">Parents will see the due date in the column headers.</div>
                                     </div>
                                 </div>
                             </div>

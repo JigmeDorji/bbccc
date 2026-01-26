@@ -11,7 +11,7 @@ if ($role === 'parent') {
 
 $message = "";
 $success = false;
-$reload = false;
+$reload  = false;
 
 // ---------------- DB CONNECTION ----------------
 try {
@@ -28,11 +28,13 @@ try {
     die("DB connection failed: " . $e->getMessage());
 }
 
-// ---------------- LOAD FEES SETTINGS (BANK + DUE DATES) ----------------
+// ---------------- LOAD FEES SETTINGS ----------------
 $stmtSet = $pdo->query("SELECT * FROM fees_settings WHERE id = 1 LIMIT 1");
 $feesSettings = $stmtSet->fetch() ?: [];
 
 // ---------------- HELPERS ----------------
+function h($v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+
 function badge_class(string $status): string {
     $s = strtolower(trim($status));
     if ($s === 'approved') return 'success';
@@ -58,14 +60,6 @@ function proof_type(string $path): string {
     return ($ext === 'pdf') ? 'pdf' : 'img';
 }
 
-function plan_installments(string $plan): array {
-    $p = strtolower(trim($plan));
-    if ($p === 'term-wise') return ['TERM1','TERM2','TERM3','TERM4'];
-    if ($p === 'half-yearly') return ['HALF1','HALF2'];
-    if ($p === 'yearly') return ['YEARLY'];
-    return [];
-}
-
 /**
  * Due date rules requested:
  * TERM1 = HALF1 = YEARLY -> due_term1
@@ -84,47 +78,108 @@ function installment_due_date(array $settings, string $installmentCode): ?string
 }
 
 function pretty_date(?string $d): string {
-    if (!$d) return '-';
-    return htmlspecialchars($d);
+    return $d ? htmlspecialchars($d) : '-';
 }
 
-function h($v): string {
-    return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+/**
+ * ✅ First installment codes per plan (used for paid counts & reference column)
+ * Term-wise -> TERM1
+ * Half-yearly -> HALF1
+ * Yearly -> YEARLY
+ */
+function first_installment_code(string $planType): string {
+    return match ($planType) {
+        'Term-wise' => 'TERM1',
+        'Half-yearly' => 'HALF1',
+        'Yearly' => 'YEARLY',
+        default => 'TERM1'
+    };
 }
 
-// ---------------- APPROVE / REJECT INSTALLMENT ----------------
+function normalize_status($v): string {
+    return strtolower(trim((string)$v));
+}
+
+// ---------------- ACTIONS: APPROVE / REJECT / UPDATE ----------------
+// NOTE: "Update" here will open an inline modal to change status (Approved/Rejected/Pending) + reset verify meta.
+// If you want update to edit due_amount, remarks, etc, tell me and I will add those fields too.
+
 if (isset($_GET['fee_action'], $_GET['fee_id'])) {
     try {
         $feeId = (int)$_GET['fee_id'];
-        $act = strtolower(trim($_GET['fee_action']));
+        $act   = strtolower(trim($_GET['fee_action']));
 
         if ($feeId <= 0) throw new Exception("Invalid fee ID.");
-        if (!in_array($act, ['approve','reject'], true)) throw new Exception("Invalid action.");
 
-        $newStatus = ($act === 'approve') ? 'Approved' : 'Rejected';
+        // approve / reject keep as before
+        if (in_array($act, ['approve','reject'], true)) {
+            $newStatus = ($act === 'approve') ? 'Approved' : 'Rejected';
+            $verifiedBy = $_SESSION['username'] ?? 'admin';
+
+            $stmt = $pdo->prepare("
+                UPDATE fees_payments
+                SET status = :st,
+                    verified_by = :vb,
+                    verified_at = NOW()
+                WHERE id = :id
+            ");
+            $stmt->execute([':st'=>$newStatus, ':vb'=>$verifiedBy, ':id'=>$feeId]);
+
+            $message = "Installment {$newStatus} successfully.";
+            $success = true;
+            $reload  = true;
+        }
+
+        // update: handled via POST (safer), but keep GET to open modal only (UI)
+    } catch (Exception $e) {
+        $message = "Error: " . $e->getMessage();
+        $success = false;
+        $reload  = false;
+    }
+}
+
+// ---------------- UPDATE (POST) ----------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
+    try {
+        $feeId = (int)($_POST['update_fee_id'] ?? 0);
+        $newStatus = trim((string)($_POST['new_status'] ?? ''));
+
+        if ($feeId <= 0) throw new Exception("Invalid fee ID.");
+        if (!in_array($newStatus, ['Pending','Approved','Rejected'], true)) {
+            throw new Exception("Invalid status.");
+        }
+
         $verifiedBy = $_SESSION['username'] ?? 'admin';
 
-        $stmt = $pdo->prepare("
-            UPDATE fees_payments
-            SET status = :st,
-                verified_by = :vb,
-                verified_at = NOW()
-            WHERE id = :id
-        ");
-        $stmt->execute([
-            ':st' => $newStatus,
-            ':vb' => $verifiedBy,
-            ':id' => $feeId
-        ]);
+        // If Approved/Rejected => set verified_*; if Pending => clear verified_*
+        if ($newStatus === 'Pending') {
+            $stmt = $pdo->prepare("
+                UPDATE fees_payments
+                SET status = 'Pending',
+                    verified_by = NULL,
+                    verified_at = NULL
+                WHERE id = :id
+            ");
+            $stmt->execute([':id'=>$feeId]);
+        } else {
+            $stmt = $pdo->prepare("
+                UPDATE fees_payments
+                SET status = :st,
+                    verified_by = :vb,
+                    verified_at = NOW()
+                WHERE id = :id
+            ");
+            $stmt->execute([':st'=>$newStatus, ':vb'=>$verifiedBy, ':id'=>$feeId]);
+        }
 
-        $message = "Installment {$newStatus} successfully.";
+        $message = "Installment updated successfully.";
         $success = true;
-        $reload = true;
+        $reload  = true;
 
     } catch (Exception $e) {
         $message = "Error: " . $e->getMessage();
         $success = false;
-        $reload = false;
+        $reload  = false;
     }
 }
 
@@ -136,6 +191,7 @@ $stmt = $pdo->prepare("
         s.student_name,
         s.approval_status AS enrollment_status,
         s.payment_plan,
+        s.payment_reference AS enrollment_reference,
         s.payment_proof AS enrollment_proof,
         p.full_name AS parent_name,
         p.email AS parent_email,
@@ -168,6 +224,7 @@ foreach ($rows as $r) {
             'student_name' => $r['student_name'] ?? '',
             'payment_plan' => $r['payment_plan'] ?? $plan,
             'enrollment_status' => $r['enrollment_status'] ?? 'Pending',
+            'enrollment_reference' => $r['enrollment_reference'] ?? '',
             'enrollment_proof' => $r['enrollment_proof'] ?? '',
             'parent_name' => $r['parent_name'] ?? '',
             'parent_email' => $r['parent_email'] ?? '',
@@ -181,19 +238,54 @@ foreach ($rows as $r) {
     $group[$plan][$sid]['installments'][$code] = $r;
 }
 
-// order plans
+// Plans
 $plans = [
     'Term-wise' => ['TERM1','TERM2','TERM3','TERM4'],
     'Half-yearly' => ['HALF1','HALF2'],
     'Yearly' => ['YEARLY'],
 ];
 
-// Summary values
+// ---------------- GLOBAL SUMMARY (students/enrollments/paid counts) ----------------
+// count unique students in fees table
+$seenStudents = [];
+foreach ($rows as $r) {
+    $sid = (string)($r['student_id'] ?? '');
+    if ($sid !== '') $seenStudents[$sid] = true;
+}
+$totalStudents = count($seenStudents); // enrollments in fees system
+
+// Paid counts by installment code (unique students who have that installment Approved)
+$paidCounts = [
+    'TERM1'=>0,'TERM2'=>0,'TERM3'=>0,'TERM4'=>0,
+    'HALF1'=>0,'HALF2'=>0,
+    'YEARLY'=>0
+];
+$paidSeen = [
+    'TERM1'=>[],'TERM2'=>[],'TERM3'=>[],'TERM4'=>[],
+    'HALF1'=>[],'HALF2'=>[],
+    'YEARLY'=>[]
+];
+
+foreach ($rows as $r) {
+    $code = (string)($r['installment_code'] ?? '');
+    $sid  = (string)($r['student_id'] ?? '');
+    if ($sid === '' || $code === '') continue;
+
+    if (normalize_status($r['status'] ?? '') === 'approved') {
+        $paidSeen[$code][$sid] = true;
+    }
+}
+foreach ($paidSeen as $code => $set) {
+    $paidCounts[$code] = count($set);
+}
+
+// ---------------- Summary values (bank + due) ----------------
 $bankName = $feesSettings['bank_name'] ?? '';
 $accName  = $feesSettings['account_name'] ?? '';
 $bsb      = $feesSettings['bsb'] ?? '';
 $accNo    = $feesSettings['account_number'] ?? '';
 $notes    = $feesSettings['bank_notes'] ?? '';
+
 $due1 = $feesSettings['due_term1'] ?? null;
 $due2 = $feesSettings['due_term2'] ?? null;
 $due3 = $feesSettings['due_term3'] ?? null;
@@ -216,11 +308,17 @@ $due4 = $feesSettings['due_term4'] ?? null;
     <style>
         .mini { font-size:12px; color:#6c757d; }
         .nowrap { white-space:nowrap; }
-        td.wrap { white-space: normal !important; max-width: 240px; }
+        td.wrap { white-space: normal !important; max-width: 260px; }
 
         .summary-box { background:#f8f9fc; border:1px solid #e3e6f0; border-radius:12px; padding:14px; }
         .due-pill { display:inline-block; padding:4px 8px; border-radius:999px; background:#eef2ff; color:#1b4fd6; font-size:11px; font-weight:700; margin-right:6px; margin-bottom:6px; }
         .kv strong { display:inline-block; min-width:120px; }
+
+        /* Top summary cards */
+        .stat-card { border:1px solid #e3e6f0; border-radius:12px; padding:14px; background:#fff; }
+        .stat-label { font-size:12px; font-weight:800; text-transform:uppercase; color:#6c757d; }
+        .stat-value { font-size:28px; font-weight:900; line-height:1.1; }
+        .stat-sub { font-size:12px; color:#6c757d; }
 
         /* Proof UI */
         .proof-thumb {
@@ -278,6 +376,11 @@ $due4 = $feesSettings['due_term4'] ?? null;
             flex-wrap:wrap;
             margin-top:10px;
         }
+
+        thead th { vertical-align: middle !important; }
+        thead .mini { font-size:11px; font-weight:700; }
+
+        .ref-col { max-width: 220px; }
     </style>
 </head>
 <body id="page-top">
@@ -314,7 +417,36 @@ $due4 = $feesSettings['due_term4'] ?? null;
                     });
                 </script>
 
-                <!-- ✅ SUMMARY BOX -->
+                <!-- ✅ SUMMARY: ENROLLMENTS + PAID COUNTS -->
+                <div class="row mb-3">
+                    <div class="col-lg-3 mb-3">
+                        <div class="stat-card shadow-sm">
+                            <div class="stat-label text-primary">Enrollments</div>
+                            <div class="stat-value"><?php echo (int)$totalStudents; ?></div>
+                            <div class="stat-sub">Students in fees system</div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-9 mb-3">
+                        <div class="stat-card shadow-sm">
+                            <div class="stat-label text-info">Paid students by installment (Approved)</div>
+                            <div class="mt-2 mini">
+                                <span class="due-pill">Term 1: <?php echo (int)$paidCounts['TERM1']; ?></span>
+                                <span class="due-pill">Term 2: <?php echo (int)$paidCounts['TERM2']; ?></span>
+                                <span class="due-pill">Term 3: <?php echo (int)$paidCounts['TERM3']; ?></span>
+                                <span class="due-pill">Term 4: <?php echo (int)$paidCounts['TERM4']; ?></span>
+                                <span class="due-pill">Half 1: <?php echo (int)$paidCounts['HALF1']; ?></span>
+                                <span class="due-pill">Half 2: <?php echo (int)$paidCounts['HALF2']; ?></span>
+                                <span class="due-pill">Yearly: <?php echo (int)$paidCounts['YEARLY']; ?></span>
+                            </div>
+                            <div class="stat-sub mt-2">
+                                Counts are unique students whose installment status is <strong>Approved</strong>.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ✅ BANK + DUE SUMMARY BOX -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center">
                         <h6 class="m-0 font-weight-bold text-primary">
@@ -375,11 +507,19 @@ $due4 = $feesSettings['due_term4'] ?? null;
                                             <th>Email</th>
                                             <th>Phone</th>
                                             <th class="wrap">Address</th>
+                                            <th class="ref-col">Reference No.</th>
+
+                                            <!-- ✅ Due date shown in column header -->
                                             <?php foreach ($codes as $c): ?>
-                                                <th class="nowrap"><?php echo htmlspecialchars(installment_label($c)); ?></th>
+                                                <?php $dueHeader = installment_due_date($feesSettings, $c); ?>
+                                                <th class="nowrap text-center">
+                                                    <div><?php echo htmlspecialchars(installment_label($c)); ?></div>
+                                                    <div class="mini text-muted">Due: <?php echo $dueHeader ? htmlspecialchars($dueHeader) : '-'; ?></div>
+                                                </th>
                                             <?php endforeach; ?>
                                         </tr>
                                         </thead>
+
                                         <tbody>
                                         <?php foreach ($group[$planName] as $sid => $info): ?>
                                             <tr>
@@ -398,23 +538,37 @@ $due4 = $feesSettings['due_term4'] ?? null;
                                                 <td class="wrap"><?php echo htmlspecialchars($info['parent_phone'] ?: '-'); ?></td>
                                                 <td class="wrap"><?php echo htmlspecialchars($info['parent_address'] ?: '-'); ?></td>
 
+                                                <!-- ✅ Reference column -->
+                                                <td class="wrap">
+                                                    <?php
+                                                        // For each plan, display the reference of the FIRST installment row (best), else fallback to enrollment_reference.
+                                                        $firstCode = first_installment_code($planName);
+                                                        $ref = '';
+                                                        if (isset($info['installments'][$firstCode]['payment_reference'])) {
+                                                            $ref = (string)$info['installments'][$firstCode]['payment_reference'];
+                                                        }
+                                                        if ($ref === '') {
+                                                            $ref = (string)($info['enrollment_reference'] ?? '');
+                                                        }
+                                                    ?>
+                                                    <div class="mini"><strong><?php echo $ref ? htmlspecialchars($ref) : '-'; ?></strong></div>
+                                                    <div class="mini text-muted">Use this to match bank transfer</div>
+                                                </td>
+
                                                 <?php foreach ($codes as $code): ?>
                                                     <?php
                                                         $r = $info['installments'][$code] ?? null;
                                                         $status = $r['status'] ?? 'Pending';
                                                         $proof = trim((string)($r['proof_path'] ?? ''));
                                                         $feeId = (int)($r['id'] ?? 0);
-                                                        $due = installment_due_date($feesSettings, $code);
+
+                                                        $isApproved = (normalize_status($status) === 'approved');
                                                     ?>
                                                     <td>
                                                         <div class="mb-1">
                                                             <span class="badge badge-<?php echo badge_class($status); ?>">
                                                                 <?php echo htmlspecialchars($status); ?>
                                                             </span>
-                                                        </div>
-
-                                                        <div class="mini mb-2">
-                                                            <span class="due-pill">Due: <?php echo pretty_date($due); ?></span>
                                                         </div>
 
                                                         <?php if ($proof !== ''): ?>
@@ -438,18 +592,39 @@ $due4 = $feesSettings['due_term4'] ?? null;
                                                         <?php endif; ?>
 
                                                         <?php if ($feeId > 0): ?>
-                                                            <div class="btn-group btn-group-sm" role="group">
-                                                                <a class="btn btn-success"
-                                                                   href="feesManagement.php?fee_action=approve&fee_id=<?php echo (int)$feeId; ?>"
-                                                                   onclick="return confirm('Approve this installment?');">
-                                                                    Approve
-                                                                </a>
-                                                                <a class="btn btn-warning"
-                                                                   href="feesManagement.php?fee_action=reject&fee_id=<?php echo (int)$feeId; ?>"
-                                                                   onclick="return confirm('Reject this installment?');">
-                                                                    Reject
-                                                                </a>
-                                                            </div>
+                                                            <?php if ($isApproved): ?>
+                                                                <!-- ✅ Replace Approve/Reject with Update -->
+                                                                <button type="button"
+                                                                        class="btn btn-sm btn-outline-primary update-btn"
+                                                                        data-fee-id="<?php echo (int)$feeId; ?>"
+                                                                        data-current-status="<?php echo htmlspecialchars($status); ?>">
+                                                                    <i class="fas fa-edit"></i> Update
+                                                                </button>
+                                                            <?php else: ?>
+                                                                <div class="btn-group btn-group-sm" role="group">
+                                                                    <a class="btn btn-success"
+                                                                       href="feesManagement.php?fee_action=approve&fee_id=<?php echo (int)$feeId; ?>"
+                                                                       onclick="return confirm('Approve this installment?');">
+                                                                        Approve
+                                                                    </a>
+                                                                    <a class="btn btn-warning"
+                                                                       href="feesManagement.php?fee_action=reject&fee_id=<?php echo (int)$feeId; ?>"
+                                                                       onclick="return confirm('Reject this installment?');">
+                                                                        Reject
+                                                                    </a>
+                                                                </div>
+
+                                                                <!-- Also allow update even if not approved (optional).
+                                                                     If you want update only when approved, delete this: -->
+                                                                <div class="mt-2">
+                                                                    <button type="button"
+                                                                            class="btn btn-sm btn-outline-primary update-btn"
+                                                                            data-fee-id="<?php echo (int)$feeId; ?>"
+                                                                            data-current-status="<?php echo htmlspecialchars($status); ?>">
+                                                                        <i class="fas fa-edit"></i> Update
+                                                                    </button>
+                                                                </div>
+                                                            <?php endif; ?>
                                                         <?php else: ?>
                                                             <div class="mini text-muted">Missing fee row</div>
                                                         <?php endif; ?>
@@ -472,9 +647,16 @@ $due4 = $feesSettings['due_term4'] ?? null;
     </div>
 </div>
 
+<!-- Hidden Update Form (submitted via JS) -->
+<form id="updateFeeForm" method="POST" style="display:none;">
+    <input type="hidden" name="update_fee_id" id="update_fee_id" value="">
+    <input type="hidden" name="new_status" id="new_status" value="">
+</form>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
 
+    // ---------- Proof Modal ----------
     function openProofModal(path, type, filename) {
         filename = filename || 'proof';
 
@@ -564,6 +746,49 @@ document.addEventListener('DOMContentLoaded', function () {
             const name = this.getAttribute('data-name') || 'proof';
             if (!path) return;
             openProofModal(path, type, name);
+        });
+    });
+
+    // ---------- Update button ----------
+    document.querySelectorAll('.update-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const feeId = this.getAttribute('data-fee-id');
+            const current = this.getAttribute('data-current-status') || 'Pending';
+
+            Swal.fire({
+                title: 'Update Installment',
+                html: `
+                    <div class="text-left">
+                        <div class="mini mb-2">Fee ID: <strong>${feeId}</strong></div>
+                        <label class="mini mb-1">Status</label>
+                        <select id="statusSelect" class="form-control">
+                            <option value="Pending">Pending</option>
+                            <option value="Approved">Approved</option>
+                            <option value="Rejected">Rejected</option>
+                        </select>
+                        <div class="mini text-muted mt-2">
+                            If set to Pending, verified_by and verified_at will be cleared.
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Save',
+                cancelButtonText: 'Cancel',
+                didOpen: () => {
+                    const sel = document.getElementById('statusSelect');
+                    if (sel) sel.value = (current.charAt(0).toUpperCase() + current.slice(1).toLowerCase());
+                },
+                preConfirm: () => {
+                    const sel = document.getElementById('statusSelect');
+                    return sel ? sel.value : 'Pending';
+                }
+            }).then((res) => {
+                if (!res.isConfirmed) return;
+
+                document.getElementById('update_fee_id').value = feeId;
+                document.getElementById('new_status').value = res.value;
+                document.getElementById('updateFeeForm').submit();
+            });
         });
     });
 
