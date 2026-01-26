@@ -26,34 +26,189 @@ try {
     die("DB connection failed: " . $e->getMessage());
 }
 
-// DELETE (admin)
+// ---------------- FEES HELPERS (SYNC ON APPROVE/REJECT) ----------------
+function plan_installments(string $plan): array {
+    $p = strtolower(trim($plan));
+    if ($p === 'term-wise') return ['TERM1','TERM2','TERM3','TERM4'];
+    if ($p === 'half-yearly') return ['HALF1','HALF2'];
+    if ($p === 'yearly') return ['YEARLY'];
+    return [];
+}
+
+function first_installment_code(string $planType): string {
+    if ($planType === 'Term-wise') return 'TERM1';
+    if ($planType === 'Half-yearly') return 'HALF1';
+    return 'YEARLY';
+}
+
+// Adjust if needed
+function default_due_amount(string $planType, string $code): float {
+    if ($planType === 'Term-wise') return 65.00;
+    if ($planType === 'Half-yearly') return 125.00;
+    if ($planType === 'Yearly') return 250.00;
+    return 0.00;
+}
+
+function ensure_fee_rows(PDO $pdo, string $studentDbId, string $planType, ?string $enrollProof, string $enrollStatus): void {
+    $installments = plan_installments($planType);
+    if (!$installments) return;
+
+    $firstCode = first_installment_code($planType);
+
+    foreach ($installments as $code) {
+        $stmt = $pdo->prepare("SELECT * FROM fees_payments WHERE student_id = :sid AND installment_code = :code LIMIT 1");
+        $stmt->execute([':sid' => $studentDbId, ':code' => $code]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            $due = default_due_amount($planType, $code);
+
+            $status = 'Pending';
+            $proof  = null;
+
+            // first installment proof comes from enrollment proof
+            if ($code === $firstCode && !empty($enrollProof)) {
+                $proof = $enrollProof;
+                if (strtolower($enrollStatus) === 'approved') $status = 'Approved';
+            }
+
+            $ins = $pdo->prepare("
+                INSERT INTO fees_payments (student_id, plan_type, installment_code, due_amount, status, proof_path)
+                VALUES (:sid, :plan, :code, :due, :st, :proof)
+            ");
+            $ins->execute([
+                ':sid'   => $studentDbId,
+                ':plan'  => $planType,
+                ':code'  => $code,
+                ':due'   => $due,
+                ':st'    => $status,
+                ':proof' => $proof
+            ]);
+        }
+    }
+}
+
+function approve_first_installment(PDO $pdo, string $studentDbId, string $planType, ?string $enrollProof, string $verifiedBy): void {
+    if (empty($enrollProof)) return; // cannot approve without proof
+
+    $firstCode = first_installment_code($planType);
+
+    $stmt = $pdo->prepare("
+        UPDATE fees_payments
+        SET
+            proof_path = CASE WHEN (proof_path IS NULL OR proof_path = '') THEN :proof ELSE proof_path END,
+            status = 'Approved',
+            verified_by = :vb,
+            verified_at = NOW()
+        WHERE student_id = :sid AND installment_code = :code
+    ");
+    $stmt->execute([
+        ':proof' => $enrollProof,
+        ':vb'    => $verifiedBy,
+        ':sid'   => $studentDbId,
+        ':code'  => $firstCode
+    ]);
+}
+
+function reject_all_installments(PDO $pdo, string $studentDbId, string $verifiedBy): void {
+    $stmt = $pdo->prepare("
+        UPDATE fees_payments
+        SET status = 'Rejected',
+            verified_by = :vb,
+            verified_at = NOW()
+        WHERE student_id = :sid
+    ");
+    $stmt->execute([
+        ':vb'  => $verifiedBy,
+        ':sid' => $studentDbId
+    ]);
+}
+
+// DELETE (admin) - also remove fees_payments rows
 if (isset($_GET['delete'])) {
     try {
         $id = (int)$_GET['delete'];
         if ($id > 0) {
+            $pdo->beginTransaction();
+
+            // delete fees first
+            $stmt = $pdo->prepare("DELETE FROM fees_payments WHERE student_id = :sid");
+            $stmt->execute([':sid' => (string)$id]);
+
+            // then delete enrollment
             $stmt = $pdo->prepare("DELETE FROM students WHERE id = :id");
             $stmt->execute([':id' => $id]);
+
+            $pdo->commit();
+
             $message = "Enrollment deleted successfully.";
             $reloadPage = true;
         }
     } catch (Exception $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
         $message = "Error: " . $e->getMessage();
     }
 }
 
-// APPROVE / REJECT
+// APPROVE / REJECT (sync fees instantly)
 if (isset($_GET['action'], $_GET['student'])) {
-    $action = strtolower($_GET['action']);
+    $action = strtolower(trim($_GET['action']));
     $studentId = (int)$_GET['student'];
 
     if ($studentId > 0 && in_array($action, ['approve', 'reject'], true)) {
-        $newStatus = ($action === 'approve') ? 'Approved' : 'Rejected';
+        try {
+            $pdo->beginTransaction();
 
-        $stmt = $pdo->prepare("UPDATE students SET approval_status = :st WHERE id = :id");
-        $stmt->execute([':st' => $newStatus, ':id' => $studentId]);
+            // Load student for plan + proof
+            $stmt = $pdo->prepare("
+                SELECT id, payment_plan, payment_proof, approval_status
+                FROM students
+                WHERE id = :id
+                LIMIT 1
+            ");
+            $stmt->execute([':id' => $studentId]);
+            $stu = $stmt->fetch();
 
-        $message = "Enrollment {$newStatus} successfully.";
-        $reloadPage = true;
+            if (!$stu) {
+                throw new Exception("Student enrollment not found.");
+            }
+
+            $planType    = (string)$stu['payment_plan'];     // Term-wise / Half-yearly / Yearly
+            $enrollProof = $stu['payment_proof'] ?? null;    // enrollment proof
+            $verifiedBy  = $_SESSION['username'] ?? 'admin';
+
+            $studentKey = (string)$studentId; // fees_payments stores student_id as varchar
+
+            if ($action === 'approve') {
+                $upd = $pdo->prepare("UPDATE students SET approval_status = 'Approved' WHERE id = :id");
+                $upd->execute([':id' => $studentId]);
+
+                ensure_fee_rows($pdo, $studentKey, $planType, $enrollProof, 'Approved');
+                approve_first_installment($pdo, $studentKey, $planType, $enrollProof, $verifiedBy);
+
+                $pdo->commit();
+
+                $message = "Enrollment Approved + first fee installment Approved.";
+                $reloadPage = true;
+
+            } else {
+                $upd = $pdo->prepare("UPDATE students SET approval_status = 'Rejected' WHERE id = :id");
+                $upd->execute([':id' => $studentId]);
+
+                ensure_fee_rows($pdo, $studentKey, $planType, $enrollProof, 'Rejected');
+                reject_all_installments($pdo, $studentKey, $verifiedBy);
+
+                $pdo->commit();
+
+                $message = "Enrollment Rejected + all fee installments marked Rejected.";
+                $reloadPage = true;
+            }
+
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $message = "Error: " . $e->getMessage();
+            $reloadPage = false;
+        }
     }
 }
 
@@ -411,7 +566,6 @@ $pageScripts = [
 
 <script>
 function updateSummaryOverall(dt) {
-    // Overall totals: ignore filtering/search
     const rows = dt.rows({ search: 'none' }).data();
 
     let total = rows.length;
@@ -453,29 +607,22 @@ $(document).ready(function () {
         ]
     });
 
-    // Calculate totals ONCE (keep constant)
     updateSummaryOverall(dt);
 
-    // Search box
     $('#searchBox').on('input', function () {
         const col = parseInt($('#colSelect').val(), 10);
         const val = this.value;
 
         dt.columns().search('');
 
-        if (col === -1) {
-            dt.search(val).draw();
-        } else {
-            dt.search('');
-            dt.column(col).search(val).draw();
-        }
+        if (col === -1) dt.search(val).draw();
+        else { dt.search(''); dt.column(col).search(val).draw(); }
     });
 
     $('#colSelect').on('change', function () {
         $('#searchBox').trigger('input');
     });
 
-    // Status tabs (column 10)
     $('.status-tabs button').on('click', function () {
         $('.status-tabs button').removeClass('active');
         $(this).addClass('active');
@@ -486,14 +633,10 @@ $(document).ready(function () {
         dt.columns().search('');
         $('#searchBox').val('');
 
-        if (st === 'all') {
-            dt.column(10).search('').draw();
-        } else {
-            dt.column(10).search(st, true, false).draw();
-        }
+        if (st === 'all') dt.column(10).search('').draw();
+        else dt.column(10).search(st, true, false).draw();
     });
 
-    // Reset
     $('#resetBtn').on('click', function () {
         $('.status-tabs button').removeClass('active');
         $('.status-tabs button[data-status="all"]').addClass('active');

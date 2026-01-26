@@ -59,6 +59,9 @@ function isParent() { return strtolower($_SESSION['role'] ?? '') === 'parent'; }
             <div id="collapseOrders" class="collapse <?= in_array($currentPage, ['dzoClassManagement.php','attendanceManagement.php']) ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <a class="collapse-item <?= ($currentPage == 'dzoClassManagement.php') ? 'active' : '' ?>" href="dzoClassManagement.php">Enrollments</a>
+                    <a class="collapse-item <?= ($currentPage == 'feesManagement.php') ? 'active' : '' ?>" href="feesManagement.php">
+                        Fees Management
+                    </a>
                     <a class="collapse-item <?= ($currentPage == 'attendanceManagement.php') ? 'active' : '' ?>" href="attendanceManagement.php">Attendance</a>
                 </div>
             </div>
@@ -89,6 +92,15 @@ function isParent() { return strtolower($_SESSION['role'] ?? '') === 'parent'; }
                 <span>Attendance</span>
             </a>
         </li>
+
+        <li class="nav-item <?= ($currentPage == 'parentFeesPayment.php') ? 'active' : '' ?>">
+            <a class="nav-link" href="parentFeesPayment.php">
+                <i class="fas fa-money-check-alt"></i>
+                <span>Fees Payments</span>
+            </a>
+        </li>
+
+
     <?php } ?>
 
 </ul>

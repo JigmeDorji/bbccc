@@ -4,8 +4,6 @@ require_once "include/auth.php";
 require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
-
-// Parent only
 if ($role !== 'parent') {
     die("This page is only for Parents to add student enrollments.");
 }
@@ -18,49 +16,19 @@ $focusField = "";
 // ---------------- DB CONNECTION ----------------
 try {
     $pdo = new PDO(
-        "mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME,
+        "mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME . ";charset=utf8mb4",
         $DB_USER,
         $DB_PASSWORD,
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+        ]
     );
 } catch (Exception $e) {
     die("DB connection failed: " . $e->getMessage());
 }
 
-// ---------------- GET LOGGED-IN PARENT (EMAIL-AS-USERNAME) ----------------
-$autoParentId = null;
-$autoParentLabel = "";
-
-$sessionLoginEmail = strtolower(trim($_SESSION['username'] ?? '')); // email-as-username
-
-if ($sessionLoginEmail === '') {
-    die("Session username missing. Please log out and log in again.");
-}
-
-$stmtParent = $pdo->prepare("
-    SELECT id, full_name, email
-    FROM parents
-    WHERE LOWER(email) = :e
-    LIMIT 1
-");
-$stmtParent->execute([':e' => $sessionLoginEmail]);
-$parentRow = $stmtParent->fetch(PDO::FETCH_ASSOC);
-
-if (!$parentRow) {
-    die(
-        "No matching parent record found for email: <strong>" . htmlspecialchars($sessionLoginEmail) . "</strong><br><br>" .
-        "Fix: Ensure the parent's <strong>email</strong> in the parents table matches the login email exactly."
-    );
-}
-
-$autoParentId = (int)$parentRow['id'];
-$autoParentLabel = trim(($parentRow['full_name'] ?? '') . ' - ' . ($parentRow['email'] ?? ''));
-
-// ---------------- AUTO VALUES ----------------
-$autoRegDate = date('Y-m-d');
-$autoApprovalStatus = "Pending";
-
-// Payment plan amounts
+// ---------------- HELPERS ----------------
 function plan_amount(string $plan): float {
     $plan = strtolower(trim($plan));
     if ($plan === 'term-wise') return 65.00;
@@ -82,10 +50,64 @@ function generateNextStudentId(PDO $pdo): string {
         FROM students
         WHERE student_id LIKE 'BLCS%'
     ");
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    $row = $stmt->fetch();
     $next = ((int)($row['max_num'] ?? 0)) + 1;
     return 'BLCS' . str_pad((string)$next, 4, '0', STR_PAD_LEFT);
 }
+
+function upload_error_message(int $code): string {
+    $map = [
+        UPLOAD_ERR_OK => 'OK',
+        UPLOAD_ERR_INI_SIZE => 'File exceeds upload_max_filesize in php.ini',
+        UPLOAD_ERR_FORM_SIZE => 'File exceeds MAX_FILE_SIZE from form',
+        UPLOAD_ERR_PARTIAL => 'File was only partially uploaded',
+        UPLOAD_ERR_NO_FILE => 'No file was uploaded',
+        UPLOAD_ERR_NO_TMP_DIR => 'Missing a temporary folder on server',
+        UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk (permissions)',
+        UPLOAD_ERR_EXTENSION => 'Upload stopped by a PHP extension',
+    ];
+    return $map[$code] ?? 'Unknown upload error';
+}
+
+function safe_mkdir(string $path): void {
+    if (!is_dir($path)) {
+        if (!@mkdir($path, 0775, true) && !is_dir($path)) {
+            throw new Exception("Unable to create upload folder. Check permissions: " . $path);
+        }
+    }
+    if (!is_writable($path)) {
+        throw new Exception("Upload folder is not writable. Please chmod/chown this folder: " . $path);
+    }
+}
+
+// ---------------- AUTO VALUES ----------------
+$autoRegDate = date('Y-m-d');
+$autoApprovalStatus = "Pending";
+
+// ---------------- GET LOGGED-IN PARENT (EMAIL-AS-USERNAME) ----------------
+$sessionLoginEmail = strtolower(trim($_SESSION['username'] ?? ''));
+if ($sessionLoginEmail === '') {
+    die("Session username missing. Please log out and log in again.");
+}
+
+$stmtParent = $pdo->prepare("
+    SELECT id, full_name, email
+    FROM parents
+    WHERE LOWER(email) = :e
+    LIMIT 1
+");
+$stmtParent->execute([':e' => $sessionLoginEmail]);
+$parentRow = $stmtParent->fetch();
+
+if (!$parentRow) {
+    die(
+        "No matching parent record found for email: <strong>" . htmlspecialchars($sessionLoginEmail) . "</strong><br><br>" .
+        "Fix: Ensure the parent's <strong>email</strong> in the parents table matches the login email exactly."
+    );
+}
+
+$autoParentId = (int)$parentRow['id'];
+$autoParentLabel = trim(($parentRow['full_name'] ?? '') . ' - ' . ($parentRow['email'] ?? ''));
 
 // ---------------- FORM STATE (STICKY VALUES) ----------------
 $old = [
@@ -97,7 +119,6 @@ $old = [
     'payment_plan'  => '',
 ];
 
-// Existing proof path for edit mode
 $existing_payment_proof = null;
 
 // ---------------- EDIT (optional) ----------------
@@ -107,7 +128,7 @@ if (isset($_GET['edit'])) {
 
         $stmt = $pdo->prepare("SELECT * FROM students WHERE id = :id AND parentId = :pid");
         $stmt->execute([':id' => $id, ':pid' => $autoParentId]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        $row = $stmt->fetch();
 
         if (!$row) {
             throw new Exception("Student not found or you don't have permission to edit this record.");
@@ -117,14 +138,12 @@ if (isset($_GET['edit'])) {
             throw new Exception("This enrollment is already Approved. Please contact admin for changes.");
         }
 
-        // ✅ Prefill sticky values from DB
         $old['student_name']  = $row['student_name'] ?? '';
         $old['dob']           = $row['dob'] ?? '';
         $old['gender']        = $row['gender'] ?? '';
         $old['medical_issue'] = $row['medical_issue'] ?? '';
         $old['class_option']  = $row['class_option'] ?? '';
         $old['payment_plan']  = $row['payment_plan'] ?? '';
-
         $existing_payment_proof = $row['payment_proof'] ?? null;
 
     } catch (Exception $e) {
@@ -134,9 +153,8 @@ if (isset($_GET['edit'])) {
 }
 
 // ---------------- SAVE (ADD / UPDATE) ----------------
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
     try {
-        // Read inputs
         $student_name  = trim($_POST['student_name'] ?? '');
         $dob           = trim($_POST['dob'] ?? '');
         $gender        = trim($_POST['gender'] ?? '');
@@ -144,7 +162,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $class_option  = trim($_POST['class_option'] ?? '');
         $payment_plan  = trim($_POST['payment_plan'] ?? '');
 
-        // ✅ Sticky values always kept on error
+        // sticky
         $old['student_name']  = $student_name;
         $old['dob']           = $dob;
         $old['gender']        = $gender;
@@ -152,7 +170,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $old['class_option']  = $class_option;
         $old['payment_plan']  = $payment_plan;
 
-        // Validate required fields (medical optional)
+        // Validate
         if ($student_name === "") { $focusField = "student_name"; throw new Exception("Student Name is required."); }
         if ($dob === "")          { $focusField = "dob";          throw new Exception("DOB is required."); }
         if ($gender === "")       { $focusField = "gender";       throw new Exception("Gender is required."); }
@@ -175,73 +193,72 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             throw new Exception("Invalid payment plan selection.");
         }
 
-        // Calculate amount + reference
+        // Amount + reference
         $amount = plan_amount($payment_plan);
-        if ($amount <= 0) {
-            throw new Exception("Payment amount could not be calculated.");
-        }
+        if ($amount <= 0) throw new Exception("Payment amount could not be calculated.");
 
         $ref = clean_ref_text($student_name) . "_" . clean_ref_text($payment_plan) . "_" . clean_ref_text((string)(int)$amount);
 
-        // Payment proof upload handling
+        $isEdit = isset($_GET['edit']) && ((int)$_GET['edit'] > 0);
         $proofPath = $existing_payment_proof ?: null;
 
-        $isEdit = isset($_GET['edit']) && ((int)$_GET['edit'] > 0);
-
-        // ✅ For NEW enrollments proof is required
-        if (!$isEdit && (!isset($_FILES['payment_proof']) || $_FILES['payment_proof']['error'] !== 0)) {
-            $focusField = "payment_proof";
-            throw new Exception("Payment proof is required for new enrollments. Please upload a screenshot/PDF.");
+        // Require proof for NEW enrollments
+        if (!$isEdit) {
+            $err = $_FILES['payment_proof']['error'] ?? UPLOAD_ERR_NO_FILE;
+            if ($err !== UPLOAD_ERR_OK) {
+                $focusField = "payment_proof";
+                throw new Exception("Payment proof is required. Upload error: " . upload_error_message((int)$err));
+            }
         }
 
-        // If file provided, validate + store
-        if (isset($_FILES['payment_proof']) && $_FILES['payment_proof']['error'] === 0) {
+        // Upload (if provided)
+        if (isset($_FILES['payment_proof']) && ($_FILES['payment_proof']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
             $allowed = ['jpg','jpeg','png','pdf'];
-            $ext = strtolower(pathinfo($_FILES['payment_proof']['name'], PATHINFO_EXTENSION));
+            $origName = $_FILES['payment_proof']['name'] ?? '';
+            $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
 
             if (!in_array($ext, $allowed, true)) {
                 $focusField = "payment_proof";
                 throw new Exception("Invalid file type. Only JPG, PNG or PDF allowed.");
             }
-            if ($_FILES['payment_proof']['size'] > 5 * 1024 * 1024) {
+
+            $size = (int)($_FILES['payment_proof']['size'] ?? 0);
+            if ($size > 5 * 1024 * 1024) {
                 $focusField = "payment_proof";
                 throw new Exception("File too large. Maximum 5MB allowed.");
             }
 
-            $dir = "uploads/payments/";
-            if (!is_dir($dir)) {
-                @mkdir($dir, 0775, true);
+            $relativeDir = "uploads/payments/";
+            $absDir = __DIR__ . "/" . $relativeDir;
+            safe_mkdir($absDir);
+
+            $safeBase = preg_replace('/[^a-zA-Z0-9_\-]/', '_', pathinfo($origName, PATHINFO_FILENAME));
+            $safeBase = substr($safeBase, 0, 80);
+
+            $newRel = $relativeDir . time() . "_" . $safeBase . "." . $ext;
+            $newAbs = __DIR__ . "/" . $newRel;
+
+            if (!move_uploaded_file($_FILES['payment_proof']['tmp_name'], $newAbs)) {
+                throw new Exception("Failed to upload payment proof (check folder permissions).");
             }
 
-            $safeName = preg_replace('/[^a-zA-Z0-9_\-]/', '_', pathinfo($_FILES['payment_proof']['name'], PATHINFO_FILENAME));
-            $newFile = $dir . time() . "_" . $safeName . "." . $ext;
-
-            if (!move_uploaded_file($_FILES['payment_proof']['tmp_name'], $newFile)) {
-                throw new Exception("Failed to upload payment proof.");
-            }
-
-            $proofPath = $newFile;
+            $proofPath = $newRel;
         }
 
-        // Auto fields
         $parentId = $autoParentId;
-        $registration_date = $autoRegDate;
-        $approval_status = $autoApprovalStatus;
 
         if ($isEdit) {
             $id = (int)$_GET['edit'];
 
-            // Safety: ensure record belongs to parent and not approved
             $stmtCheck = $pdo->prepare("SELECT approval_status, payment_proof FROM students WHERE id = :id AND parentId = :pid LIMIT 1");
             $stmtCheck->execute([':id' => $id, ':pid' => $parentId]);
-            $current = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+            $current = $stmtCheck->fetch();
 
             if (!$current) throw new Exception("You don't have permission to update this record.");
             if (strtolower($current['approval_status'] ?? '') === 'approved') {
                 throw new Exception("This enrollment is already Approved. Please contact admin for changes.");
             }
 
-            // Keep existing proof if user did not upload again
             if (!$proofPath && !empty($current['payment_proof'])) {
                 $proofPath = $current['payment_proof'];
             }
@@ -259,7 +276,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     payment_proof = :payment_proof
                 WHERE id = :id AND parentId = :parentId
             ");
-
             $stmt->execute([
                 ':student_name' => $student_name,
                 ':dob' => $dob,
@@ -291,7 +307,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                      :payment_plan, :payment_amount, :payment_reference, :payment_proof,
                      :registration_date, :approval_status, :parentId)
             ");
-
             $stmt->execute([
                 ':student_id' => $student_id,
                 ':student_name' => $student_name,
@@ -303,12 +318,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 ':payment_amount' => $amount,
                 ':payment_reference' => $ref,
                 ':payment_proof' => $proofPath,
-                ':registration_date' => $registration_date,
-                ':approval_status' => $approval_status,
+                ':registration_date' => $autoRegDate,
+                ':approval_status' => $autoApprovalStatus,
                 ':parentId' => $parentId
             ]);
 
-            $message = "Enrollment submitted successfully. Please complete payment and upload proof. (Pending approval)";
+            $message = "Enrollment submitted successfully. (Pending approval)";
             $success = true;
             $reloadPage = true;
         }
@@ -316,18 +331,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     } catch (Exception $e) {
         $message = "Error: " . $e->getMessage();
         $success = false;
-        $reloadPage = false; // ✅ do NOT redirect on error (keeps sticky values)
+        $reloadPage = false;
     }
 }
 
-// ---------------- DELETE (Parent only pending + own record) ----------------
+// ---------------- DELETE ----------------
 if (isset($_GET['delete'])) {
     try {
         $id = (int)$_GET['delete'];
 
         $stmtCheck = $pdo->prepare("SELECT approval_status FROM students WHERE id = :id AND parentId = :pid LIMIT 1");
         $stmtCheck->execute([':id' => $id, ':pid' => $autoParentId]);
-        $current = $stmtCheck->fetch(PDO::FETCH_ASSOC);
+        $current = $stmtCheck->fetch();
 
         if (!$current) throw new Exception("You don't have permission to delete this record.");
         if (strtolower($current['approval_status'] ?? '') === 'approved') {
@@ -354,7 +369,7 @@ if (isset($_GET['delete'])) {
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Add Student</title>
+    <title><?php echo isset($_GET['edit']) ? "Edit Enrollment" : "Add Student Enrollment"; ?></title>
 
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
@@ -364,6 +379,16 @@ if (isset($_GET['delete'])) {
         .bank-box { background:#f8f9fc; border:1px solid #e3e6f0; padding:15px; border-radius:8px; }
         .ref-box { background:#fff; border:1px dashed #bbb; padding:10px; border-radius:6px; }
         .small-help { font-size: 12px; color:#6c757d; }
+        .preview-box img { max-width: 100%; border:1px solid #e3e6f0; border-radius:10px; padding:6px; }
+        .step-badge{
+            display:inline-block;
+            padding:6px 10px;
+            border-radius:999px;
+            font-size:12px;
+            font-weight:700;
+            background:#eaf2ff;
+            color:#1b4fd6;
+        }
     </style>
 </head>
 <body id="page-top">
@@ -382,7 +407,7 @@ if (isset($_GET['delete'])) {
                     <ul class="mb-0">
                         <li><strong>Parent</strong> is linked to your login: <strong><?php echo htmlspecialchars($autoParentLabel); ?></strong></li>
                         <li><strong>Status</strong> stays <strong>Pending</strong> until admin verifies payment & approves enrollment.</li>
-                        <li>Please choose your <strong>class session</strong> and <strong>payment plan</strong>, then pay and upload proof.</li>
+                        <li>Please follow the steps below: fill details → pay → upload proof → submit.</li>
                     </ul>
                 </div>
 
@@ -398,14 +423,12 @@ if (isset($_GET['delete'])) {
                                 icon: isSuccess ? 'success' : 'error',
                                 title: msg,
                                 showConfirmButton: true,
-                                timer: isSuccess ? 1800 : 4500
+                                timer: isSuccess ? 1800 : 6000
                             }).then(() => {
                                 if (reload && isSuccess) {
                                     window.location.href = 'index-admin.php';
                                     return;
                                 }
-
-                                // Focus field on error
                                 if (!isSuccess && focusField) {
                                     const el = document.querySelector(`[name="${focusField}"]`) || document.getElementById(focusField);
                                     if (el) el.focus();
@@ -415,32 +438,37 @@ if (isset($_GET['delete'])) {
                     });
                 </script>
 
+                <!-- ✅ ONE COLUMN, STEP BY STEP -->
                 <div class="row">
-                    <div class="col-lg-8">
-                        <div class="card shadow mb-4">
-                            <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">Enrollment Form</h6>
-                            </div>
-                            <div class="card-body">
+                    <div class="col-lg-12">
 
-                                <form action="studentSetup.php<?php echo isset($_GET['edit']) ? '?edit='.(int)$_GET['edit'] : ''; ?>" method="POST" enctype="multipart/form-data">
+                        <form action="studentSetup.php<?php echo isset($_GET['edit']) ? '?edit='.(int)$_GET['edit'] : ''; ?>"
+                              method="POST" enctype="multipart/form-data" id="enrollmentForm">
+
+                            <!-- STEP 1 -->
+                            <div class="card shadow mb-4" id="step1">
+                                <div class="card-header py-3 d-flex align-items-center justify-content-between">
+                                    <h6 class="m-0 font-weight-bold text-primary">Step 1 — Student & Class Details</h6>
+                                    <span class="step-badge">Step 1 of 3</span>
+                                </div>
+                                <div class="card-body">
 
                                     <div class="form-group">
                                         <label>Student Name <span class="text-danger">*</span></label>
-                                        <input type="text" class="form-control" name="student_name"
+                                        <input type="text" class="form-control" name="student_name" id="student_name"
                                                value="<?php echo htmlspecialchars($old['student_name']); ?>" required
-                                               placeholder="Enter student full name" id="student_name">
+                                               placeholder="Enter student full name">
                                     </div>
 
                                     <div class="form-group">
                                         <label>DOB <span class="text-danger">*</span></label>
-                                        <input type="date" class="form-control" name="dob"
+                                        <input type="date" class="form-control" name="dob" id="dob"
                                                value="<?php echo htmlspecialchars($old['dob']); ?>" required>
                                     </div>
 
                                     <div class="form-group">
                                         <label>Gender <span class="text-danger">*</span></label>
-                                        <select class="form-control" name="gender" required>
+                                        <select class="form-control" name="gender" id="gender" required>
                                             <option value="">-- Select --</option>
                                             <?php
                                             $genders = ["Male", "Female", "Other"];
@@ -478,87 +506,117 @@ if (isset($_GET['delete'])) {
                                         <label>Payment Plan <span class="text-danger">*</span></label>
                                         <select class="form-control" name="payment_plan" id="payment_plan" required>
                                             <option value="">-- Select --</option>
-                                            <option value="Term-wise" <?php echo ($old['payment_plan']==="Term-wise")?'selected':''; ?>>Term-wise ($65)</option>
-                                            <option value="Half-yearly" <?php echo ($old['payment_plan']==="Half-yearly")?'selected':''; ?>>Half-yearly ($125)</option>
-                                            <option value="Yearly" <?php echo ($old['payment_plan']==="Yearly")?'selected':''; ?>>Yearly ($250)</option>
+                                            <option value="Term-wise" <?php echo ($old['payment_plan'] === "Term-wise") ? 'selected' : ''; ?>>Term-wise ($65)</option>
+                                            <option value="Half-yearly" <?php echo ($old['payment_plan'] === "Half-yearly") ? 'selected' : ''; ?>>Half-yearly ($125)</option>
+                                            <option value="Yearly" <?php echo ($old['payment_plan'] === "Yearly") ? 'selected' : ''; ?>>Yearly ($250)</option>
                                         </select>
                                         <div class="small-help mt-1">Amount is calculated automatically based on your payment plan.</div>
                                     </div>
 
-                                    <div class="form-group">
-                                        <label>Upload Payment Screenshot / Proof <?php echo (empty($existing_payment_proof) && !isset($_GET['edit'])) ? '<span class="text-danger">*</span>' : ''; ?></label>
-                                        <input type="file" class="form-control-file" name="payment_proof" id="payment_proof"
-                                            <?php echo (!isset($_GET['edit'])) ? 'required' : ''; ?>>
-                                        <?php if (!empty($existing_payment_proof)): ?>
-                                            <div class="small-help mt-2">
-                                                Existing proof uploaded: <a href="<?php echo htmlspecialchars($existing_payment_proof); ?>" target="_blank">View file</a>
-                                            </div>
-                                            <div class="small-help mt-1">If you want to replace it, upload a new file.</div>
-                                        <?php endif; ?>
-                                        <div class="small-help mt-1">Allowed: JPG, PNG, PDF (Max 5MB)</div>
-                                        <div class="small-help mt-1"><strong>Note:</strong> If there is an error, your browser will ask you to choose the file again (security limitation).</div>
+                                    <button type="button" class="btn btn-outline-primary" id="goToPayment">
+                                        Continue to Payment (Step 2)
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- STEP 2 -->
+                            <div class="card shadow mb-4" id="step2">
+                                <div class="card-header py-3 d-flex align-items-center justify-content-between">
+                                    <h6 class="m-0 font-weight-bold text-primary">Step 2 — Make Payment & Use Reference</h6>
+                                    <span class="step-badge">Step 2 of 3</span>
+                                </div>
+                                <div class="card-body">
+
+                                    <div class="alert alert-info mb-4">
+                                        Please pay the <strong>calculated amount</strong> and use the <strong>payment reference</strong> exactly.
                                     </div>
 
-                                    <button type="submit" class="btn btn-primary">
+                                    <div class="mb-4">
+                                        <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-university"></i> Bank Details</h6>
+                                        <div class="bank-box">
+                                            <p class="mb-1"><strong>Account Name:</strong> Bhutanese Centre Canberra</p>
+                                            <p class="mb-1"><strong>BSB:</strong> 000-000</p>
+                                            <p class="mb-1"><strong>Account Number:</strong> 00000000</p>
+                                            <hr>
+                                            <p class="mb-0 small-help">
+                                                Enrollment will be confirmed only after payment verification.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-4">
+                                        <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-dollar-sign"></i> Calculated Amount</h6>
+                                        <div class="alert alert-light mb-0">
+                                            <strong>Amount to pay:</strong> <span id="payAmount">$0</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-2">
+                                        <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-receipt"></i> Payment Reference</h6>
+                                        <div class="ref-box">
+                                            <div class="small-help mb-2">Copy and paste this reference into your bank transfer:</div>
+                                            <div class="input-group">
+                                                <input type="text" class="form-control" id="payRef" readonly value="">
+                                                <div class="input-group-append">
+                                                    <button type="button" class="btn btn-success" id="copyBtn">Copy</button>
+                                                </div>
+                                            </div>
+                                            <div class="small-help mt-2">Format: <code>ChildName_PLAN_Amount</code></div>
+                                        </div>
+                                    </div>
+
+                                    <button type="button" class="btn btn-outline-primary mt-4" id="goToUpload">
+                                        Continue to Upload Proof (Step 3)
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- STEP 3 -->
+                            <div class="card shadow mb-4" id="step3">
+                                <div class="card-header py-3 d-flex align-items-center justify-content-between">
+                                    <h6 class="m-0 font-weight-bold text-primary">Step 3 — Upload Proof & Submit Enrollment</h6>
+                                    <span class="step-badge">Step 3 of 3</span>
+                                </div>
+                                <div class="card-body">
+
+                                    <div class="form-group">
+                                        <label>
+                                            Upload Payment Screenshot / Proof
+                                            <?php echo (!isset($_GET['edit'])) ? '<span class="text-danger">*</span>' : ''; ?>
+                                        </label>
+
+                                        <div class="custom-file">
+                                            <input type="file"
+                                                   class="custom-file-input"
+                                                   name="payment_proof"
+                                                   id="payment_proof"
+                                                   accept=".jpg,.jpeg,.png,.pdf,image/*,application/pdf"
+                                                <?php echo (!isset($_GET['edit'])) ? 'required' : ''; ?>>
+                                            <label class="custom-file-label" for="payment_proof">Choose image or PDF...</label>
+                                        </div>
+
+                                        <?php if (!empty($existing_payment_proof)): ?>
+                                            <div class="small-help mt-2">
+                                                Existing proof uploaded:
+                                                <a href="<?php echo htmlspecialchars($existing_payment_proof); ?>" target="_blank">View file</a>
+                                            </div>
+                                            <div class="small-help mt-1">Upload a new file only if you want to replace it.</div>
+                                        <?php endif; ?>
+
+                                        <div class="small-help mt-2">Allowed: JPG, PNG, PDF (Max 5MB)</div>
+                                        <div class="small-help mt-1"><strong>Note:</strong> If there is an error, your browser may ask you to choose the file again.</div>
+
+                                        <div id="filePreview" class="preview-box mt-3" style="display:none;"></div>
+                                    </div>
+
+                                    <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
                                         <?php echo isset($_GET['edit']) ? "Update Enrollment" : "Submit Enrollment"; ?>
                                     </button>
                                     <a href="index-admin.php" class="btn btn-secondary ml-2">Back to Dashboard</a>
-
-                                </form>
-
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="col-lg-4">
-
-                        <!-- Bank details -->
-                        <div class="card shadow mb-4">
-                            <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">Bank Details</h6>
-                            </div>
-                            <div class="card-body">
-                                <div class="bank-box">
-                                    <p class="mb-1"><strong>Account Name:</strong> Bhutanese Centre Canberra</p>
-                                    <p class="mb-1"><strong>BSB:</strong> 000-000</p>
-                                    <p class="mb-1"><strong>Account Number:</strong> 00000000</p>
-                                    <hr>
-                                    <p class="mb-0 small-help">
-                                        Please use the generated payment reference exactly in your bank transfer.
-                                        Enrollment will be confirmed only after payment verification.
-                                    </p>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- Payment reference -->
-                        <div class="card shadow mb-4">
-                            <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">Payment Reference</h6>
-                            </div>
-                            <div class="card-body">
-                                <div class="ref-box">
-                                    <div class="small-help mb-2">Copy and paste this reference into your bank transfer:</div>
-                                    <input type="text" class="form-control" id="payRef" readonly value="">
-                                    <button type="button" class="btn btn-sm btn-success mt-2" id="copyBtn">
-                                        Copy Reference
-                                    </button>
-                                    <div class="small-help mt-2">Format: <code>ChildName_PLAN_Amount</code></div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Payment amount -->
-                        <div class="card shadow mb-4">
-                            <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">Calculated Amount</h6>
-                            </div>
-                            <div class="card-body">
-                                <div class="alert alert-light mb-0">
-                                    <strong>Amount to pay:</strong> <span id="payAmount">$0</span>
-                                </div>
-                            </div>
-                        </div>
+                        </form>
 
                     </div>
                 </div>
@@ -572,7 +630,7 @@ if (isset($_GET['delete'])) {
 
 <script>
 function cleanRef(text) {
-    return text.trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+    return (text || '').trim().replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
 }
 
 function planAmount(plan) {
@@ -584,33 +642,106 @@ function planAmount(plan) {
 }
 
 function updatePayInfo() {
-    const name = document.getElementById('student_name').value || '';
-    const plan = document.getElementById('payment_plan').value || '';
+    const name = document.getElementById('student_name')?.value || '';
+    const plan = document.getElementById('payment_plan')?.value || '';
     const amt = planAmount(plan);
 
-    document.getElementById('payAmount').textContent = '$' + amt;
+    const payAmount = document.getElementById('payAmount');
+    const payRef = document.getElementById('payRef');
+
+    if (payAmount) payAmount.textContent = '$' + amt;
 
     const ref = cleanRef(name) + '_' + cleanRef(plan) + '_' + cleanRef(String(amt));
-    document.getElementById('payRef').value = (name && plan && amt) ? ref : '';
+    if (payRef) payRef.value = (name && plan && amt) ? ref : '';
+
+    validateReadyToSubmit();
+}
+
+function validateReadyToSubmit() {
+    const isEdit = <?php echo isset($_GET['edit']) ? 'true' : 'false'; ?>;
+
+    const name = (document.getElementById('student_name')?.value || '').trim();
+    const plan = (document.getElementById('payment_plan')?.value || '').trim();
+    const venue = (document.getElementById('class_option')?.value || '').trim();
+    const gender = (document.getElementById('gender')?.value || '').trim();
+    const dob = (document.getElementById('dob')?.value || '').trim();
+
+    const fileInput = document.getElementById('payment_proof');
+    const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
+
+    // New enrollment must have a file; edit can submit without new upload
+    const okFile = isEdit ? true : hasFile;
+
+    const ok = !!(name && plan && venue && gender && dob && okFile);
+
+    const btn = document.getElementById('submitBtn');
+    if (btn) btn.disabled = !ok;
 }
 
 document.addEventListener("DOMContentLoaded", function() {
     updatePayInfo();
+    validateReadyToSubmit();
 
-    document.getElementById('student_name').addEventListener('input', updatePayInfo);
-    document.getElementById('payment_plan').addEventListener('change', updatePayInfo);
+    // Update amount/reference live
+    document.getElementById('student_name')?.addEventListener('input', updatePayInfo);
+    document.getElementById('payment_plan')?.addEventListener('change', updatePayInfo);
+    document.getElementById('class_option')?.addEventListener('change', validateReadyToSubmit);
+    document.getElementById('gender')?.addEventListener('change', validateReadyToSubmit);
+    document.getElementById('dob')?.addEventListener('change', validateReadyToSubmit);
 
-    document.getElementById('copyBtn').addEventListener('click', function() {
+    // Smooth step navigation
+    document.getElementById('goToPayment')?.addEventListener('click', function() {
+        document.getElementById('step2')?.scrollIntoView({behavior:'smooth'});
+    });
+    document.getElementById('goToUpload')?.addEventListener('click', function() {
+        document.getElementById('step3')?.scrollIntoView({behavior:'smooth'});
+    });
+
+    // Copy reference
+    document.getElementById('copyBtn')?.addEventListener('click', function() {
         const ref = document.getElementById('payRef');
-        if (!ref.value) return;
-
+        if (!ref || !ref.value) return;
         ref.select();
         ref.setSelectionRange(0, 99999);
-
         document.execCommand("copy");
-        Swal.fire({ icon:'success', title:'Copied!', showConfirmButton:false, timer:900 });
+        Swal.fire({ icon:'success', title:'Reference copied!', showConfirmButton:false, timer:900 });
     });
+
+    // Friendly file UI: label + preview + validation
+    const input = document.getElementById("payment_proof");
+    const label = document.querySelector('label.custom-file-label[for="payment_proof"]');
+    const preview = document.getElementById("filePreview");
+
+    if (input) {
+        input.addEventListener("change", function () {
+            validateReadyToSubmit();
+
+            if (!input.files || !input.files.length) return;
+
+            const file = input.files[0];
+            if (label) label.textContent = file.name;
+
+            if (!preview) return;
+            preview.style.display = "block";
+            preview.innerHTML = "";
+
+            const ext = (file.name.split('.').pop() || "").toLowerCase();
+
+            if (["jpg","jpeg","png"].includes(ext)) {
+                const img = document.createElement("img");
+                img.src = URL.createObjectURL(file);
+                preview.appendChild(img);
+            } else if (ext === "pdf") {
+                preview.innerHTML = `<div class="alert alert-light mb-0">
+                    <i class="fas fa-file-pdf"></i> PDF selected: <strong>${file.name}</strong>
+                </div>`;
+            } else {
+                preview.innerHTML = `<div class="alert alert-warning mb-0">Unsupported file selected.</div>`;
+            }
+        });
+    }
 });
 </script>
+
 </body>
 </html>

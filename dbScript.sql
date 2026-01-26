@@ -159,7 +159,7 @@ CREATE TABLE `students` (
   `dob` date DEFAULT NULL,
   `gender` varchar(20) DEFAULT NULL,
   `medical_issue` text,
-  `class_option` varchar(30) DEFAULT NULL,
+  `class_option` varchar(255) DEFAULT NULL,
   `payment_plan` varchar(30) DEFAULT NULL,
   `payment_amount` decimal(10,2) DEFAULT NULL,
   `payment_reference` varchar(150) DEFAULT NULL,
@@ -262,8 +262,77 @@ VALUES
  'BBCC plans to establish a Bhutanese Temple in Canberra as a vibrant centre for ceremonies, meditation, counselling, and cultural activities, promoting wellbeing and spiritual guidance for the community.'
 );
 
+-- Create fees_payment table
+
+CREATE TABLE IF NOT EXISTS fees_payments (
+  id INT NOT NULL AUTO_INCREMENT,
+  student_id INT NOT NULL,
+  parent_id INT NOT NULL,
+  plan_type ENUM('TERM','HALF','YEAR') NOT NULL,
+  period_no INT NOT NULL, -- TERM:1-4, HALF:1-2, YEAR:1
+  amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+  reference VARCHAR(255) NOT NULL,
+  proof_path VARCHAR(255) NOT NULL,
+  status ENUM('Pending','Verified','Rejected') NOT NULL DEFAULT 'Pending',
+  submitted_at DATETIME NOT NULL,
+  verified_at DATETIME NULL,
+  verified_by VARCHAR(50) NULL,
+  reject_reason VARCHAR(255) NULL,
+  PRIMARY KEY (id),
+  KEY idx_student (student_id),
+  KEY idx_parent (parent_id),
+  KEY idx_status (status),
+  UNIQUE KEY uniq_payment_period (student_id, plan_type, period_no),
+  CONSTRAINT fk_fee_student FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+  CONSTRAINT fk_fee_parent FOREIGN KEY (parent_id) REFERENCES parents(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+
+
+-- Fees_Payment Table
+
+CREATE TABLE IF NOT EXISTS fees_payments (
+  id INT NOT NULL AUTO_INCREMENT,
+  student_id VARCHAR(50) NOT NULL,          -- matches students.id (you said it can be varchar)
+  plan_type ENUM('Term-wise','Half-yearly','Yearly') NOT NULL,
+  installment_code ENUM('TERM1','TERM2','TERM3','TERM4','HALF1','HALF2','YEARLY') NOT NULL,
+  due_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+  status ENUM('Pending','Approved','Rejected') NOT NULL DEFAULT 'Pending',
+  proof_path VARCHAR(255) DEFAULT NULL,
+  remarks VARCHAR(255) DEFAULT NULL,
+  verified_by VARCHAR(100) DEFAULT NULL,
+  verified_at DATETIME DEFAULT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  PRIMARY KEY (id),
+  UNIQUE KEY uniq_student_installment (student_id, installment_code),
+  KEY idx_student (student_id),
+  KEY idx_plan (plan_type),
+  KEY idx_status (status)
+);
+
+-- Creat table for fees_setting
+
+CREATE TABLE IF NOT EXISTS fees_settings (
+  id INT NOT NULL PRIMARY KEY DEFAULT 1,
+
+  bank_name VARCHAR(120) DEFAULT NULL,
+  account_name VARCHAR(120) DEFAULT NULL,
+  bsb VARCHAR(20) DEFAULT NULL,
+  account_number VARCHAR(40) DEFAULT NULL,
+  bank_notes VARCHAR(255) DEFAULT NULL,
+
+  due_term1 DATE DEFAULT NULL,
+  due_term2 DATE DEFAULT NULL,
+  due_term3 DATE DEFAULT NULL,
+  due_term4 DATE DEFAULT NULL,
+
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+INSERT IGNORE INTO fees_settings (id) VALUES (1);
+
 -- Add any changes here
-
-
 
 
