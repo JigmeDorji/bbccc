@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Simple script to start the PHP development server
 
 PORT=${1:-8000}
