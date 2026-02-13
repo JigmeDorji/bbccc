@@ -103,6 +103,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                                 <a href="services.php">Service</a>
                             </li>
 
+                            <li class="<?= ($currentPage === 'events.php' || $currentPage === 'book-event.php') ? 'active' : '' ?>">
+                                <a href="events.php">Events</a>
+                            </li>
+
                             <li class="<?= ($currentPage === 'contact-us.php') ? 'active' : '' ?>">
                                 <a href="contact-us.php">Contact</a>
                             </li>
@@ -142,6 +146,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 
                             <li class="<?= ($currentPage === 'services.php') ? 'active' : '' ?>">
                                 <a href="services.php">Service</a>
+                            </li>
+
+                            <li class="<?= ($currentPage === 'events.php' || $currentPage === 'book-event.php') ? 'active' : '' ?>">
+                                <a href="events.php">Events</a>
                             </li>
 
                             <li class="<?= ($currentPage === 'contact-us.php') ? 'active' : '' ?>">

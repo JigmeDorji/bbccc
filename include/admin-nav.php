@@ -67,6 +67,21 @@ function isParent() { return strtolower($_SESSION['role'] ?? '') === 'parent'; }
             </div>
         </li>
 
+        <!-- Event Management -->
+        <li class="nav-item">
+            <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseEvents"
+               aria-expanded="true" aria-controls="collapseEvents">
+                <i class="fas fa-calendar-alt"></i>
+                <span>Event Management</span>
+            </a>
+            <div id="collapseEvents" class="collapse <?= in_array($currentPage, ['eventManagement.php','bookingManagement.php']) ? 'show' : '' ?>">
+                <div class="bg-white py-2 collapse-inner rounded">
+                    <a class="collapse-item <?= ($currentPage == 'eventManagement.php') ? 'active' : '' ?>" href="eventManagement.php">Manage Events</a>
+                    <a class="collapse-item <?= ($currentPage == 'bookingManagement.php') ? 'active' : '' ?>" href="bookingManagement.php">Booking Requests</a>
+                </div>
+            </div>
+        </li>
+
     <?php } ?>
 
     <!-- Parent-only menu -->
