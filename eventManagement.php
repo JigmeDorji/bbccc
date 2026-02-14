@@ -174,6 +174,107 @@ $csrf = $_SESSION['csrf_token'];
         .badge-available  { background:#28a745; color:#fff; }
         .badge-pending    { background:#ffc107; color:#333; }
         .badge-booked     { background:#dc3545; color:#fff; }
+
+        /* ── Modal Professional Styling ── */
+        #eventModal .modal-dialog { max-width: 720px; }
+        #eventModal .modal-content {
+            border: none;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0,0,0,.15);
+        }
+        #eventModal .modal-header {
+            background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+            color: #fff;
+            border-bottom: none;
+            padding: 1.25rem 1.5rem;
+        }
+        #eventModal .modal-header .modal-title {
+            font-weight: 700;
+            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #eventModal .modal-header .close,
+        #eventModal .modal-header .btn-close-custom {
+            color: #fff;
+            opacity: .85;
+            font-size: 1.4rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: opacity .2s;
+        }
+        #eventModal .modal-header .btn-close-custom:hover { opacity: 1; }
+        #eventModal .modal-body {
+            padding: 1.75rem 1.5rem 1rem;
+            background: #f8f9fc;
+        }
+        #eventModal .modal-body .form-group { margin-bottom: 1rem; }
+        #eventModal .modal-body label {
+            font-weight: 600;
+            font-size: .82rem;
+            text-transform: uppercase;
+            letter-spacing: .4px;
+            color: #5a5c69;
+            margin-bottom: .3rem;
+        }
+        #eventModal .modal-body .form-control {
+            border-radius: 8px;
+            border: 1px solid #d1d3e2;
+            padding: .55rem .85rem;
+            font-size: .9rem;
+            transition: border-color .2s, box-shadow .2s;
+        }
+        #eventModal .modal-body .form-control:focus {
+            border-color: #4e73df;
+            box-shadow: 0 0 0 3px rgba(78,115,223,.15);
+        }
+        #eventModal .modal-body textarea.form-control { resize: vertical; min-height: 80px; }
+        #eventModal .modal-body .section-divider {
+            font-size: .75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 700;
+            color: #b7b9cc;
+            margin: .75rem 0 .5rem;
+            padding-bottom: .35rem;
+            border-bottom: 1px solid #e3e6f0;
+        }
+        #eventModal .modal-footer {
+            background: #fff;
+            border-top: 1px solid #e3e6f0;
+            padding: 1rem 1.5rem;
+        }
+        #eventModal .modal-footer .btn { border-radius: 8px; padding: .5rem 1.5rem; font-weight: 600; }
+        #eventModal .btn-create {
+            background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+            border: none; color: #fff;
+        }
+        #eventModal .btn-create:hover { background: linear-gradient(135deg, #224abe 0%, #1a339a 100%); }
+        #eventModal .btn-update {
+            background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+            border: none; color: #fff;
+        }
+        #eventModal .btn-update:hover { background: linear-gradient(135deg, #224abe 0%, #1a339a 100%); }
+        #eventModal .btn-cancel-modal {
+            background: #e3e6f0; color: #5a5c69; border: none;
+        }
+        #eventModal .btn-cancel-modal:hover { background: #d1d3e2; }
+
+        /* ── New Event button ── */
+        .btn-new-event {
+            background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+            border: none; color: #fff; border-radius: 8px;
+            font-weight: 600; padding: .45rem 1.1rem;
+            transition: transform .15s, box-shadow .2s;
+        }
+        .btn-new-event:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(78,115,223,.35);
+            color: #fff;
+        }
     </style>
 </head>
 <body id="page-top">
@@ -209,7 +310,9 @@ $csrf = $_SESSION['csrf_token'];
 <div class="card shadow mb-4">
     <div class="card-header py-3 d-flex justify-content-between align-items-center">
         <h6 class="m-0 font-weight-bold text-primary">Events List</h6>
-        <a href="#eventForm" class="btn btn-sm btn-success"><i class="fas fa-plus"></i> New Event</a>
+        <button type="button" class="btn btn-sm btn-new-event" id="btnNewEvent" aria-label="Create a new event">
+            <i class="fas fa-plus-circle mr-1" aria-hidden="true"></i> New Event
+        </button>
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -245,8 +348,19 @@ $csrf = $_SESSION['csrf_token'];
                         <span class="badge <?= $badgeClass ?>"><?= $icon ?> <?= $displayStatus ?></span>
                     </td>
                     <td>
-                        <a href="eventManagement.php?edit=<?= $ev['id'] ?>#eventForm" class="btn btn-info btn-sm" title="Edit"><i class="fas fa-edit"></i></a>
-                        <a href="#" class="btn btn-danger btn-sm delete-btn" data-id="<?= $ev['id'] ?>" title="Delete"><i class="fas fa-trash"></i></a>
+                        <button type="button" class="btn btn-primary btn-sm edit-btn"
+                                data-id="<?= $ev['id'] ?>"
+                                data-title="<?= htmlspecialchars($ev['title']) ?>"
+                                data-desc="<?= htmlspecialchars($ev['description'] ?? '') ?>"
+                                data-date="<?= htmlspecialchars($ev['event_date']) ?>"
+                                data-start="<?= htmlspecialchars($ev['start_time'] ?? '') ?>"
+                                data-end="<?= htmlspecialchars($ev['end_time'] ?? '') ?>"
+                                data-location="<?= htmlspecialchars($ev['location'] ?? '') ?>"
+                                data-sponsors="<?= htmlspecialchars($ev['sponsors'] ?? '') ?>"
+                                data-contacts="<?= htmlspecialchars($ev['contacts'] ?? '') ?>"
+                                data-status="<?= htmlspecialchars($ev['status']) ?>"
+                                title="Edit event" aria-label="Edit event <?= htmlspecialchars($ev['title']) ?>"><i class="fas fa-edit" aria-hidden="true"></i></button>
+                        <a href="#" class="btn btn-danger btn-sm delete-btn" data-id="<?= $ev['id'] ?>" title="Delete event" aria-label="Delete event <?= htmlspecialchars($ev['title']) ?>"><i class="fas fa-trash" aria-hidden="true"></i></a>
                     </td>
                 </tr>
             <?php endforeach; ?>
@@ -256,98 +370,106 @@ $csrf = $_SESSION['csrf_token'];
     </div>
 </div>
 
-<!-- ═══ EVENT FORM (Create / Edit) ═══ -->
-<div class="card shadow mb-4" id="eventForm">
-    <div class="card-header py-3">
-        <h6 class="m-0 font-weight-bold text-primary"><?= $edit_id ? 'Edit Event #'.$edit_id : 'Create New Event' ?></h6>
-    </div>
-    <div class="card-body">
-        <form method="POST" action="eventManagement.php" id="eventFormInner">
-            <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
-            <?php if ($edit_id): ?>
-                <input type="hidden" name="edit_id" value="<?= $edit_id ?>">
-            <?php endif; ?>
-
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label>Title <span class="text-danger">*</span></label>
-                        <input type="text" name="title" class="form-control" required
-                               value="<?= htmlspecialchars($f_title) ?>">
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="form-group">
-                        <label>Event Date <span class="text-danger">*</span></label>
-                        <input type="date" name="event_date" class="form-control" required
-                               value="<?= htmlspecialchars($f_date) ?>">
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="form-group">
-                        <label>Status</label>
-                        <select name="status" class="form-control">
-                            <option value="Available"        <?= $f_status==='Available'?'selected':'' ?>>Available</option>
-                            <option value="Pending Approval" <?= $f_status==='Pending Approval'?'selected':'' ?>>Pending Approval</option>
-                            <option value="Booked"           <?= $f_status==='Booked'?'selected':'' ?>>Booked</option>
-                        </select>
-                    </div>
-                </div>
+<!-- ═══ EVENT MODAL (Create / Edit) ═══ -->
+<div class="modal fade" id="eventModal" tabindex="-1" role="dialog" aria-labelledby="eventModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="eventModalLabel">
+                    <i class="fas fa-calendar-plus" id="modalIcon"></i>
+                    <span id="modalTitleText">Create New Event</span>
+                </h5>
+                <button type="button" class="btn-close-custom" data-dismiss="modal" aria-label="Close dialog">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
             </div>
+            <form method="POST" action="eventManagement.php" id="eventFormInner">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
+                    <input type="hidden" name="edit_id" id="modal_edit_id" value="">
 
-            <div class="row">
-                <div class="col-md-3">
-                    <div class="form-group">
-                        <label>Start Time</label>
-                        <input type="time" name="start_time" class="form-control"
-                               value="<?= htmlspecialchars($f_start) ?>">
+                    <div class="section-divider"><i class="fas fa-info-circle mr-1"></i> Event Details</div>
+                    <div class="row">
+                        <div class="col-md-7">
+                            <div class="form-group">
+                                <label>Title <span class="text-danger">*</span></label>
+                                <input type="text" name="title" id="modal_title" class="form-control" required
+                                       placeholder="Enter event title">
+                            </div>
+                        </div>
+                        <div class="col-md-5">
+                            <div class="form-group">
+                                <label>Event Date <span class="text-danger">*</span></label>
+                                <input type="date" name="event_date" id="modal_date" class="form-control" required>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="form-group">
-                        <label>End Time</label>
-                        <input type="time" name="end_time" class="form-control"
-                               value="<?= htmlspecialchars($f_end) ?>">
+
+                    <div class="section-divider"><i class="fas fa-clock mr-1"></i> Schedule & Location</div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Start Time</label>
+                                <input type="time" name="start_time" id="modal_start" class="form-control">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>End Time</label>
+                                <input type="time" name="end_time" id="modal_end" class="form-control">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Status</label>
+                                <select name="status" id="modal_status" class="form-control">
+                                    <option value="Available">Available</option>
+                                    <option value="Pending Approval">Pending Approval</option>
+                                    <option value="Booked">Booked</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div class="col-md-6">
                     <div class="form-group">
                         <label>Location</label>
-                        <input type="text" name="location" class="form-control"
-                               value="<?= htmlspecialchars($f_location) ?>">
+                        <input type="text" name="location" id="modal_location" class="form-control"
+                               placeholder="e.g. BBCC Hall">
                     </div>
-                </div>
-            </div>
 
-            <div class="row">
-                <div class="col-md-6">
+                    <div class="section-divider"><i class="fas fa-users mr-1"></i> Sponsor & Contact</div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Sponsors</label>
+                                <input type="text" name="sponsors" id="modal_sponsors" class="form-control"
+                                       placeholder="Sponsor name">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>Contacts</label>
+                                <input type="text" name="contacts" id="modal_contacts" class="form-control"
+                                       placeholder="e.g. 0402 096 551">
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="form-group">
-                        <label>Sponsors</label>
-                        <input type="text" name="sponsors" class="form-control"
-                               value="<?= htmlspecialchars($f_sponsors) ?>">
+                        <label>Description</label>
+                        <textarea name="description" id="modal_desc" class="form-control" rows="3"
+                                  placeholder="Brief event description..."></textarea>
                     </div>
                 </div>
-                <div class="col-md-6">
-                    <div class="form-group">
-                        <label>Contacts</label>
-                        <input type="text" name="contacts" class="form-control"
-                               value="<?= htmlspecialchars($f_contacts) ?>" placeholder="e.g. 0402 096 551">
-                    </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-cancel-modal" data-dismiss="modal">
+                        <i class="fas fa-times mr-1"></i> Cancel
+                    </button>
+                    <button type="submit" class="btn" id="submitBtn">
+                        <i class="fas fa-save mr-1"></i> <span id="submitBtnText">Create Event</span>
+                    </button>
                 </div>
-            </div>
-
-            <div class="form-group">
-                <label>Description</label>
-                <textarea name="description" class="form-control" rows="3"><?= htmlspecialchars($f_desc) ?></textarea>
-            </div>
-
-            <button type="submit" class="btn btn-primary" id="submitBtn">
-                <i class="fas fa-save"></i> <?= $edit_id ? 'Update Event' : 'Create Event' ?>
-            </button>
-            <?php if ($edit_id): ?>
-                <a href="eventManagement.php" class="btn btn-secondary">Cancel</a>
-            <?php endif; ?>
-        </form>
+            </form>
+        </div>
     </div>
 </div>
 
@@ -369,9 +491,55 @@ include 'include/admin-footer.php';
 <script>
 $(document).ready(function() {
     $('#eventsTable').DataTable({ pageLength: 25, order: [[0, 'asc']] });
+
+    // ── NEW EVENT: reset form and open modal ──
+    $('#btnNewEvent').on('click', function() {
+        $('#modal_edit_id').val('');
+        $('#modal_title').val('');
+        $('#modal_date').val('');
+        $('#modal_start').val('');
+        $('#modal_end').val('');
+        $('#modal_location').val('');
+        $('#modal_sponsors').val('');
+        $('#modal_contacts').val('');
+        $('#modal_status').val('Available');
+        $('#modal_desc').val('');
+        $('#modalTitleText').text('Create New Event');
+        $('#modalIcon').attr('class', 'fas fa-calendar-plus');
+        $('#submitBtn').removeClass('btn-update').addClass('btn-create');
+        $('#submitBtnText').text('Create Event');
+        $('#eventModal').modal('show');
+    });
+
+    // ── EDIT EVENT: populate form and open modal ──
+    $(document).on('click', '.edit-btn', function() {
+        var btn = $(this);
+        $('#modal_edit_id').val(btn.data('id'));
+        $('#modal_title').val(btn.data('title'));
+        $('#modal_date').val(btn.data('date'));
+        $('#modal_start').val(btn.data('start') || '');
+        $('#modal_end').val(btn.data('end') || '');
+        $('#modal_location').val(btn.data('location') || '');
+        $('#modal_sponsors').val(btn.data('sponsors') || '');
+        $('#modal_contacts').val(btn.data('contacts') || '');
+        $('#modal_status').val(btn.data('status'));
+        $('#modal_desc').val(btn.data('desc') || '');
+        $('#modalTitleText').text('Edit Event #' + btn.data('id'));
+        $('#modalIcon').attr('class', 'fas fa-calendar-check');
+        $('#submitBtn').removeClass('btn-create').addClass('btn-update');
+        $('#submitBtnText').text('Update Event');
+        $('#eventModal').modal('show');
+    });
+
+    // ── Loading state on submit ──
+    $('#eventFormInner').on('submit', function() {
+        var btn = $('#submitBtn');
+        btn.prop('disabled', true);
+        btn.html('<i class="fas fa-spinner fa-spin mr-1"></i> Saving...');
+    });
 });
 
-// Delete with confirmation
+// ── Delete with confirmation ──
 document.querySelectorAll('.delete-btn').forEach(btn => {
     btn.addEventListener('click', function(e) {
         e.preventDefault();
@@ -391,13 +559,6 @@ document.querySelectorAll('.delete-btn').forEach(btn => {
     });
 });
 
-// Loading state on submit
-document.getElementById('eventFormInner').addEventListener('submit', function() {
-    const btn = document.getElementById('submitBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-});
-
 <?php if ($message): ?>
 Swal.fire({
     icon: '<?= $msgType ?>',
@@ -406,6 +567,27 @@ Swal.fire({
     timer: 1800
 }).then(() => {
     <?php if ($reloadPage): ?>window.location.href = 'eventManagement.php';<?php endif; ?>
+});
+<?php endif; ?>
+
+<?php if ($edit_id): ?>
+// Auto-open modal in edit mode when loaded via ?edit=
+$(document).ready(function() {
+    $('#modal_edit_id').val('<?= $edit_id ?>');
+    $('#modal_title').val(<?= json_encode($f_title) ?>);
+    $('#modal_date').val(<?= json_encode($f_date) ?>);
+    $('#modal_start').val(<?= json_encode($f_start) ?>);
+    $('#modal_end').val(<?= json_encode($f_end) ?>);
+    $('#modal_location').val(<?= json_encode($f_location) ?>);
+    $('#modal_sponsors').val(<?= json_encode($f_sponsors) ?>);
+    $('#modal_contacts').val(<?= json_encode($f_contacts) ?>);
+    $('#modal_status').val(<?= json_encode($f_status) ?>);
+    $('#modal_desc').val(<?= json_encode($f_desc) ?>);
+    $('#modalTitleText').text('Edit Event #<?= $edit_id ?>');
+    $('#modalIcon').attr('class', 'fas fa-calendar-check');
+    $('#submitBtn').removeClass('btn-create').addClass('btn-update');
+    $('#submitBtnText').text('Update Event');
+    $('#eventModal').modal('show');
 });
 <?php endif; ?>
 </script>

@@ -10,7 +10,7 @@ function isCompanyAdmin() { return ($_SESSION['role'] ?? '') === 'company_admin'
 function isParent() { return strtolower($_SESSION['role'] ?? '') === 'parent'; }
 ?>
 
-<ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
+<ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar" role="navigation" aria-label="Main sidebar navigation">
     <a class="sidebar-brand d-flex align-items-center justify-content-center" href="index-admin.php">
         <div class="sidebar-brand-icon">
             <img src="bbccassests/img/logo/logo5.jpg" alt="Bhutanese Centre Logo" class="img-thumbnail">

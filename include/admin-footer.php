@@ -2,8 +2,11 @@
 // include/admin-footer.php
 ?>
 
+<!-- End main content landmark -->
+</main>
+
 <!-- Footer -->
-<footer class="sticky-footer bg-white">
+<footer class="sticky-footer bg-white" role="contentinfo">
     <div class="container my-auto">
         <div class="copyright text-center my-auto">
             <span>Copyright &copy; Bhutanese Buddhist Centre 2026</span>
