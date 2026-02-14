@@ -46,6 +46,48 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         color: #fff;
         text-decoration: none;
     }
+
+    /* ── Mobile header top bar ────────────────────── */
+    @media (max-width: 990px) {
+        .header_top .col-xs-12.col-md-5 p {
+            text-align: center;
+            margin-bottom: 5px;
+        }
+        .header_top .col-xs-12.col-md-5 p span {
+            display: inline-block;
+            margin: 0 6px 4px;
+            font-size: 13px;
+        }
+        .header_top .social-icons {
+            text-align: center;
+            margin: 0;
+            padding: 4px 0 8px;
+        }
+
+        /* Mobile logo + name above hamburger */
+        .mobile-logo-bar {
+            display: flex !important;
+            align-items: center;
+            background: #fff;
+            padding: 10px 15px;
+        }
+        .mobile-logo-bar img {
+            width: 50px;
+            height: 50px;
+            border-radius: 6px;
+            margin-right: 10px;
+            object-fit: contain;
+        }
+        .mobile-logo-bar h4 {
+            margin: 0;
+            font-size: 16px;
+            font-weight: 700;
+            color: #222;
+        }
+    }
+    @media (min-width: 991px) {
+        .mobile-logo-bar { display: none !important; }
+    }
 </style>
 
 <!-- Header Top -->
@@ -126,7 +168,13 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     </div>
 </div>
 
-<!-- Mobile Menu -->
+<!-- Mobile Logo Bar (visible only on mobile, above hamburger menu) -->
+<div class="mobile-logo-bar hidden-lg hidden-md">
+    <a href="index.php"><img src="bbccassests/img/logo/logo5.jpg" alt="BBCC Logo"></a>
+    <h4>Bhutanese Centre Canberra</h4>
+</div>
+
+<!-- Mobile Menu (meanmenu takes over this nav) -->
 <div class="nav_areas hidden-lg hidden-md">
     <div class="mobile-menu">
         <div class="container">
@@ -157,11 +205,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
                             </li>
 
                             <li>
-                                <a href="login.php">
-                                    <button class="btn btn-sm btn-danger" style="width:100%; margin-top:10px;">
-                                        Login
-                                    </button>
-                                </a>
+                                <a href="login.php">Login</a>
                             </li>
 
                         </ul>

@@ -5,7 +5,7 @@
       MOBILE NAV MENU ACTIVE JS
       ========================*/
     $('.mobile-menu nav').meanmenu({
-        meanScreenWidth: "990",
+        meanScreenWidth: "991",
         meanMenuContainer: ".mobile-menu",
     });
 

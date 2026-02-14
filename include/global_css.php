@@ -364,38 +364,45 @@ echo '
 /* ---------------- Tablet + Mobile (Unified Layout) ---------------- */
 @media (max-width: 992px) {
 
-    /* Slider height */
+    /* Slider height – auto so content does not overflow */
     .hero-slider {
-        height: 450px;
+        height: auto;
+        min-height: 300px;
     }
 
     /* Stack content vertically */
     .hero-container {
-        height: 450px;
+        height: auto;
+        min-height: 300px;
         flex-direction: column;
     }
 
     /* Text area */
     .hero-left {
         width: 100%;
-        padding: 40px 20px;
+        padding: 30px 20px;
         text-align: center;
-        justify-content: flex-start;
+        justify-content: center;
     }
 
     .hero-left h1 {
-        font-size: 32px;
+        font-size: 28px;
     }
 
     .hero-left p {
-        font-size: 16px;
-        margin-top: 15px;
+        font-size: 15px;
+        margin-top: 12px;
+        max-width: 100%;
     }
 
     .hero-btn {
-        margin: 20px auto 0 auto;
-        padding: 12px 28px;
-        font-size: 16px;
+        margin: 15px auto 0 auto;
+        padding: 10px 24px;
+        font-size: 15px;
+    }
+
+    .read_more_btn {
+        text-align: center;
     }
 
     /* Image section */
@@ -406,44 +413,49 @@ echo '
 
     .hero-right img {
         width: 100%;
-        height: 220px;
+        height: 200px;
         object-fit: cover;
     }
 
     /* Slider dots */
     .slider-counter {
-        bottom: 12px;
-        gap: 10px;
+        bottom: 8px;
+        gap: 8px;
     }
 
     .slider-counter .dot {
         width: 10px;
         height: 10px;
     }
+
+    /* Slide positioning – let them flow naturally when active */
+    .hero-slide {
+        position: relative;
+        display: none;
+    }
+    .hero-slide.active {
+        display: block;
+        position: relative;
+    }
 }
 
 /* ---------------- Mobile Optimization (extra small screens) ---------------- */
 @media (max-width: 576px) {
 
-    /* Reduce total height slightly for small phones */
-    .hero-slider {
-        height: 420px;
-    }
-
-    .hero-container {
-        height: 420px;
+    .hero-left {
+        padding: 20px 15px;
     }
 
     .hero-left h1 {
-        font-size: 26px;
+        font-size: 22px;
     }
 
     .hero-left p {
-        font-size: 14px;
+        font-size: 13px;
     }
 
     .hero-right img {
-        height: 200px;
+        height: 180px;
     }
 }
 
