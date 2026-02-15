@@ -245,16 +245,14 @@ h1, h6 { font-size: 1rem !important; }
 
 .topbar-avatar {
     width: 36px; height: 36px;
-    border-radius: 10px;
+    border-radius: 50%;
     background: linear-gradient(135deg, #4e73df, #224abe);
     color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.82rem;
-    font-weight: 700;
+    font-size: 1rem;
     flex-shrink: 0;
-    letter-spacing: 0.5px;
 }
 .topbar-user-info {
     display: none;
@@ -307,7 +305,7 @@ h1, h6 { font-size: 1rem !important; }
 }
 .dropdown-header-card .topbar-avatar {
     width: 40px; height: 40px;
-    font-size: 0.88rem;
+    font-size: 1.1rem;
 }
 .dropdown-header-card .info .name {
     font-size: 0.88rem;
@@ -412,12 +410,12 @@ h1, h6 { font-size: 1rem !important; }
                 <span class="topbar-user-name"><?php echo $_displayName; ?></span>
                 <span class="topbar-user-role"><?php echo $_displayRole; ?></span>
             </div>
-            <div class="topbar-avatar" aria-hidden="true"><?php echo $_initials; ?></div>
+            <div class="topbar-avatar" aria-hidden="true"><i class="fas fa-user"></i></div>
 
             <!-- Dropdown -->
             <div class="topbar-dropdown" id="adminDropdown" role="menu">
                 <div class="dropdown-header-card">
-                    <div class="topbar-avatar" aria-hidden="true"><?php echo $_initials; ?></div>
+                    <div class="topbar-avatar" aria-hidden="true"><i class="fas fa-user"></i></div>
                     <div class="info">
                         <div class="name"><?php echo $_displayName; ?></div>
                         <div class="role"><?php echo $_displayRole; ?></div>
