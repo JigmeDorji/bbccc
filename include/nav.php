@@ -2,217 +2,71 @@
 $currentPage = basename($_SERVER['PHP_SELF']);
 ?>
 
-<style>
-    .logo {
-        display: flex;
-        align-items: center;
-        margin-top: -27%;
-        margin-bottom: -26%;
-        width: 180px;
-        height: 180px;
-        object-fit: contain;
-    }
-    .logo img {
-        margin-right: 8px;
-    }
-    .logo h3 {
-        margin: 0;
-    }
-
-    /* Active Menu */
-    .navid li.active > a {
-        color: #881b12 !important;
-        font-weight: bold;
-        border-bottom: 2px solid #881b12;
-    }
-
-    /* Login button */
-    .login-button a {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        text-align: center;
-        border: 2px solid #881b12;
-        padding: 8px 16px;
-        border-radius: 5px;
-        color: #881b12;
-        font-weight: bold;
-        text-transform: uppercase;
-        transition: 0.3s;
-    }
-
-    .login-button a:hover {
-        background-color: #6b140d;
-        color: #fff;
-        text-decoration: none;
-    }
-
-    /* ── Mobile header top bar ────────────────────── */
-    @media (max-width: 990px) {
-        .header_top .col-xs-12.col-md-5 p {
-            text-align: center;
-            margin-bottom: 5px;
-        }
-        .header_top .col-xs-12.col-md-5 p span {
-            display: inline-block;
-            margin: 0 6px 4px;
-            font-size: 13px;
-        }
-        .header_top .social-icons {
-            text-align: center;
-            margin: 0;
-            padding: 4px 0 8px;
-        }
-
-        /* Mobile logo + name above hamburger */
-        .mobile-logo-bar {
-            display: flex !important;
-            align-items: center;
-            background: #fff;
-            padding: 10px 15px;
-        }
-        .mobile-logo-bar img {
-            width: 50px;
-            height: 50px;
-            border-radius: 6px;
-            margin-right: 10px;
-            object-fit: contain;
-        }
-        .mobile-logo-bar h4 {
-            margin: 0;
-            font-size: 16px;
-            font-weight: 700;
-            color: #222;
-        }
-    }
-    @media (min-width: 991px) {
-        .mobile-logo-bar { display: none !important; }
-    }
-</style>
-
-<!-- Header Top -->
-<div class="header_top">
-    <div class="container">
-        <div class="row">
-            <div class="col-xs-12 col-md-5 col-sm-6">
-                <p>
-                    <span><i class="fa fa-user white"></i> bbbccc@gmail.com</span>
-                    <span><i class="fa fa-phone"></i> 0404902044</span>
-                </p>
-            </div>
-
-            <div class="col-xs-12 col-md-3 col-sm-6"></div>
-
-            <div class="col-xs-12 col-md-4 col-sm-12">
-                <ul class="social-icons">
-                    <li><a class="facebook" href="#"><i class="fa fa-facebook"></i></a></li>
-                    <li><a class="rss" href="#"><i class="fa fa-youtube"></i></a></li>
-                    <li><a class="google" href="#"><i class="fa fa-instagram"></i></a></li>
-                </ul>
-            </div>
+<!-- Top Bar -->
+<div class="bbcc-topbar">
+    <div class="bbcc-container bbcc-topbar__inner">
+        <div class="bbcc-topbar__info">
+            <span><i class="fa-solid fa-envelope"></i> bbbccc@gmail.com</span>
+            <span><i class="fa-solid fa-phone"></i> 0404 902 044</span>
+        </div>
+        <div class="bbcc-topbar__social">
+            <a href="https://www.facebook.com/profile.php?id=100084018901076" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
+            <a href="#" aria-label="YouTube"><i class="fa-brands fa-youtube"></i></a>
+            <a href="#" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
         </div>
     </div>
 </div>
 
-<!-- Desktop Navigation -->
-<div class="nav_areas hidden-xs hidden-sm">
-    <div class="nav_area">
-        <div class="container">
-            <div class="row">
+<!-- Main Navigation -->
+<nav class="bbcc-navbar" id="bbccNavbar">
+    <div class="bbcc-container bbcc-navbar__inner">
 
-                <!-- Logo -->
-                <div class="col-md-3 col-sm-4 col-xs-5">
-                    <div class="logo">
-                        <a href="index.php"><img src="bbccassests/img/logo/logo5.jpg" alt=""></a>
-                        <h3>Bhutanese Centre Canberra</h3>
-                    </div>
-                </div>
-
-                <!-- Navigation -->
-                <div class="col-md-9 col-sm-8 col-xs-8">
-                    <nav class="menu">
-                        <ul class="navid">
-
-                            <li class="<?= ($currentPage === 'index.php') ? 'active' : '' ?>">
-                                <a href="index.php">Home</a>
-                            </li>
-
-                            <li class="<?= ($currentPage === 'about-us.php') ? 'active' : '' ?>">
-                                <a href="about-us.php">About</a>
-                            </li>
-
-                            <li class="<?= ($currentPage === 'services.php') ? 'active' : '' ?>">
-                                <a href="services.php">Service</a>
-                            </li>
-
-                            <li class="<?= ($currentPage === 'events.php' || $currentPage === 'book-event.php') ? 'active' : '' ?>">
-                                <a href="events.php">Events</a>
-                            </li>
-
-                            <li class="<?= ($currentPage === 'contact-us.php') ? 'active' : '' ?>">
-                                <a href="contact-us.php">Contact</a>
-                            </li>
-
-                            <li class="">
-                                <a href="login.php">
-                                    <button class="btn btn-sm btn-danger">Login</button>
-                                </a>
-                            </li>
-
-                        </ul>
-                    </nav>
-                </div>
-
+        <!-- Brand -->
+        <a href="index.php" class="bbcc-navbar__brand">
+            <img src="bbccassests/img/logo/logo5.jpg" alt="BBCC Logo">
+            <div class="bbcc-navbar__brand-text">
+                Bhutanese Buddhist &amp; Cultural Center
+                <small>Canberra, Australian Capital Territory</small>
             </div>
-        </div>
+        </a>
+
+        <!-- Nav Links -->
+        <ul class="bbcc-nav" id="bbccNav">
+            <li class="<?= ($currentPage === 'index.php') ? 'active' : '' ?>">
+                <a href="index.php">Home</a>
+            </li>
+            <li class="<?= ($currentPage === 'about-us.php') ? 'active' : '' ?>">
+                <a href="about-us.php">About</a>
+            </li>
+            <li class="<?= ($currentPage === 'services.php') ? 'active' : '' ?>">
+                <a href="services.php">Services</a>
+            </li>
+            <li class="<?= ($currentPage === 'events.php' || $currentPage === 'event_detail.php' || $currentPage === 'book-event.php') ? 'active' : '' ?>">
+                <a href="events.php">Events</a>
+            </li>
+            <li class="<?= ($currentPage === 'contact-us.php') ? 'active' : '' ?>">
+                <a href="contact-us.php">Contact</a>
+            </li>
+            <li>
+                <a href="login.php" class="bbcc-nav__login">
+                    <i class="fa-solid fa-right-to-bracket"></i> Login
+                </a>
+            </li>
+        </ul>
+
+        <!-- Mobile Toggle -->
+        <button class="bbcc-navbar__toggle" id="bbccNavToggle" aria-label="Toggle navigation">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+
     </div>
-</div>
+</nav>
 
-<!-- Mobile Logo Bar (visible only on mobile, above hamburger menu) -->
-<div class="mobile-logo-bar hidden-lg hidden-md">
-    <a href="index.php"><img src="bbccassests/img/logo/logo5.jpg" alt="BBCC Logo"></a>
-    <h4>Bhutanese Centre Canberra</h4>
-</div>
-
-<!-- Mobile Menu (meanmenu takes over this nav) -->
-<div class="nav_areas hidden-lg hidden-md">
-    <div class="mobile-menu">
-        <div class="container">
-            <div class="row">
-                <div class="col-sm-12 col-xs-12">
-
-                    <nav class="menu">
-                        <ul>
-
-                            <li class="<?= ($currentPage === 'index.php') ? 'active' : '' ?>">
-                                <a href="index.php">Home</a>
-                            </li>
-
-                            <li class="<?= ($currentPage === 'about-us.php') ? 'active' : '' ?>">
-                                <a href="about-us.php">About</a>
-                            </li>
-
-                            <li class="<?= ($currentPage === 'services.php') ? 'active' : '' ?>">
-                                <a href="services.php">Service</a>
-                            </li>
-
-                            <li class="<?= ($currentPage === 'events.php' || $currentPage === 'book-event.php') ? 'active' : '' ?>">
-                                <a href="events.php">Events</a>
-                            </li>
-
-                            <li class="<?= ($currentPage === 'contact-us.php') ? 'active' : '' ?>">
-                                <a href="contact-us.php">Contact</a>
-                            </li>
-
-                            <li>
-                                <a href="login.php">Login</a>
-                            </li>
-
-                        </ul>
-                    </nav>
-
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+<script>
+document.getElementById('bbccNavToggle').addEventListener('click', function() {
+    document.getElementById('bbccNav').classList.toggle('open');
+    const icon = this.querySelector('i');
+    icon.classList.toggle('fa-bars');
+    icon.classList.toggle('fa-xmark');
+});
+</script>

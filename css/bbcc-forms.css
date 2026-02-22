@@ -1,0 +1,526 @@
+/* ═══════════════════════════════════════════════════════════════
+   BBCC Unified Form Styles
+   Matches the parentAccountSetup.php design language
+   Works with both Bootstrap 4 (SB Admin 2) and Bootstrap 5
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+    --brand: #881b12;
+    --brand-light: #a82218;
+    --brand-dark: #6b140d;
+    --brand-bg: #fef3f2;
+    --brand-shadow: rgba(136, 27, 18, 0.12);
+    --input-radius: 10px;
+    --card-radius: 16px;
+    --btn-radius: 10px;
+    --transition-speed: 0.2s;
+}
+
+/* ── Form Controls ─────────────────────────────────────────── */
+.form-control,
+.form-select,
+.custom-select {
+    height: 48px;
+    border-radius: var(--input-radius) !important;
+    border: 1.5px solid #dee2e6;
+    font-size: 0.9rem;
+    padding: 0.55rem 1rem;
+    transition: border-color var(--transition-speed), box-shadow var(--transition-speed);
+}
+
+.form-control:focus,
+.form-select:focus,
+.custom-select:focus {
+    border-color: var(--brand) !important;
+    box-shadow: 0 0 0 3px var(--brand-shadow) !important;
+    outline: none;
+}
+
+textarea.form-control {
+    height: auto;
+    min-height: 100px;
+}
+
+.form-control-sm {
+    height: 40px;
+    font-size: 0.82rem;
+}
+
+.form-control-file {
+    font-size: 0.85rem;
+    padding: 8px 0;
+}
+
+/* ── Labels ────────────────────────────────────────────────── */
+.form-group > label,
+.bbcc-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #5a5c69;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 6px;
+}
+
+.form-group > label .text-danger,
+.bbcc-label .text-danger {
+    font-size: 0.85em;
+}
+
+/* ── Form Groups ───────────────────────────────────────────── */
+.form-group {
+    margin-bottom: 1.2rem;
+}
+
+/* ── Bootstrap 5 Floating Labels (for pages that use BS5) ─── */
+.form-floating > .form-control,
+.form-floating > .form-select {
+    height: 50px;
+    border-radius: var(--input-radius);
+    border: 1.5px solid #dee2e6;
+    font-size: 0.9rem;
+}
+
+.form-floating > .form-control:focus,
+.form-floating > .form-select:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px var(--brand-shadow);
+}
+
+.form-floating > label {
+    font-size: 0.85rem;
+    color: #888;
+}
+
+/* ── Buttons ───────────────────────────────────────────────── */
+.btn-brand,
+.btn-primary {
+    background: var(--brand) !important;
+    border-color: var(--brand) !important;
+    color: #fff !important;
+    border-radius: var(--btn-radius);
+    font-weight: 600;
+    font-size: 0.92rem;
+    padding: 10px 24px;
+    transition: all var(--transition-speed);
+    letter-spacing: 0.2px;
+}
+
+.btn-brand:hover,
+.btn-primary:hover,
+.btn-brand:focus,
+.btn-primary:focus {
+    background: var(--brand-dark) !important;
+    border-color: var(--brand-dark) !important;
+    color: #fff !important;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(136, 27, 18, 0.3);
+}
+
+.btn-brand:active,
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-outline-brand,
+.btn-outline-primary {
+    border: 2px solid var(--brand) !important;
+    color: var(--brand) !important;
+    border-radius: var(--btn-radius);
+    font-weight: 600;
+    font-size: 0.92rem;
+    padding: 9px 24px;
+    background: transparent;
+    transition: all var(--transition-speed);
+}
+
+.btn-outline-brand:hover,
+.btn-outline-primary:hover {
+    background: var(--brand) !important;
+    color: #fff !important;
+    border-color: var(--brand) !important;
+}
+
+.btn-secondary {
+    border-radius: var(--btn-radius);
+    font-weight: 600;
+}
+
+.btn-success {
+    border-radius: var(--btn-radius);
+    font-weight: 600;
+}
+
+.btn-danger {
+    border-radius: var(--btn-radius);
+    font-weight: 600;
+}
+
+.btn-info {
+    border-radius: var(--btn-radius);
+    font-weight: 600;
+}
+
+.btn-outline-danger {
+    border-radius: var(--btn-radius);
+}
+
+.btn-outline-info {
+    border-radius: var(--btn-radius);
+}
+
+.btn-outline-secondary {
+    border-radius: var(--btn-radius);
+}
+
+.btn-sm {
+    padding: 6px 14px;
+    font-size: 0.8rem;
+}
+
+.btn-lg {
+    padding: 12px 32px;
+    font-size: 1rem;
+}
+
+/* ── Cards ─────────────────────────────────────────────────── */
+.card {
+    border-radius: var(--card-radius) !important;
+    border: 1px solid #e3e6f0;
+    overflow: hidden;
+}
+
+.card-header {
+    border-radius: var(--card-radius) var(--card-radius) 0 0 !important;
+    background: #f8f9fc;
+    border-bottom: 1px solid #e3e6f0;
+}
+
+.card .card-header .font-weight-bold {
+    font-size: 0.88rem;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* ── Info Box (branded accent) ─────────────────────────────── */
+.info-box,
+.bbcc-info {
+    background: var(--brand-bg);
+    border-left: 4px solid var(--brand);
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-size: 0.82rem;
+    color: #555;
+    margin-bottom: 20px;
+}
+
+.info-box i,
+.bbcc-info i {
+    color: var(--brand);
+    margin-right: 6px;
+}
+
+/* ── Alerts ────────────────────────────────────────────────── */
+.alert {
+    border-radius: var(--input-radius);
+    font-size: 0.88rem;
+    border: none;
+}
+
+.alert-success {
+    background: #d4edda;
+    color: #155724;
+    border-left: 4px solid #28a745;
+}
+
+.alert-danger {
+    background: #f8d7da;
+    color: #721c24;
+    border-left: 4px solid #dc3545;
+}
+
+.alert-warning {
+    background: #fff3cd;
+    color: #856404;
+    border-left: 4px solid #ffc107;
+}
+
+.alert-info {
+    background: #d1ecf1;
+    color: #0c5460;
+    border-left: 4px solid #17a2b8;
+}
+
+/* ── Badges ────────────────────────────────────────────────── */
+.badge {
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+}
+
+/* ── Tables ────────────────────────────────────────────────── */
+.table thead th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #5a5c69;
+    font-weight: 700;
+    border-bottom-width: 2px;
+}
+
+.table td {
+    font-size: 0.88rem;
+    vertical-align: middle;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f8f9fc;
+}
+
+/* ── Modals ────────────────────────────────────────────────── */
+.modal-content {
+    border-radius: var(--card-radius) !important;
+    border: none;
+}
+
+.modal-header {
+    background: #f8f9fc;
+    border-bottom: 1px solid #e3e6f0;
+}
+
+.modal-title {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.modal-footer {
+    border-top: 1px solid #e3e6f0;
+}
+
+/* ── Custom Switches & Checkboxes ──────────────────────────── */
+.custom-control-input:checked ~ .custom-control-label::before {
+    background-color: var(--brand);
+    border-color: var(--brand);
+}
+
+.custom-control-input:focus ~ .custom-control-label::before {
+    box-shadow: 0 0 0 3px var(--brand-shadow);
+}
+
+input[type="checkbox"]:checked {
+    accent-color: var(--brand);
+}
+
+/* ── Password Strength & Validation (reusable) ─────────────── */
+.pw-strength {
+    height: 4px;
+    border-radius: 2px;
+    background: #e9ecef;
+    margin-top: 6px;
+    overflow: hidden;
+}
+
+.pw-strength-bar {
+    height: 100%;
+    width: 0;
+    border-radius: 2px;
+    transition: width 0.3s, background 0.3s;
+}
+
+.pw-hint {
+    font-size: 0.72rem;
+    color: #999;
+    margin-top: 4px;
+}
+
+.pw-hint .met { color: #28a745; }
+.pw-hint .unmet { color: #ccc; }
+
+.form-control.is-valid { border-color: #28a745 !important; }
+.form-control.is-invalid { border-color: #dc3545 !important; }
+
+.validation-icon {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.9rem;
+    pointer-events: none;
+}
+
+/* ── Password Toggle (show/hide) ───────────────────────────── */
+.pw-wrapper {
+    position: relative;
+}
+
+.pw-wrapper .form-control {
+    padding-right: 48px;
+}
+
+.pw-toggle {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #858796;
+    cursor: pointer;
+    padding: 4px 8px;
+    font-size: 0.85rem;
+    z-index: 5;
+}
+
+.pw-toggle:hover {
+    color: var(--brand);
+}
+
+/* ── Section Titles (portal pages) ─────────────────────────── */
+.section-title,
+.bbcc-section-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #5a5c69;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 28px 0 12px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e3e6f0;
+}
+
+.section-title i,
+.bbcc-section-title i {
+    color: var(--brand);
+    margin-right: 8px;
+}
+
+/* ── Page Headers ──────────────────────────────────────────── */
+.h3.text-gray-800,
+h1.h3 {
+    font-weight: 700 !important;
+    color: #2d3436 !important;
+    font-size: 1.35rem !important;
+}
+
+/* ── Profile Labels ────────────────────────────────────────── */
+.profile-label,
+.mini-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    color: #858796;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    margin-bottom: 2px;
+}
+
+.profile-value {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #2d3436;
+}
+
+/* ── Nav Tabs (portal) ─────────────────────────────────────── */
+.nav-tabs .nav-link {
+    border-radius: var(--input-radius) var(--input-radius) 0 0;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #858796;
+    padding: 10px 18px;
+    transition: all 0.2s;
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--brand);
+    border-color: #dee2e6 #dee2e6 #fff;
+    font-weight: 700;
+}
+
+.nav-tabs .nav-link:hover:not(.active) {
+    color: var(--brand);
+    border-color: transparent;
+    background: var(--brand-bg);
+}
+
+/* ── Sidebar Brand Colors ──────────────────────────────────── */
+.bg-gradient-primary {
+    background-color: var(--brand) !important;
+    background-image: linear-gradient(180deg, var(--brand) 10%, var(--brand-dark) 100%) !important;
+}
+.sidebar .nav-item.active .nav-link {
+    font-weight: 700;
+}
+.sidebar .sidebar-brand {
+    background: rgba(0,0,0,.1);
+}
+.sidebar .nav-item .nav-link:hover {
+    background: rgba(255,255,255,.08);
+}
+.sidebar .sidebar-heading {
+    color: rgba(255,255,255,.4);
+}
+.sidebar hr.sidebar-divider {
+    border-top: 1px solid rgba(255,255,255,.12);
+}
+
+/* ── Admin Accent Overrides (brand instead of blue) ────────── */
+.btn-primary {
+    background-color: var(--brand) !important;
+    border-color: var(--brand) !important;
+}
+.btn-primary:hover {
+    background-color: var(--brand-dark) !important;
+    border-color: var(--brand-dark) !important;
+}
+.text-primary { color: var(--brand) !important; }
+a.text-primary:hover { color: var(--brand-dark) !important; }
+.badge-primary { background-color: var(--brand) !important; }
+.welcome-banner .quick-actions a:hover { opacity: .9; }
+
+/* ── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #999; }
+
+/* ── Selection ─────────────────────────────────────────────── */
+::selection {
+    background: var(--brand-bg);
+    color: var(--brand-dark);
+}
+
+/* ── Animations ────────────────────────────────────────────── */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .form-control,
+    .form-select,
+    .custom-select {
+        height: 44px;
+        font-size: 0.88rem;
+    }
+
+    .btn-primary,
+    .btn-brand {
+        padding: 9px 18px;
+        font-size: 0.88rem;
+    }
+
+    .card {
+        border-radius: 12px !important;
+    }
+}

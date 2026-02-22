@@ -92,73 +92,93 @@ $assignments = $pdo->query(
             <?php include_once 'include/admin-header.php'; ?>
 
             <div class="container-fluid">
-                <h1 class="h3 mb-4 text-gray-800">Assign Class</h1>
+                <div class="d-flex align-items-center justify-content-between mb-4">
+                    <div>
+                        <h1 class="h3 mb-0 text-gray-800 font-weight-bold">Assign Students to Classes</h1>
+                        <p class="text-muted mb-0" style="font-size:.88rem;">Allocate approved students into active classes.</p>
+                    </div>
+                    <a href="admin-class-setup.php" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;">
+                        <i class="fas fa-cog mr-1"></i> Classes & Teachers
+                    </a>
+                </div>
 
                 <?php if ($message): ?>
-                    <div class="alert <?php echo (stripos($message, 'Error') === 0) ? 'alert-danger' : 'alert-success'; ?>">
-                        <?php echo htmlspecialchars($message); ?>
-                    </div>
+                <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+                <script>
+                document.addEventListener('DOMContentLoaded', () => {
+                    Swal.fire({
+                        icon: <?= json_encode(stripos($message, 'Error') === 0 ? 'error' : 'success') ?>,
+                        title: <?= json_encode($message) ?>,
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                });
+                </script>
                 <?php endif; ?>
 
-                <div class="card shadow mb-4">
-                    <div class="card-header py-3">
-                        <h6 class="m-0 font-weight-bold text-primary">Assign Student to Class</h6>
+                <div class="card shadow mb-4" style="border-radius:14px;border:none;">
+                    <div class="card-header py-3" style="border-radius:14px 14px 0 0;">
+                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-user-plus mr-1"></i> Assign Student to Class</h6>
                     </div>
                     <div class="card-body">
                         <form method="POST">
-                            <div class="form-group">
-                                <label>Student</label>
-                                <select name="student_id" class="form-control" required>
-                                    <option value="">-- Select Student --</option>
-                                    <?php foreach ($students as $student): ?>
-                                        <option value="<?php echo (int)$student['id']; ?>">
-                                            <?php echo htmlspecialchars($student['student_name']); ?> (<?php echo htmlspecialchars($student['student_id']); ?>)
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
+                            <div class="form-row align-items-end">
+                                <div class="form-group col-md-5">
+                                    <label><i class="fas fa-user-graduate mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Student <span class="text-danger">*</span></label>
+                                    <select name="student_id" class="form-control" required>
+                                        <option value="">— Select student —</option>
+                                        <?php foreach ($students as $student): ?>
+                                            <option value="<?= (int)$student['id'] ?>">
+                                                <?= htmlspecialchars($student['student_name']) ?> (<?= htmlspecialchars($student['student_id']) ?>)
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-5">
+                                    <label><i class="fas fa-chalkboard mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Class <span class="text-danger">*</span></label>
+                                    <select name="class_id" class="form-control" required>
+                                        <option value="">— Select class —</option>
+                                        <?php foreach ($classes as $class): ?>
+                                            <option value="<?= (int)$class['id'] ?>">
+                                                <?= htmlspecialchars($class['class_name']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-2">
+                                    <button type="submit" class="btn btn-primary btn-block" style="border-radius:10px;">
+                                        <i class="fas fa-check mr-1"></i> Assign
+                                    </button>
+                                </div>
                             </div>
-
-                            <div class="form-group">
-                                <label>Class</label>
-                                <select name="class_id" class="form-control" required>
-                                    <option value="">-- Select Class --</option>
-                                    <?php foreach ($classes as $class): ?>
-                                        <option value="<?php echo (int)$class['id']; ?>">
-                                            <?php echo htmlspecialchars($class['class_name']); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-
-                            <button type="submit" class="btn btn-primary">Assign</button>
                         </form>
                     </div>
                 </div>
 
-                <div class="card shadow mb-4">
+                <div class="card shadow mb-4" style="border-radius:14px;border:none;">
                     <div class="card-header py-3">
-                        <h6 class="m-0 font-weight-bold text-primary">Recent Assignments</h6>
+                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-list mr-1"></i> Current Assignments</h6>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
-                            <table class="table table-bordered" width="100%" cellspacing="0">
-                                <thead>
+                            <table class="table table-hover" width="100%">
+                                <thead style="background:#f8f9fc;">
                                 <tr>
-                                    <th>Student</th>
-                                    <th>Class</th>
-                                    <th>Assigned At</th>
+                                    <th style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Student</th>
+                                    <th style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Class</th>
+                                    <th style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Assigned</th>
                                 </tr>
                                 </thead>
                                 <tbody>
                                 <?php foreach ($assignments as $assignment): ?>
                                     <tr>
-                                        <td><?php echo htmlspecialchars($assignment['student_name']); ?> (<?php echo htmlspecialchars($assignment['student_id']); ?>)</td>
-                                        <td><?php echo htmlspecialchars($assignment['class_name']); ?></td>
-                                        <td><?php echo htmlspecialchars($assignment['assigned_at']); ?></td>
+                                        <td class="font-weight-bold"><?= htmlspecialchars($assignment['student_name']) ?> <small class="text-muted">(<?= htmlspecialchars($assignment['student_id']) ?>)</small></td>
+                                        <td><?= htmlspecialchars($assignment['class_name']) ?></td>
+                                        <td style="font-size:.85rem;"><?= htmlspecialchars($assignment['assigned_at']) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                                 <?php if (empty($assignments)): ?>
-                                    <tr><td colspan="3" class="text-center">No assignments yet.</td></tr>
+                                    <tr><td colspan="3" class="text-center text-muted py-4"><i class="fas fa-inbox mr-1"></i> No assignments yet.</td></tr>
                                 <?php endif; ?>
                                 </tbody>
                             </table>

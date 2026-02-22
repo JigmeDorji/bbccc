@@ -28,9 +28,10 @@ if (!$parent) die("Parent record not found. Please contact admin.");
 $parentId = (int)$parent['id'];
 
 $stmt = $pdo->prepare("
-    SELECT s.student_name, s.student_id, a.attendance_date, a.session, a.status, a.remarks
+    SELECT s.student_name, s.student_id, a.attendance_date, c.class_name, a.status, a.notes
     FROM students s
-    LEFT JOIN attendance a ON a.student_pk = s.id
+    LEFT JOIN attendance a ON a.student_id = s.id
+    LEFT JOIN classes c ON c.id = a.class_id
     WHERE s.parentId = :pid
     ORDER BY s.student_name ASC, a.attendance_date DESC
 ");
@@ -72,9 +73,9 @@ $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                 <tr>
                                     <th>Student</th>
                                     <th>Date</th>
-                                    <th>Session</th>
+                                    <th>Class</th>
                                     <th>Status</th>
-                                    <th>Remarks</th>
+                                    <th>Notes</th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -82,9 +83,9 @@ $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <tr>
                                         <td><?php echo htmlspecialchars(($r['student_name'] ?? '').' ('.($r['student_id'] ?? '').')'); ?></td>
                                         <td><?php echo htmlspecialchars($r['attendance_date'] ?? '-'); ?></td>
-                                        <td><?php echo htmlspecialchars($r['session'] ?? '-'); ?></td>
+                                        <td><?php echo htmlspecialchars($r['class_name'] ?? '-'); ?></td>
                                         <td><?php echo htmlspecialchars($r['status'] ?? '-'); ?></td>
-                                        <td><?php echo htmlspecialchars($r['remarks'] ?? '-'); ?></td>
+                                        <td><?php echo htmlspecialchars($r['notes'] ?? '-'); ?></td>
                                     </tr>
                                 <?php endforeach; ?>
                                 </tbody>

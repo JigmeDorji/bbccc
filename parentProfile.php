@@ -244,11 +244,7 @@ $address   = $parent['address'] ?? '';
 
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
-
-    <style>
-        .profile-label { color:#6c757d; font-size:12px; text-transform: uppercase; letter-spacing:.02em; }
-        .profile-value { font-size:15px; font-weight:600; color:#343a40; }
-    </style>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body id="page-top">
 <div id="wrapper">
@@ -262,8 +258,8 @@ $address   = $parent['address'] ?? '';
 
             <div class="container-fluid">
 
-                <div class="d-flex align-items-center justify-content-between mb-3">
-                    <h1 class="h3 text-gray-800 mb-0">My Profile</h1>
+                <div class="d-flex align-items-center justify-content-between mb-4">
+                    <h1 class="h3 text-gray-800 mb-0"><i class="fas fa-user-circle mr-2" style="color:var(--brand);"></i>My Profile</h1>
 
                     <?php if (!$isEditMode): ?>
                         <a href="parentProfile.php?edit=1" class="btn btn-primary">
@@ -277,170 +273,212 @@ $address   = $parent['address'] ?? '';
                 </div>
 
                 <?php if (!empty($message)): ?>
-                    <div class="alert alert-success"><?php echo htmlspecialchars($message); ?></div>
+                    <script>
+                    document.addEventListener('DOMContentLoaded', () => {
+                        Swal.fire({icon:'success', title:'Profile Updated!', text:'Your changes have been saved.', timer:2000, showConfirmButton:false, confirmButtonColor:'#881b12'});
+                    });
+                    </script>
                 <?php endif; ?>
 
                 <?php if (!empty($errors)): ?>
                     <div class="alert alert-danger">
-                        <ul class="mb-0">
+                        <i class="fas fa-exclamation-triangle mr-1"></i>
+                        <ul class="mb-0 d-inline">
                             <?php foreach ($errors as $er): ?>
-                                <li><?php echo htmlspecialchars($er); ?></li>
+                                <li><?= htmlspecialchars($er) ?></li>
                             <?php endforeach; ?>
                         </ul>
                     </div>
                 <?php endif; ?>
 
                 <?php if (!$isEditMode): ?>
-                    <!-- ✅ VIEW MODE -->
+                    <!-- VIEW MODE -->
                     <div class="card shadow mb-4">
                         <div class="card-header py-3 d-flex align-items-center justify-content-between">
-                            <h6 class="m-0 font-weight-bold text-primary">Your Details</h6>
+                            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-id-card mr-1"></i> Your Details</h6>
                             <span class="badge badge-info">View Mode</span>
                         </div>
                         <div class="card-body">
                             <div class="row">
                                 <div class="col-md-6 mb-3">
-                                    <div class="profile-label">Full Name</div>
-                                    <div class="profile-value"><?php echo htmlspecialchars($full_name); ?></div>
+                                    <div class="profile-label"><i class="fas fa-user mr-1" style="color:var(--brand);font-size:0.6rem;"></i> Full Name</div>
+                                    <div class="profile-value"><?= htmlspecialchars($full_name) ?></div>
                                 </div>
 
                                 <div class="col-md-6 mb-3">
-                                    <div class="profile-label">Gender</div>
-                                    <div class="profile-value"><?php echo htmlspecialchars($gender ?: '-'); ?></div>
+                                    <div class="profile-label"><i class="fas fa-venus-mars mr-1" style="color:var(--brand);font-size:0.6rem;"></i> Gender</div>
+                                    <div class="profile-value"><?= htmlspecialchars($gender ?: '—') ?></div>
                                 </div>
 
                                 <div class="col-md-6 mb-3">
-                                    <div class="profile-label">Email (Username)</div>
-                                    <div class="profile-value"><?php echo htmlspecialchars($email); ?></div>
+                                    <div class="profile-label"><i class="fas fa-envelope mr-1" style="color:var(--brand);font-size:0.6rem;"></i> Email (Username)</div>
+                                    <div class="profile-value"><?= htmlspecialchars($email) ?></div>
                                 </div>
 
                                 <div class="col-md-6 mb-3">
-                                    <div class="profile-label">Mobile Number</div>
-                                    <div class="profile-value"><?php echo htmlspecialchars($phone); ?></div>
+                                    <div class="profile-label"><i class="fas fa-phone mr-1" style="color:var(--brand);font-size:0.6rem;"></i> Mobile Number</div>
+                                    <div class="profile-value"><?= htmlspecialchars($phone) ?></div>
                                 </div>
 
                                 <div class="col-md-12 mb-1">
-                                    <div class="profile-label">Address</div>
-                                    <div class="profile-value"><?php echo htmlspecialchars($address); ?></div>
+                                    <div class="profile-label"><i class="fas fa-map-marker-alt mr-1" style="color:var(--brand);font-size:0.6rem;"></i> Address</div>
+                                    <div class="profile-value"><?= htmlspecialchars($address) ?></div>
                                 </div>
                             </div>
 
                             <hr>
-                            <div class="small text-muted">
-                                To update your details, click <strong>Edit Profile</strong>.
+                            <div class="info-box mt-3">
+                                <i class="fas fa-info-circle"></i>
+                                To update your details or change your password, click <strong>Edit Profile</strong>.
                             </div>
                         </div>
                     </div>
 
-                    <a class="btn btn-secondary" href="index-admin.php">Back to Dashboard</a>
-
                 <?php else: ?>
-                    <!-- ✅ EDIT MODE -->
+                    <!-- EDIT MODE -->
                     <div class="card shadow mb-4">
                         <div class="card-header py-3 d-flex align-items-center justify-content-between">
-                            <h6 class="m-0 font-weight-bold text-primary">Edit Your Details</h6>
+                            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-edit mr-1"></i> Edit Your Details</h6>
                             <span class="badge badge-warning">Edit Mode</span>
                         </div>
 
                         <div class="card-body">
                             <form method="POST" action="parentProfile.php?edit=1" id="profileForm">
 
-                                <div class="form-group">
-                                    <label>Full Name <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" name="full_name" required
-                                           value="<?php echo htmlspecialchars($full_name); ?>">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label><i class="fas fa-user mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Full Name <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" name="full_name" required
+                                                   value="<?= htmlspecialchars($full_name) ?>" placeholder="Enter full name">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label><i class="fas fa-venus-mars mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Gender <span class="text-danger">*</span></label>
+                                            <select class="form-control" name="gender" required>
+                                                <option value="">— Select —</option>
+                                                <?php
+                                                $opts = ['Male','Female','Other'];
+                                                foreach ($opts as $o) {
+                                                    $sel = (strcasecmp($gender, $o) === 0) ? 'selected' : '';
+                                                    echo "<option value=\"".htmlspecialchars($o)."\" $sel>".htmlspecialchars($o)."</option>";
+                                                }
+                                                ?>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label><i class="fas fa-envelope mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Email (Username) <span class="text-danger">*</span></label>
+                                            <input type="email" class="form-control" name="email" required
+                                                   value="<?= htmlspecialchars($email) ?>" placeholder="you@example.com">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label><i class="fas fa-phone mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Mobile Number <span class="text-danger">*</span></label>
+                                            <input type="tel" class="form-control" name="phone" required
+                                                   value="<?= htmlspecialchars($phone) ?>" placeholder="0412 345 678">
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <div class="form-group">
-                                    <label>Gender <span class="text-danger">*</span></label>
-                                    <select class="form-control" name="gender" required>
-                                        <option value="">-- Select --</option>
-                                        <?php
-                                        $opts = ['Male','Female','Other'];
-                                        foreach ($opts as $o) {
-                                            $sel = (strcasecmp($gender, $o) === 0) ? 'selected' : '';
-                                            echo "<option value=\"".htmlspecialchars($o)."\" $sel>".htmlspecialchars($o)."</option>";
-                                        }
-                                        ?>
-                                    </select>
-                                </div>
-
-                                <div class="form-group">
-                                    <label>Email (This is your username) <span class="text-danger">*</span></label>
-                                    <input type="email" class="form-control" name="email" required
-                                           value="<?php echo htmlspecialchars($email); ?>">
-                                </div>
-
-                                <div class="form-group">
-                                    <label>Mobile Number <span class="text-danger">*</span></label>
-                                    <input type="text" class="form-control" name="phone" required
-                                           value="<?php echo htmlspecialchars($phone); ?>">
-                                </div>
-
-                                <div class="form-group">
-                                    <label>Address <span class="text-danger">*</span></label>
+                                    <label><i class="fas fa-map-marker-alt mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Address <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" name="address" required
-                                           value="<?php echo htmlspecialchars($address); ?>">
+                                           value="<?= htmlspecialchars($address) ?>" placeholder="Street, Suburb, State, Postcode">
                                 </div>
 
                                 <hr>
 
-                                <!-- ✅ Toggle Change Password -->
+                                <!-- Toggle Change Password -->
                                 <div class="custom-control custom-switch mb-3">
                                     <input type="checkbox" class="custom-control-input" id="toggleChangePw">
-                                    <label class="custom-control-label" for="toggleChangePw">Change Password</label>
+                                    <label class="custom-control-label" for="toggleChangePw" style="font-size:0.88rem; font-weight:600;">
+                                        <i class="fas fa-key mr-1" style="color:var(--brand);"></i> Change Password
+                                    </label>
                                 </div>
 
-                                <!-- Hidden field sent to server -->
                                 <input type="hidden" name="change_password" id="change_password" value="0">
 
                                 <div id="passwordBox" style="display:none;">
-                                    <div class="alert alert-light">
-                                        For security, please enter your <strong>old password</strong> first.
+                                    <div class="info-box">
+                                        <i class="fas fa-shield-alt"></i>
+                                        For security, enter your <strong>current password</strong> before setting a new one.
                                     </div>
 
                                     <div class="form-group">
-                                        <label>Old Password <span class="text-danger">*</span></label>
-                                        <input type="password" class="form-control" name="old_password" id="old_password" autocomplete="current-password">
+                                        <label><i class="fas fa-lock mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Current Password <span class="text-danger">*</span></label>
+                                        <div class="pw-wrapper">
+                                            <input type="password" class="form-control" name="old_password" id="old_password" autocomplete="current-password" placeholder="Enter current password">
+                                            <button type="button" class="pw-toggle" onclick="togglePw('old_password', this)"><i class="fas fa-eye"></i></button>
+                                        </div>
                                     </div>
 
-                                    <div class="form-group">
-                                        <label>New Password <span class="text-danger">*</span></label>
-                                        <input type="password" class="form-control" name="password" id="password" autocomplete="new-password" placeholder="Min 8 characters">
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label>Confirm New Password <span class="text-danger">*</span></label>
-                                        <input type="password" class="form-control" name="confirm_password" id="confirm_password" autocomplete="new-password" placeholder="Re-enter new password">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label><i class="fas fa-lock-open mr-1" style="color:var(--brand);font-size:0.7rem;"></i> New Password <span class="text-danger">*</span></label>
+                                                <div class="pw-wrapper">
+                                                    <input type="password" class="form-control" name="password" id="password" autocomplete="new-password" placeholder="Min 8 characters">
+                                                    <button type="button" class="pw-toggle" onclick="togglePw('password', this)"><i class="fas fa-eye"></i></button>
+                                                </div>
+                                                <div class="pw-strength"><div class="pw-strength-bar" id="strengthBar"></div></div>
+                                                <div class="pw-hint" id="pwHints">
+                                                    <span class="unmet" data-check="len">8+ chars</span> &middot;
+                                                    <span class="unmet" data-check="letter">1 letter</span> &middot;
+                                                    <span class="unmet" data-check="num">1 number</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label><i class="fas fa-check-double mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Confirm Password <span class="text-danger">*</span></label>
+                                                <div class="pw-wrapper">
+                                                    <input type="password" class="form-control" name="confirm_password" id="confirm_password" autocomplete="new-password" placeholder="Re-enter password">
+                                                    <button type="button" class="pw-toggle" onclick="togglePw('confirm_password', this)"><i class="fas fa-eye"></i></button>
+                                                </div>
+                                                <div id="matchFeedback" style="font-size:0.72rem; margin-top:4px;"></div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
-                                <button class="btn btn-primary" type="submit">
-                                    <i class="fas fa-save mr-1"></i> Save Changes
-                                </button>
-
-                                <a class="btn btn-secondary ml-2" href="parentProfile.php">Cancel</a>
+                                <div class="mt-3">
+                                    <button class="btn btn-primary" type="submit" id="saveBtn">
+                                        <i class="fas fa-save mr-1"></i> Save Changes
+                                    </button>
+                                    <a class="btn btn-secondary ml-2" href="parentProfile.php">Cancel</a>
+                                </div>
 
                             </form>
                         </div>
                     </div>
 
                     <script>
+                    function togglePw(id, btn) {
+                        const f = document.getElementById(id);
+                        const icon = btn.querySelector('i');
+                        if (f.type === 'password') { f.type = 'text'; icon.className = 'fas fa-eye-slash'; }
+                        else { f.type = 'password'; icon.className = 'fas fa-eye'; }
+                    }
+
                     document.addEventListener('DOMContentLoaded', function () {
                         const toggle = document.getElementById('toggleChangePw');
                         const box = document.getElementById('passwordBox');
                         const flag = document.getElementById('change_password');
 
-                        // Keep toggle ON after a failed submit if user selected it
-                        const wasOn = <?php echo (isset($_POST['change_password']) && $_POST['change_password'] === '1') ? 'true' : 'false'; ?>;
+                        const wasOn = <?= (isset($_POST['change_password']) && $_POST['change_password'] === '1') ? 'true' : 'false'; ?>;
                         if (toggle) toggle.checked = wasOn;
 
                         function applyToggle() {
                             const on = toggle && toggle.checked;
                             if (flag) flag.value = on ? '1' : '0';
                             if (box) box.style.display = on ? 'block' : 'none';
-
-                            // Optional: clear fields when OFF
                             if (!on) {
                                 ['old_password','password','confirm_password'].forEach(id => {
                                     const el = document.getElementById(id);
@@ -453,6 +491,52 @@ $address   = $parent['address'] ?? '';
                             toggle.addEventListener('change', applyToggle);
                             applyToggle();
                         }
+
+                        // Password strength
+                        const pwField = document.getElementById('password');
+                        const confirmField = document.getElementById('confirm_password');
+                        const bar = document.getElementById('strengthBar');
+
+                        if (pwField) {
+                            pwField.addEventListener('input', function() {
+                                const v = this.value;
+                                let s = 0;
+                                if (v.length >= 8) s++;
+                                if (/[A-Za-z]/.test(v)) s++;
+                                if (/[0-9]/.test(v)) s++;
+                                if (/[^A-Za-z0-9]/.test(v)) s++;
+
+                                const w = [0,25,50,75,100][s];
+                                const c = ['#dc3545','#dc3545','#ffc107','#28a745','#28a745'][s];
+                                bar.style.width = w + '%';
+                                bar.style.background = c;
+
+                                const hints = document.getElementById('pwHints');
+                                hints.querySelector('[data-check=len]').className = v.length >= 8 ? 'met' : 'unmet';
+                                hints.querySelector('[data-check=letter]').className = /[A-Za-z]/.test(v) ? 'met' : 'unmet';
+                                hints.querySelector('[data-check=num]').className = /[0-9]/.test(v) ? 'met' : 'unmet';
+
+                                checkMatch();
+                            });
+                        }
+                        if (confirmField) confirmField.addEventListener('input', checkMatch);
+
+                        function checkMatch() {
+                            const fb = document.getElementById('matchFeedback');
+                            if (!confirmField || !confirmField.value) { fb.innerHTML = ''; return; }
+                            if (pwField.value === confirmField.value) {
+                                fb.innerHTML = '<span style="color:#28a745;"><i class="fas fa-check-circle"></i> Passwords match</span>';
+                            } else {
+                                fb.innerHTML = '<span style="color:#dc3545;"><i class="fas fa-times-circle"></i> Do not match</span>';
+                            }
+                        }
+
+                        // Submit loading
+                        document.getElementById('profileForm').addEventListener('submit', function() {
+                            const btn = document.getElementById('saveBtn');
+                            btn.disabled = true;
+                            btn.innerHTML = '<span class="spinner-border spinner-border-sm mr-1"></span> Saving...';
+                        });
                     });
                     </script>
 

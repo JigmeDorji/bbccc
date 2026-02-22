@@ -20,46 +20,62 @@ try {
     die("DB connection failed: " . $e->getMessage());
 }
 
+// Load classes for selector
+$classesList = $pdo->query("SELECT id, class_name FROM classes WHERE active=1 ORDER BY class_name")->fetchAll(PDO::FETCH_ASSOC);
+
 $date = $_GET['date'] ?? date('Y-m-d');
-$session = $_GET['session'] ?? 'AM';
-if (!in_array($session, ['AM','PM'], true)) $session = 'AM';
+$classId = (int)($_GET['class_id'] ?? ($classesList[0]['id'] ?? 0));
+
+// Resolve a teacher_id for admin marking (use teacher assigned to class, or first teacher)
+$adminTeacherId = 0;
+if ($classId) {
+    $t = $pdo->prepare("SELECT teacher_id FROM classes WHERE id=:cid AND teacher_id IS NOT NULL");
+    $t->execute([':cid'=>$classId]);
+    $adminTeacherId = (int)$t->fetchColumn();
+}
+if (!$adminTeacherId) {
+    $adminTeacherId = (int)$pdo->query("SELECT id FROM teachers LIMIT 1")->fetchColumn();
+}
 
 // Save attendance
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $date = $_POST['date'] ?? date('Y-m-d');
-        $session = $_POST['session'] ?? 'AM';
-        if (!in_array($session, ['AM','PM'], true)) $session = 'AM';
+        $classId = (int)($_POST['class_id'] ?? 0);
+        if (!$classId) throw new Exception("Please select a class.");
 
         $rows = $_POST['att'] ?? [];
-        $remarks = $_POST['remarks'] ?? [];
+        $notes = $_POST['notes'] ?? [];
 
-        $stmtUpsert = $pdo->prepare("
-            INSERT INTO attendance (student_pk, attendance_date, session, status, remarks, marked_by)
-            VALUES (:student_pk, :d, :s, :st, :rm, :mb)
-            ON DUPLICATE KEY UPDATE
-                status = VALUES(status),
-                remarks = VALUES(remarks),
-                marked_by = VALUES(marked_by)
-        ");
+        // Resolve teacher_id for this class
+        $t = $pdo->prepare("SELECT teacher_id FROM classes WHERE id=:cid AND teacher_id IS NOT NULL");
+        $t->execute([':cid'=>$classId]);
+        $teacherId = (int)$t->fetchColumn();
+        if (!$teacherId) {
+            $teacherId = (int)$pdo->query("SELECT id FROM teachers LIMIT 1")->fetchColumn();
+        }
+        if (!$teacherId) throw new Exception("No teacher found. Please set up a teacher first.");
 
-        foreach ($rows as $student_pk => $status) {
-            $student_pk = (int)$student_pk;
-            if ($student_pk <= 0) continue;
-
+        foreach ($rows as $studentId => $status) {
+            $studentId = (int)$studentId;
+            if ($studentId <= 0) continue;
             if (!in_array($status, ['Present','Absent','Late'], true)) continue;
 
-            $rm = isset($remarks[$student_pk]) ? trim($remarks[$student_pk]) : null;
-            $rm = ($rm === '') ? null : $rm;
+            $note = isset($notes[$studentId]) ? trim($notes[$studentId]) : null;
+            $note = ($note === '') ? null : $note;
 
-            $stmtUpsert->execute([
-                ':student_pk' => $student_pk,
-                ':d' => $date,
-                ':s' => $session,
-                ':st' => $status,
-                ':rm' => $rm,
-                ':mb' => $_SESSION['username'] ?? ($_SESSION['userid'] ?? 'admin')
-            ]);
+            // Check if record exists
+            $chk = $pdo->prepare("SELECT id FROM attendance WHERE class_id=:cid AND student_id=:sid AND attendance_date=:d");
+            $chk->execute([':cid'=>$classId, ':sid'=>$studentId, ':d'=>$date]);
+            $existId = $chk->fetchColumn();
+
+            if ($existId) {
+                $upd = $pdo->prepare("UPDATE attendance SET status=:st, notes=:n, marked_at=NOW() WHERE id=:id");
+                $upd->execute([':st'=>$status, ':n'=>$note, ':id'=>$existId]);
+            } else {
+                $ins = $pdo->prepare("INSERT INTO attendance (class_id, student_id, teacher_id, attendance_date, status, notes) VALUES (:cid,:sid,:tid,:d,:st,:n)");
+                $ins->execute([':cid'=>$classId, ':sid'=>$studentId, ':tid'=>$teacherId, ':d'=>$date, ':st'=>$status, ':n'=>$note]);
+            }
         }
 
         $message = "Attendance saved successfully.";
@@ -70,26 +86,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Approved students list + existing attendance for date/session
-$stmtStudents = $pdo->prepare("
-    SELECT s.id, s.student_id, s.student_name, s.class_option, p.full_name AS parent_name
-    FROM students s
-    LEFT JOIN parents p ON p.id = s.parentId
-    WHERE LOWER(s.approval_status) = 'approved'
-    ORDER BY s.student_name ASC
-");
-$stmtStudents->execute();
-$students = $stmtStudents->fetchAll(PDO::FETCH_ASSOC);
-
-$stmtExisting = $pdo->prepare("
-    SELECT student_pk, status, remarks
-    FROM attendance
-    WHERE attendance_date = :d AND session = :s
-");
-$stmtExisting->execute([':d' => $date, ':s' => $session]);
+// Students assigned to selected class + existing attendance for date
+$students = [];
 $existing = [];
-foreach ($stmtExisting->fetchAll(PDO::FETCH_ASSOC) as $r) {
-    $existing[(int)$r['student_pk']] = $r;
+if ($classId) {
+    $stmtStudents = $pdo->prepare("
+        SELECT s.id, s.student_id, s.student_name, s.class_option, p.full_name AS parent_name
+        FROM class_assignments ca
+        JOIN students s ON s.id = ca.student_id
+        LEFT JOIN parents p ON p.id = s.parentId
+        WHERE ca.class_id = :cid AND LOWER(s.approval_status) = 'approved'
+        ORDER BY s.student_name ASC
+    ");
+    $stmtStudents->execute([':cid' => $classId]);
+    $students = $stmtStudents->fetchAll(PDO::FETCH_ASSOC);
+
+    $stmtExisting = $pdo->prepare("
+        SELECT student_id, status, notes
+        FROM attendance
+        WHERE class_id = :cid AND attendance_date = :d
+    ");
+    $stmtExisting->execute([':cid' => $classId, ':d' => $date]);
+    foreach ($stmtExisting->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $existing[(int)$r['student_id']] = $r;
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -120,24 +140,25 @@ foreach ($stmtExisting->fetchAll(PDO::FETCH_ASSOC) as $r) {
                     const reload = <?php echo $reload ? 'true' : 'false'; ?>;
                     if (msg) {
                         Swal.fire({ icon: msg.toLowerCase().startsWith('error') ? 'error':'success', title: msg, showConfirmButton:false, timer: 1400 })
-                        .then(() => { if (reload) window.location.href = 'attendanceManagement.php?date=<?php echo htmlspecialchars($date); ?>&session=<?php echo htmlspecialchars($session); ?>'; });
+                        .then(() => { if (reload) window.location.href = 'attendanceManagement.php?date=<?php echo htmlspecialchars($date); ?>&class_id=<?php echo (int)$classId; ?>'; });
                     }
                 });
                 </script>
 
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
-                        <h6 class="m-0 font-weight-bold text-primary">Select Date & Session</h6>
+                        <h6 class="m-0 font-weight-bold text-primary">Select Class & Date</h6>
                     </div>
                     <div class="card-body">
                         <form method="GET" class="form-inline">
+                            <label class="mr-2">Class</label>
+                            <select class="form-control mr-3" name="class_id">
+                                <?php foreach ($classesList as $cl): ?>
+                                <option value="<?php echo (int)$cl['id']; ?>" <?php echo $classId==(int)$cl['id']?'selected':''; ?>><?php echo htmlspecialchars($cl['class_name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
                             <label class="mr-2">Date</label>
                             <input type="date" class="form-control mr-3" name="date" value="<?php echo htmlspecialchars($date); ?>">
-                            <label class="mr-2">Session</label>
-                            <select class="form-control mr-3" name="session">
-                                <option value="AM" <?php echo $session==='AM'?'selected':''; ?>>AM</option>
-                                <option value="PM" <?php echo $session==='PM'?'selected':''; ?>>PM</option>
-                            </select>
                             <button class="btn btn-primary" type="submit">Load</button>
                         </form>
                     </div>
@@ -152,7 +173,7 @@ foreach ($stmtExisting->fetchAll(PDO::FETCH_ASSOC) as $r) {
                     <div class="card-body">
                         <form method="POST">
                             <input type="hidden" name="date" value="<?php echo htmlspecialchars($date); ?>">
-                            <input type="hidden" name="session" value="<?php echo htmlspecialchars($session); ?>">
+                            <input type="hidden" name="class_id" value="<?php echo (int)$classId; ?>">
 
                             <div class="table-responsive">
                                 <table class="table table-bordered" width="100%" cellspacing="0">
@@ -163,7 +184,7 @@ foreach ($stmtExisting->fetchAll(PDO::FETCH_ASSOC) as $r) {
                                         <th>Class</th>
                                         <th>Parent</th>
                                         <th>Status</th>
-                                        <th>Remarks (optional)</th>
+                                        <th>Notes (optional)</th>
                                     </tr>
                                     </thead>
                                     <tbody>
@@ -171,7 +192,7 @@ foreach ($stmtExisting->fetchAll(PDO::FETCH_ASSOC) as $r) {
                                         <?php
                                             $pk = (int)$s['id'];
                                             $cur = $existing[$pk]['status'] ?? '';
-                                            $rm  = $existing[$pk]['remarks'] ?? '';
+                                            $rm  = $existing[$pk]['notes'] ?? '';
                                         ?>
                                         <tr>
                                             <td><?php echo (int)($i+1); ?></td>
@@ -187,7 +208,7 @@ foreach ($stmtExisting->fetchAll(PDO::FETCH_ASSOC) as $r) {
                                                 </select>
                                             </td>
                                             <td>
-                                                <input type="text" class="form-control" name="remarks[<?php echo $pk; ?>]" value="<?php echo htmlspecialchars($rm); ?>" placeholder="Optional">
+                                                <input type="text" class="form-control" name="notes[<?php echo $pk; ?>]" value="<?php echo htmlspecialchars($rm); ?>" placeholder="Optional">
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>

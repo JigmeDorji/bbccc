@@ -48,9 +48,16 @@ try {
         if ($parentProfile) {
             $parentDbId = (int)$parentProfile['id'];
             $stmtKids = $pdo->prepare("
-                SELECT id, student_id, student_name, dob, gender, registration_date, approval_status,
-                       class_option, payment_plan, payment_amount, payment_reference, payment_proof
-                FROM students WHERE parentId = :pid ORDER BY id DESC
+                SELECT s.id, s.student_id, s.student_name, s.dob, s.gender, s.registration_date, s.approval_status,
+                       COALESCE(c.class_name, s.class_option) AS class_option,
+                       COALESCE(e.fee_plan, s.payment_plan) AS payment_plan,
+                       COALESCE(e.fee_amount, s.payment_amount) AS payment_amount,
+                       COALESCE(e.payment_ref, s.payment_reference) AS payment_reference,
+                       COALESCE(e.proof_path, s.payment_proof) AS payment_proof
+                FROM students s
+                LEFT JOIN pcm_enrolments e ON e.student_id = s.id
+                LEFT JOIN classes c ON c.id = e.class_id
+                WHERE s.parentId = :pid ORDER BY s.id DESC
             ");
             $stmtKids->execute([':pid' => $parentDbId]);
             $myChildren = $stmtKids->fetchAll(PDO::FETCH_ASSOC);
@@ -246,7 +253,7 @@ function badge_class($st) {
 
     /* Welcome banner */
     .welcome-banner {
-        background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);
+        background: linear-gradient(135deg, #881b12 0%, #6b140d 100%);
         border-radius: 16px;
         padding: 30px 32px;
         color: #fff;
@@ -505,11 +512,11 @@ function badge_class($st) {
                 <!-- ═══════════════════════════════════════════ -->
 
                 <!-- Welcome -->
-                <div class="welcome-banner" style="background: linear-gradient(135deg, #1cc88a 0%, #13855c 100%);">
+                <div class="welcome-banner">
                     <h2><i class="fas fa-namaste"></i> Welcome, <?php echo htmlspecialchars($parentProfile['full_name'] ?? $_SESSION['username'] ?? 'Parent'); ?>!</h2>
                     <p>Manage your children's enrollments, track attendance, and make fee payments from your dashboard.</p>
                     <div class="quick-actions">
-                        <a href="studentSetup.php"><i class="fas fa-plus"></i> Add Student</a>
+                        <a href="parent-enrolment.php"><i class="fas fa-plus"></i> Add Student</a>
                         <a href="parentFeesPayment.php"><i class="fas fa-money-check-alt"></i> Pay Fees</a>
                         <a href="attendanceParent.php"><i class="fas fa-clipboard-check"></i> Attendance</a>
                     </div>
@@ -550,7 +557,7 @@ function badge_class($st) {
                     <div class="card-body p-0">
                         <div class="p-3 d-flex justify-content-between align-items-center" style="border-bottom: 1px solid #f0f0f0;">
                             <div class="section-title mb-0">My Children Enrollments</div>
-                            <a href="studentSetup.php" class="btn btn-primary btn-sm" style="border-radius:8px;">
+                            <a href="parent-enrolment.php" class="btn btn-primary btn-sm" style="border-radius:8px;">
                                 <i class="fas fa-plus"></i> Add New Student
                             </a>
                         </div>
@@ -609,10 +616,10 @@ function badge_class($st) {
                                                 <?php if ($isApproved): ?>
                                                     <span class="badge badge-success">Approved</span>
                                                 <?php else: ?>
-                                                    <a class="btn btn-info btn-sm" style="border-radius:6px;font-size:0.75rem;" href="studentSetup.php?edit=<?php echo (int)$c['id']; ?>">Edit</a>
+                                                    <a class="btn btn-info btn-sm" style="border-radius:6px;font-size:0.75rem;" href="parent-enrolment.php?edit=<?php echo (int)$c['id']; ?>">Edit</a>
                                                     <?php if ($isPending): ?>
                                                         <a class="btn btn-danger btn-sm" style="border-radius:6px;font-size:0.75rem;"
-                                                           href="studentSetup.php?delete=<?php echo (int)$c['id']; ?>"
+                                                           href="parent-enrolment.php?delete=<?php echo (int)$c['id']; ?>"
                                                            onclick="return confirm('Delete this enrollment?');">Delete</a>
                                                     <?php endif; ?>
                                                 <?php endif; ?>

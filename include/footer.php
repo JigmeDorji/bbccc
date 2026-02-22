@@ -1,34 +1,76 @@
 <?php
-echo '<footer>
-    <!-- FOOTER AREA  -->
-<div class="footer_area">
-    <div class="container">
-        <div class="row">
-            <div class="col-md-12">
-                <div class="footer_title">
-                    <h5>Bhutanese Buddhist & Cultural Centre (BBCC)</h5>
-                </div>
-                <div class="footer_content">
-                    <p>BBCC provides spiritual and pastoral services, cultural programs, and community engagement activities for Bhutanese residents in Canberra and nearby regions. We aim to preserve Bhutanese identity, promote harmony, and support all community members and interested devotees.</p>
-                </div>
-                <div class="footer_social">
-                    <ul>
-                        <li><a href="https://www.facebook.com/profile.php?id=100084018901076"><i class="fa fa-facebook"></i></a></li>
-                        <li><a href="https://www.facebook.com/profile.php?id=100084018901076"><i class="fa fa-youtube"></i></a></li>
-                        <li><a href="https://www.facebook.com/profile.php?id=100084018901076"><i class="fa fa-instagram"></i></a></li>
-                    </ul>
+echo '
+<!-- Footer -->
+<footer class="bbcc-footer">
+    <div class="bbcc-container">
+        <div class="bbcc-footer__grid">
+
+            <!-- Brand Column -->
+            <div class="bbcc-footer__brand">
+                <h3>Bhutanese Buddhist &amp; Cultural Centre</h3>
+                <p>BBCC provides spiritual and pastoral services, cultural programs, and community engagement activities for Bhutanese residents in Canberra and nearby regions.</p>
+                <div class="bbcc-footer__social">
+                    <a href="https://www.facebook.com/profile.php?id=100084018901076" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
+                    <a href="#" aria-label="YouTube"><i class="fa-brands fa-youtube"></i></a>
+                    <a href="#" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
                 </div>
             </div>
+
+            <!-- Quick Links -->
+            <div class="bbcc-footer__col">
+                <h4>Quick Links</h4>
+                <ul>
+                    <li><a href="index.php">Home</a></li>
+                    <li><a href="about-us.php">About Us</a></li>
+                    <li><a href="services.php">Services</a></li>
+                    <li><a href="events.php">Events</a></li>
+                </ul>
+            </div>
+
+            <!-- Programs -->
+            <div class="bbcc-footer__col">
+                <h4>Programs</h4>
+                <ul>
+                    <li><a href="services.php">Spiritual Services</a></li>
+                    <li><a href="services.php">Dzongkha Classes</a></li>
+                    <li><a href="events.php">Community Events</a></li>
+                    <li><a href="parentAccountSetup.php">Register</a></li>
+                </ul>
+            </div>
+
+            <!-- Contact Info -->
+            <div class="bbcc-footer__col">
+                <h4>Contact</h4>
+                <ul>
+                    <li><i class="fa-solid fa-envelope" style="color:#c9a84c;margin-right:6px;font-size:.7rem;"></i> bbbccc@gmail.com</li>
+                    <li><i class="fa-solid fa-phone" style="color:#c9a84c;margin-right:6px;font-size:.7rem;"></i> 0404 902 044</li>
+                    <li><i class="fa-solid fa-location-dot" style="color:#c9a84c;margin-right:6px;font-size:.7rem;"></i> Canberra, ACT, Australia</li>
+                </ul>
+            </div>
+
+        </div>
+
+        <div class="bbcc-footer__bottom">
+            &copy; ' . date('Y') . ' Bhutanese Buddhist &amp; Cultural Centre (BBCC). All rights reserved.
         </div>
     </div>
-</div>
-
-
 </footer>
-<script src="assets/js/jquery-3.2.1.min.js"></script>
-<script src="assets/js/popper.min.js"></script>
-<script src="assets/js/bootstrap.min.js"></script>
-<script src="assets/js/plugins/owl.carousel.min.js"></script>
-<script src="assets/js/script.js"></script>
-'
+
+<!-- Scroll to Top -->
+<button class="bbcc-scrolltop" id="bbccScrollTop" aria-label="Scroll to top">
+    <i class="fa-solid fa-arrow-up"></i>
+</button>
+
+<script>
+(function() {
+    var btn = document.getElementById("bbccScrollTop");
+    window.addEventListener("scroll", function() {
+        btn.classList.toggle("show", window.scrollY > 400);
+    });
+    btn.addEventListener("click", function() {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+})();
+</script>
+';
 ?>

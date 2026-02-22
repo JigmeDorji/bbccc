@@ -1,140 +1,112 @@
 <?php
 require_once "include/config.php";
-
-$message = "";
-
-try {
-    $pdo = new PDO("mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME, $DB_USER, $DB_PASSWORD);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-    // Fetch existing menu data
-    $stmt = $pdo->prepare("SELECT * FROM menu");
-    $stmt->execute();
-    $menus = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-} catch (Exception $e) {
-    $message = "Error: " . $e->getMessage();
-}
-
-?>
-
-<?php
-require_once "include/config.php";
-
-$message = "";
-$banners = [];
-
-try {
-    $pdo = new PDO("mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME, $DB_USER, $DB_PASSWORD);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-    // Fetch existing banner data
-    $stmt = $pdo->prepare("SELECT * FROM banner LIMIT 2");
-    $stmt->execute();
-    $banners = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-} catch (Exception $e) {
-    $message = "Error: " . $e->getMessage();
-}
-
 ?>
 <!doctype html>
 <html lang="en">
-
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>services</title>
-    <?php
-    include_once 'include/global_css.php'
-    ?>
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title>Services — BBCC</title>
+    <meta name="description" content="Spiritual services, cultural preservation, and community events offered by BBCC Canberra.">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <?php include_once 'include/global_css.php'; ?>
 </head>
-<!-- =================Body Started==================== -->
-<body>
-<!-- *********************************************************** -->
-<!-- //////////////////////header-started/////////////////////// -->
-<?php
-include_once 'include/nav.php'
-?>
+<body class="bbcc-public">
 
-<div class="hero_brd_area">
-    <div class="container">
-        <div class="hero_content">
-            <h2 class="wow fadeInUp" data-wow-delay="0.3s">Services</h2>
-            <ul class="wow fadeInUp" data-wow-delay="0.5s">
-                <li><a href="index.html">Home</a></li>
-                <li>/</li>
-                <li>Services</li>
-            </ul>
-        </div>
+<?php include_once 'include/nav.php'; ?>
+
+<!-- Page Hero -->
+<div class="bbcc-page-hero">
+    <div class="bbcc-page-hero__content">
+        <h1><i class="fa-solid fa-hands-praying"></i> Our Services</h1>
+        <p class="bbcc-page-hero__subtitle">Spiritual guidance, cultural preservation and pastoral support</p>
+        <ul class="bbcc-page-hero__breadcrumb">
+            <li><a href="index.php">Home</a></li>
+            <li class="sep">/</li>
+            <li>Services</li>
+        </ul>
     </div>
 </div>
 
-<!-- FEATURE AREA  -->
-<div class="feature_area home_2">
-    <div class="container">
-        <div class="row">
-            <!-- SECTION  TITLE  -->
-            <div class="col-md-12">
-                <div class="section_title">
-                    <h2>What We <span>Do ?</span></h2>
-                    <img src="bbccassests/img/logo/line-2.png" alt="" />
-                    <p>BBCC provides spiritual and pastoral services, rituals, and teachings to Bhutanese residents in Canberra.</p>
-                </div>
-            </div>
+<!-- Main Services -->
+<section class="bbcc-section">
+    <div class="bbcc-container">
+        <div class="section-header fade-up">
+            <span class="section-badge"><i class="fa-solid fa-hands-praying"></i> What We Do</span>
+            <h2>Our Core <span>Services</span></h2>
+            <p>BBCC provides spiritual and pastoral services, rituals, and teachings to Bhutanese residents in Canberra.</p>
         </div>
-        <div class="row">
-            <!-- SINGLE FEATURE ITEM  -->
-            <div class="col-md-4 col-sm-6 col-xs-12">
-                <div class="single_feature">
-                    <div class="feature_icon">
-                        <i class="fa fa-truck "></i>
-                    </div>
-                    <div class="feature_content">
-                        <h3>Spiritual Services</h3>
-                        <p>Offering private household rituals, group teachings, meditation sessions, and Dharma
-                            teachings to support the spiritual wellbeing of our community members.</p>
-                    </div>
+        <div class="bbcc-services-extended">
+            <!-- Spiritual Services -->
+            <div class="bbcc-service-card-ext fade-up">
+                <div class="bbcc-service-card-ext__icon">
+                    <i class="fa-solid fa-hands-praying"></i>
                 </div>
+                <h3>Spiritual Services</h3>
+                <p>Offering private household rituals, group teachings, meditation sessions, and Dharma teachings to support the spiritual wellbeing of our community members.</p>
             </div>
-            <!-- SINGLE FEATURE ITEM  -->
-            <div class="col-md-4 col-sm-6 col-xs-12">
-                <div class="single_feature">
-                    <div class="feature_icon">
-                        <i class="fa fa-heartbeat "></i>
-                    </div>
-                    <div class="feature_content">
-                        <h3>Cultural Preservation</h3>
-                        <p>Weekly Bhutanese language and cultural classes, TARA practice, and Doenchoe sessions to preserve and promote Bhutanese identity within the ACT community.</p>
-                    </div>
+            <!-- Cultural Preservation -->
+            <div class="bbcc-service-card-ext fade-up">
+                <div class="bbcc-service-card-ext__icon">
+                    <i class="fa-solid fa-language"></i>
                 </div>
+                <h3>Cultural Preservation</h3>
+                <p>Weekly Bhutanese language and cultural classes, TARA practice, and Doenchoe sessions to preserve and promote Bhutanese identity within the ACT community.</p>
             </div>
-            <!-- SINGLE FEATURE ITEM  -->
-            <div class="col-md-4 col-sm-6 col-xs-12">
-                <div class="single_feature">
-                    <div class="feature_icon">
-                        <i class="fa fa-code "></i>
-                    </div>
-                    <div class="feature_content">
-                        <h3>Community Events</h3>
-                        <p>Organizing ceremonies, rituals, and religious practices on important Buddhist days, fostering unity, harmony, and a supportive community environment.</p>
-                    </div>
+            <!-- Community Events -->
+            <div class="bbcc-service-card-ext fade-up">
+                <div class="bbcc-service-card-ext__icon">
+                    <i class="fa-solid fa-calendar-days"></i>
                 </div>
+                <h3>Community Events</h3>
+                <p>Organizing ceremonies, rituals, and religious practices on important Buddhist days, fostering unity, harmony, and a supportive community environment.</p>
             </div>
-
+            <!-- Dzongkha Classes -->
+            <div class="bbcc-service-card-ext fade-up">
+                <div class="bbcc-service-card-ext__icon">
+                    <i class="fa-solid fa-chalkboard-user"></i>
+                </div>
+                <h3>Dzongkha Classes</h3>
+                <p>Structured weekly Dzongkha language classes for children and adults, helping preserve our national language and cultural heritage in the Australian diaspora.</p>
+            </div>
+            <!-- Pastoral Care -->
+            <div class="bbcc-service-card-ext fade-up">
+                <div class="bbcc-service-card-ext__icon">
+                    <i class="fa-solid fa-hand-holding-heart"></i>
+                </div>
+                <h3>Pastoral Care</h3>
+                <p>Providing compassionate support and spiritual guidance during life's challenges, including illness, bereavement, and times of personal difficulty.</p>
+            </div>
+            <!-- Meditation -->
+            <div class="bbcc-service-card-ext fade-up">
+                <div class="bbcc-service-card-ext__icon">
+                    <i class="fa-solid fa-spa"></i>
+                </div>
+                <h3>Meditation & Dharma</h3>
+                <p>Regular meditation sessions and Dharma teachings aimed at cultivating inner peace, mindfulness, and a deeper understanding of Buddhist philosophy.</p>
+            </div>
         </div>
     </div>
-</div>
+</section>
 
+<!-- CTA Section -->
+<section class="bbcc-cta">
+    <div class="bbcc-container" style="position:relative;z-index:1;">
+        <h2>Ready to Get Started?</h2>
+        <p>Register your family for Dzongkha classes or join our community programs today.</p>
+        <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
+            <a href="parentAccountSetup.php" class="bbcc-btn bbcc-btn--white">
+                <i class="fa-solid fa-user-plus"></i> Register Now
+            </a>
+            <a href="contact-us.php" class="bbcc-btn bbcc-btn--outline" style="border-color:rgba(255,255,255,.4);color:#fff;">
+                Contact Us <i class="fa-solid fa-arrow-right"></i>
+            </a>
+        </div>
+    </div>
+</section>
 
+<?php include_once 'include/footer.php'; ?>
+<?php include_once 'include/global_js.php'; ?>
 
-<!-- //////////////////////Main-End/////////////////////// -->
-<!-- ====================================================== -->
-<!-- //////////////////////Footer-Started/////////////////////// -->
-<?php
-include_once 'include/footer.php'
-?>
-<!-- *********************************************************** -->
 </body>
-<!-- =================Body End==================== -->
 </html>

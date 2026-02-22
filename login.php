@@ -139,21 +139,24 @@ if (!empty($userName) && !empty($password)) {
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>Login</title>
 
+    <?php include_once 'include/global_css.php'; ?>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
         :root {
-            --primary-color: #2D67F2;
+            --primary-color: #881b12;
+            --primary-dark: #6b140d;
+            --primary-light: #a82218;
             --text-color: #1a202c;
             --secondary-text-color: #718096;
-            --border-color: #e2e8f0;
-            --background-color: #f7fafc;
+            --border-color: #dee2e6;
+            --background-color: #f5f7fa;
             --card-background: #ffffff;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
-        body { background: var(--background-color); }
+        body { background: var(--background-color); font-family: 'Inter', var(--font-body, sans-serif); }
 
         .login-container {
             display: flex;
@@ -161,61 +164,92 @@ if (!empty($userName) && !empty($password)) {
             max-width: 1100px;
             margin: auto;
             background-color: var(--card-background);
-            border-radius: 12px;
+            border-radius: 16px;
             overflow: hidden;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
         }
 
         .login-form-container {
             flex: 1;
-            padding: 4rem;
+            padding: 3.5rem 3rem;
             display: flex;
             flex-direction: column;
             justify-content: center;
         }
 
-        .form-content { margin-bottom: 2rem; }
+        .form-content { margin-bottom: 1.5rem; }
 
         .login-form-container h2 {
-            font-size: 2rem;
+            font-size: 1.8rem;
             font-weight: 700;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.4rem;
+            color: var(--text-color);
         }
 
-        .login-form-container p {
+        .login-form-container > .form-content > p {
             color: var(--secondary-text-color);
-            margin-bottom: 2rem;
+            margin-bottom: 1.8rem;
+            font-size: 0.92rem;
         }
 
-        .input-group { margin-bottom: 1.5rem; }
+        .input-group {
+            margin-bottom: 1.3rem;
+            position: relative;
+        }
 
         .input-group label {
             display: block;
-            font-size: 0.875rem;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
+            font-size: 0.78rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            color: #5a5c69;
+        }
+
+        .input-group label i {
+            color: var(--primary-color);
+            margin-right: 4px;
+            font-size: 0.75rem;
         }
 
         .input-group input {
             width: 100%;
-            padding: 0.75rem 1rem;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            font-size: 1rem;
+            padding: 0.7rem 1rem;
+            border: 1.5px solid var(--border-color);
+            border-radius: 10px;
+            font-size: 0.92rem;
             transition: all 0.2s ease-in-out;
+            font-family: 'Inter', sans-serif;
         }
 
         .input-group input:focus {
             outline: none;
             border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(45, 103, 242, 0.2);
+            box-shadow: 0 0 0 3px rgba(136, 27, 18, 0.12);
         }
+
+        .pw-wrapper { position: relative; }
+        .pw-wrapper input { padding-right: 48px; }
+        .pw-toggle-login {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #858796;
+            cursor: pointer;
+            padding: 4px 6px;
+            font-size: 0.85rem;
+        }
+        .pw-toggle-login:hover { color: var(--primary-color); }
 
         .form-options {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 0.875rem;
+            font-size: 0.85rem;
             margin-bottom: 1.5rem;
         }
 
@@ -229,27 +263,49 @@ if (!empty($userName) && !empty($password)) {
             margin: 0;
             transform: translateY(-1px);
             accent-color: var(--primary-color);
+            width: auto;
         }
 
         .remember-me label {
             margin: 0;
             line-height: 1;
             cursor: pointer;
+            font-size: 0.85rem;
+            text-transform: none;
+            letter-spacing: 0;
+            color: #5a5c69;
         }
+
+        .forgot-password {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .forgot-password:hover { text-decoration: underline; }
 
         .login-button {
             width: 100%;
-            padding: 1rem;
-            background-color: var(--primary-color);
+            padding: 0.85rem;
+            background: var(--primary-color);
             color: white;
-            font-size: 1rem;
+            font-size: 0.95rem;
             font-weight: 600;
             border: none;
-            border-radius: 8px;
+            border-radius: 10px;
             cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Inter', sans-serif;
+            letter-spacing: 0.3px;
         }
 
-        .login-button:hover { background-color: #2354cf; }
+        .login-button:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(136, 27, 18, 0.3);
+        }
+
+        .login-button:active { transform: translateY(0); }
 
         .login-image-container {
             flex: 1;
@@ -268,14 +324,16 @@ if (!empty($userName) && !empty($password)) {
             content: '';
             position: absolute;
             inset: 0;
-            background: linear-gradient(to top, rgba(0,0,0,0.7), rgba(0,0,0,0.1));
+            background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0.5));
         }
 
         .overlay-text { position: relative; z-index: 2; }
+        .overlay-text h3 { font-size: 1.6rem; font-weight: 700; margin-bottom: 8px; color: #fff; }
+        .overlay-text p { font-size: 0.88rem; opacity: 1; line-height: 1.5; color: rgba(255,255,255,.9); }
 
         .signup-link {
             text-align: center;
-            font-size: 0.875rem;
+            font-size: 0.88rem;
             color: var(--secondary-text-color);
             margin-top: 1rem;
         }
@@ -283,44 +341,64 @@ if (!empty($userName) && !empty($password)) {
         .signup-link a {
             color: var(--primary-color);
             text-decoration: none;
+            font-weight: 600;
         }
+        .signup-link a:hover { text-decoration: underline; }
 
         .error-box {
-            background: #ffdddd;
-            border: 1px solid #ff5c5c;
-            color: #b30000;
-            padding: 12px;
-            margin-bottom: 15px;
-            border-radius: 6px;
-            font-size: 0.9rem;
+            background: #fef3f2;
+            border-left: 4px solid var(--primary-color);
+            color: #721c24;
+            padding: 12px 16px;
+            margin-bottom: 18px;
+            border-radius: 8px;
+            font-size: 0.88rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
+        .error-box i { color: var(--primary-color); font-size: 1rem; }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            margin: 20px 0;
+            color: #ccc;
+            font-size: 0.78rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .divider::before, .divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e2e8f0;
+        }
+        .divider span { padding: 0 12px; }
 
         @media (max-width: 992px) {
             .login-container { max-width: 90%; }
-            .login-form-container { padding: 3rem 2rem; }
+            .login-form-container { padding: 2.5rem 2rem; }
         }
 
         @media (max-width: 768px) {
             .login-container { flex-direction: column; max-width: 450px; margin: auto; }
-            .login-image-container { height: 250px; display: block; border-radius: 0; }
-            .overlay-text h3 { font-size: 1.5rem; }
+            .login-image-container { height: 200px; display: block; border-radius: 0; }
+            .overlay-text h3 { font-size: 1.3rem; }
         }
 
         @media (max-width: 480px) {
             .login-form-container { padding: 1.5rem; }
-            .login-form-container h2 { font-size: 1.6rem; }
-            .overlay-text h3 { font-size: 1.3rem; }
+            .login-form-container h2 { font-size: 1.5rem; }
         }
     </style>
-
-    <?php include_once 'include/global_css.php'; ?>
 </head>
-<body>
+<body class="bbcc-public">
 
 <?php include_once 'include/nav.php'; ?>
 
-<div class="blog_area section_padding">
-    <div class="container">
+<section class="bbcc-section" style="display:flex;align-items:center;min-height:calc(100vh - 200px);">
+    <div class="bbcc-container">
         <div class="login-container">
             <div class="login-form-container">
                 <div class="form-content">
@@ -328,20 +406,25 @@ if (!empty($userName) && !empty($password)) {
                     <p>Please enter your details to sign in.</p>
 
                     <?php if (!empty($login_error)): ?>
-                        <div class="error-box">Invalid email or password.</div>
+                        <div class="error-box"><i class="fas fa-exclamation-circle"></i>Invalid email or password. Please try again.</div>
                     <?php endif; ?>
 
-                    <form action="login.php" method="post">
+                    <form action="login.php" method="post" id="loginForm">
                         <div class="input-group">
-                            <label for="userName">Email Address</label>
+                            <label for="userName"><i class="fas fa-envelope"></i> Email Address</label>
                             <input type="email" name="userName" id="userName"
                                    placeholder="you@example.com"
-                                   value="<?php echo htmlspecialchars($userName); ?>" required>
+                                   value="<?php echo htmlspecialchars($userName); ?>" required autocomplete="email">
                         </div>
 
                         <div class="input-group">
-                            <label for="password">Password</label>
-                            <input type="password" name="password" id="password" placeholder="••••••••" required>
+                            <label for="password"><i class="fas fa-lock"></i> Password</label>
+                            <div class="pw-wrapper">
+                                <input type="password" name="password" id="password" placeholder="••••••••" required autocomplete="current-password">
+                                <button type="button" class="pw-toggle-login" onclick="togglePw()" tabindex="-1">
+                                    <i class="fas fa-eye" id="pwIcon"></i>
+                                </button>
+                            </div>
                         </div>
 
                         <div class="form-options">
@@ -352,8 +435,25 @@ if (!empty($userName) && !empty($password)) {
                             <a href="forgotPassword.php" class="forgot-password">Forgot Password?</a>
                         </div>
 
-                        <button type="submit" class="login-button">Sign In</button>
+                        <button type="submit" class="login-button" id="loginBtn">
+                            <i class="fas fa-sign-in-alt" style="margin-right:6px;"></i>Sign In
+                        </button>
                     </form>
+
+                    <script>
+                    function togglePw() {
+                        const f = document.getElementById('password');
+                        const i = document.getElementById('pwIcon');
+                        if (f.type === 'password') { f.type = 'text'; i.className = 'fas fa-eye-slash'; }
+                        else { f.type = 'password'; i.className = 'fas fa-eye'; }
+                    }
+                    document.getElementById('loginForm').addEventListener('submit', function() {
+                        const btn = document.getElementById('loginBtn');
+                        btn.disabled = true;
+                        btn.innerHTML = '<span style="display:inline-block;width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:8px;"></span>Signing in...';
+                    });
+                    </script>
+                    <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
                 </div>
 
                 <div class="signup-link">
@@ -369,8 +469,7 @@ if (!empty($userName) && !empty($password)) {
             </div>
         </div>
     </div>
-
-    <br><br><br><br><br><br><br><br><br>
+</section>
 
 <?php
 include_once 'include/footer.php';

@@ -42,9 +42,24 @@ $_pageTitles = [
     'parentFeesPayment'    => 'Fees Payments',
     'parent-payments'      => 'Payment History',
     'parent-students'      => 'My Students',
+    'parent-children'      => 'My Children',
+    'parent-enrolment'     => 'Enrolment',
+    'parent-fees'          => 'Fees & Payments',
+    'parent-attendance'    => 'Attendance',
+    'admin-enrolments'     => 'Enrolment Management',
+    'admin-fee-verification' => 'Fee Verification',
+    'admin-bank-settings'  => 'Bank Settings',
+    'admin-attendance'     => 'Kiosk & Absence',
+    'admin-parent-pins'    => 'Parent Kiosk PINs',
 ];
 $_pageTitle = $_pageTitles[$_pageFile] ?? ucwords(str_replace(['-', '_'], ' ', $_pageFile));
 ?>
+
+<!-- ═══ Favicon ═══ -->
+<script>if(!document.querySelector('link[rel="icon"]')){var l=document.createElement('link');l.rel='icon';l.type='image/jpeg';l.href='bbccassests/img/logo/logo5.jpg';document.head.appendChild(l);}</script>
+
+<!-- ═══ BBCC Unified Form Styles ═══ -->
+<link rel="stylesheet" href="css/bbcc-forms.css">
 
 <!-- ═══ Admin Header Styles ═══ -->
 <style>
@@ -65,7 +80,7 @@ h1, h6 { font-size: 1rem !important; }
     top: -100%;
     left: 16px;
     z-index: 9999;
-    background: #4e73df;
+    background: #881b12;
     color: #fff;
     padding: 10px 20px;
     border-radius: 0 0 8px 8px;
@@ -76,22 +91,22 @@ h1, h6 { font-size: 1rem !important; }
 .skip-to-content:focus {
     top: 0;
     color: #fff;
-    outline: 3px solid #f6c23e;
+    outline: 3px solid #c9a84c;
     outline-offset: 2px;
 }
 
 /* ── Accessibility: Focus visible ────────────────────────── */
 *:focus-visible {
-    outline: 2px solid #4e73df !important;
+    outline: 2px solid #881b12 !important;
     outline-offset: 2px !important;
-    box-shadow: 0 0 0 4px rgba(78,115,223,.2) !important;
+    box-shadow: 0 0 0 4px rgba(136,27,18,.15) !important;
 }
 .btn:focus-visible,
 .form-control:focus-visible,
 .nav-link:focus-visible {
-    outline: 2px solid #4e73df !important;
+    outline: 2px solid #881b12 !important;
     outline-offset: 2px !important;
-    box-shadow: 0 0 0 4px rgba(78,115,223,.25) !important;
+    box-shadow: 0 0 0 4px rgba(136,27,18,.2) !important;
 }
 .btn-danger:focus-visible { outline-color: #e74a3b !important; box-shadow: 0 0 0 4px rgba(231,74,59,.25) !important; }
 
@@ -154,7 +169,7 @@ h1, h6 { font-size: 1rem !important; }
     text-decoration: none;
     transition: color 0.2s;
 }
-.topbar-breadcrumb a:hover { color: #4e73df; }
+.topbar-breadcrumb a:hover { color: #881b12; }
 .topbar-breadcrumb .sep { margin: 0 5px; opacity: 0.4; }
 
 /* Right: actions cluster */
@@ -177,7 +192,7 @@ h1, h6 { font-size: 1rem !important; }
     font-weight: 500;
     white-space: nowrap;
 }
-.topbar-date i { color: #4e73df; font-size: 0.82rem; }
+.topbar-date i { color: #881b12; font-size: 0.82rem; }
 
 @media (min-width: 768px) {
     .topbar-date { display: flex; }
@@ -246,7 +261,7 @@ h1, h6 { font-size: 1rem !important; }
 .topbar-avatar {
     width: 36px; height: 36px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #4e73df, #224abe);
+    background: linear-gradient(135deg, #881b12, #6b140d);
     color: #fff;
     display: flex;
     align-items: center;
