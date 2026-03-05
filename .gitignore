@@ -1,6 +1,9 @@
 # Database config (different on local vs production)
 include/config.php
 
+# User-uploaded content (managed on server, not in repo)
+uploads/
+
 # IDE files
 .idea/
 .vscode/

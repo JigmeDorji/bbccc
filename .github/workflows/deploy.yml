@@ -29,11 +29,7 @@ jobs:
             **/node_modules/**
             .github/**
             include/config.php
+            uploads/**
             README.md
             Read me
             TECH_STACK.md
-            bbc_db_full_dump.sql
-            restWeb_db_full_dump.sql
-            dbScript.sql
-            db_migration_events.sql
-            db_migration_parent_class_mgmt.sql
