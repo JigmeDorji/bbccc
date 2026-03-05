@@ -21,9 +21,8 @@ jobs:
           server: sg2plzcpnl509605.prod.sin2.secureserver.net
           username: ${{ secrets.FTP_USER }}
           password: ${{ secrets.FTP_PASS }}
-          server-dir: /public_html/
+          server-dir: ./
           protocol: ftps
-          dangerous-clean-slate: true
           exclude: |
             **/.git*
             **/.git*/**
