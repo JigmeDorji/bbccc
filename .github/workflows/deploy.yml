@@ -18,7 +18,7 @@ jobs:
       - name: Sync files to GoDaddy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ftp.bhutanesecentre.org
+          server: sg2plzcpnl509605.prod.sin2.secureserver.net
           username: ${{ secrets.FTP_USER }}
           password: ${{ secrets.FTP_PASS }}
           server-dir: /public_html/
