@@ -67,7 +67,8 @@ function isParent() { return strtolower($_SESSION['role'] ?? '') === 'parent'; }
                     <h6 class="collapse-header">Operations</h6>
                     <a class="collapse-item <?= in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php']) ? 'active' : '' ?>" href="dzoClassManagement.php"><i class="fas fa-file-signature fa-sm mr-1 text-muted"></i> Enrolments</a>
                     <a class="collapse-item <?= in_array($currentPage, ['feesManagement.php','admin-fee-verification.php']) ? 'active' : '' ?>" href="feesManagement.php"><i class="fas fa-money-check-alt fa-sm mr-1 text-muted"></i> Fees</a>
-                    <a class="collapse-item <?= in_array($currentPage, ['attendanceManagement.php','admin-attendance.php']) ? 'active' : '' ?>" href="attendanceManagement.php"><i class="fas fa-clipboard-check fa-sm mr-1 text-muted"></i> Attendance</a>
+                    <a class="collapse-item <?= ($currentPage == 'attendanceManagement.php') ? 'active' : '' ?>" href="attendanceManagement.php"><i class="fas fa-clipboard-check fa-sm mr-1 text-muted"></i> Attendance</a>
+                    <a class="collapse-item <?= ($currentPage == 'admin-attendance.php') ? 'active' : '' ?>" href="admin-attendance.php"><i class="fas fa-door-open fa-sm mr-1 text-muted"></i> Kiosk Sign In/Out</a>
                 </div>
             </div>
         </li>

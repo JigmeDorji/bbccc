@@ -1,6 +1,7 @@
 <?php
 require_once "include/config.php";
 require_once "include/mailer.php";
+require_once "include/pcm_helpers.php";
 
 $message = "";
 $msgType = "success";
@@ -90,24 +91,34 @@ try {
         $message = "Your booking request has been submitted successfully! You will receive an email once it is reviewed.";
 
         // Admin notification
-        $adminBody = "<h2>New Booking Request</h2>
-        <table style='border-collapse:collapse;width:100%;'>
-            <tr><td style='padding:8px;border:1px solid #ddd;'><strong>Event:</strong></td><td style='padding:8px;border:1px solid #ddd;'>{$event['title']}</td></tr>
-            <tr><td style='padding:8px;border:1px solid #ddd;'><strong>Date:</strong></td><td style='padding:8px;border:1px solid #ddd;'>" . date('d M Y', strtotime($event['event_date'])) . "</td></tr>
-            <tr><td style='padding:8px;border:1px solid #ddd;'><strong>Requester:</strong></td><td style='padding:8px;border:1px solid #ddd;'>$name</td></tr>
-            <tr><td style='padding:8px;border:1px solid #ddd;'><strong>Email:</strong></td><td style='padding:8px;border:1px solid #ddd;'>$email</td></tr>
-            <tr><td style='padding:8px;border:1px solid #ddd;'><strong>Phone:</strong></td><td style='padding:8px;border:1px solid #ddd;'>$phone</td></tr>
-            <tr><td style='padding:8px;border:1px solid #ddd;'><strong>Address:</strong></td><td style='padding:8px;border:1px solid #ddd;'>$address</td></tr>
-            <tr><td style='padding:8px;border:1px solid #ddd;'><strong>Message:</strong></td><td style='padding:8px;border:1px solid #ddd;'>$msg</td></tr>
-        </table><p>Please log in to the admin panel to approve or reject this booking.</p>";
+        $sName    = htmlspecialchars($name);
+        $sEmail   = htmlspecialchars($email);
+        $sPhone   = htmlspecialchars($phone);
+        $sAddress = htmlspecialchars($address);
+        $sMsg     = htmlspecialchars($msg);
+        $sTitle   = htmlspecialchars($event['title']);
+        $sDate    = date('d M Y', strtotime($event['event_date']));
+        $tdLabel  = "padding:10px 14px;border:1px solid #e0e0e0;background:#fef3f2;font-weight:600;color:#333333;width:120px;font-size:14px;";
+        $tdValue  = "padding:10px 14px;border:1px solid #e0e0e0;color:#333333;font-size:14px;";
+        $adminBody = pcm_email_wrap('New Booking Request', "
+        <table role='presentation' style='border-collapse:collapse;width:100%;margin-bottom:16px;'>
+            <tr><td style='{$tdLabel}'>Event</td><td style='{$tdValue}'>{$sTitle}</td></tr>
+            <tr><td style='{$tdLabel}'>Date</td><td style='{$tdValue}'>{$sDate}</td></tr>
+            <tr><td style='{$tdLabel}'>Requester</td><td style='{$tdValue}'>{$sName}</td></tr>
+            <tr><td style='{$tdLabel}'>Email</td><td style='{$tdValue}'>{$sEmail}</td></tr>
+            <tr><td style='{$tdLabel}'>Phone</td><td style='{$tdValue}'>{$sPhone}</td></tr>
+            <tr><td style='{$tdLabel}'>Address</td><td style='{$tdValue}'>{$sAddress}</td></tr>
+            <tr><td style='{$tdLabel}'>Message</td><td style='{$tdValue}'>{$sMsg}</td></tr>
+        </table>
+        <p style='margin:0;'>Please log in to the admin panel to approve or reject this booking.</p>");
         send_mail(MAIL_FROM_EMAIL, MAIL_FROM_NAME, "New Booking Request – " . $event['title'], $adminBody);
 
         // User confirmation
-        $userBody = "<h2>Booking Request Received</h2>
-        <p>Dear $name,</p>
-        <p>Thank you for your booking request for <strong>{$event['title']}</strong> on <strong>" . date('d M Y', strtotime($event['event_date'])) . "</strong>.</p>
-        <p>Your request is now <strong>Pending Approval</strong>. We will notify you via email once it has been reviewed.</p>
-        <br><p>Best regards,<br>Bhutanese Buddhist & Cultural Centre, Canberra</p>";
+        $userBody = pcm_email_wrap('Booking Request Received', "
+        <p style='margin:0 0 14px;'>Dear {$sName},</p>
+        <p style='margin:0 0 14px;'>Thank you for your booking request for <strong>{$sTitle}</strong> on <strong>{$sDate}</strong>.</p>
+        <p style='margin:0 0 14px;'>Your request is now <strong>Pending Approval</strong>. We will notify you via email once it has been reviewed.</p>
+        ");
         send_mail($email, $name, "Booking Request Received – " . $event['title'], $userBody);
     }
 

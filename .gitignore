@@ -1,0 +1,10 @@
+# Database config (different on local vs production)
+include/config.php
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

@@ -1,6 +1,7 @@
 <?php
 require_once "include/config.php";
 require_once "include/mailer.php";
+require_once "include/pcm_helpers.php";
 
 $message = "";
 $errors = [];
@@ -91,19 +92,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $resetLink = "http://localhost/bbccc/resetPassword.php?token=" . urlencode($rawToken);
 
             $subject = "Reset your password - Bhutanese Centre Canberra";
-            $body = "
-                <div style='font-family: Arial, sans-serif;'>
-                    <h3>Password Reset</h3>
-                    <p>Hello " . htmlspecialchars($parentName) . ",</p>
-                    <p>Click below to reset your password. This link expires in <strong>30 minutes</strong>.</p>
-                    <p style='margin:18px 0;'>
-                        <a href='{$resetLink}' style='background:#881b12;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;display:inline-block;'>
-                            Reset Password
-                        </a>
-                    </p>
-                    <p>If you did not request this, ignore this email.</p>
-                </div>
-            ";
+            $safeName = htmlspecialchars($parentName);
+            $body = pcm_email_wrap('Password Reset', "
+                <p style='margin:0 0 14px;'>Hello {$safeName},</p>
+                <p style='margin:0 0 14px;'>Click the button below to reset your password. This link expires in <strong>30 minutes</strong>.</p>
+                <p style='margin:20px 0;'>
+                    <a href='{$resetLink}' style='background:#881b12;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;font-size:15px;' target='_blank'>
+                        Reset Password
+                    </a>
+                </p>
+                <p style='margin:0 0 14px;color:#666666;font-size:13px;'>If you did not request this, you can safely ignore this email.</p>
+            ");
 
             $sent = send_mail($emailToReset, $parentName, $subject, $body);
 

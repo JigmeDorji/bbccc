@@ -112,42 +112,76 @@ function pcm_ensure_dir(string $path): void {
 // ─── Email wrappers ───────────────────────────────────────
 function pcm_email_wrap(string $title, string $body): string {
     return "
-    <div style='font-family:Arial,sans-serif;max-width:600px;margin:0 auto;'>
-        <div style='background:#4e73df;color:#fff;padding:18px 24px;border-radius:8px 8px 0 0;'>
-            <h2 style='margin:0;font-size:18px;'>{$title}</h2>
-        </div>
-        <div style='padding:24px;background:#fff;border:1px solid #e3e6f0;border-top:none;border-radius:0 0 8px 8px;'>
-            {$body}
-            <hr style='margin:20px 0;border:none;border-top:1px solid #e3e6f0;'>
-            <p style='font-size:12px;color:#888;'>Bhutanese Buddhist Centre Canberra</p>
-        </div>
-    </div>";
+<!DOCTYPE html>
+<html lang='en' xmlns='http://www.w3.org/1999/xhtml'>
+<head>
+    <meta charset='utf-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <meta name='color-scheme' content='light'>
+    <meta name='supported-color-schemes' content='light'>
+    <title>{$title}</title>
+</head>
+<body style='margin:0;padding:0;background:#f4f4f4;-webkit-text-size-adjust:100%;'>
+<table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='background:#f4f4f4;padding:24px 0;'>
+<tr><td align='center'>
+    <table role='presentation' width='600' cellpadding='0' cellspacing='0' style='max-width:600px;width:100%;font-family:Arial,Helvetica,sans-serif;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);'>
+        <!-- Header -->
+        <tr>
+            <td style='background:#881b12;padding:20px 28px;'>
+                <h1 style='margin:0;font-size:20px;font-weight:700;color:#ffffff;line-height:1.3;'>{$title}</h1>
+            </td>
+        </tr>
+        <!-- Gold accent bar -->
+        <tr>
+            <td style='background:#c9a84c;height:4px;font-size:0;line-height:0;'>&nbsp;</td>
+        </tr>
+        <!-- Body -->
+        <tr>
+            <td style='background:#ffffff;padding:28px 28px 20px;color:#333333;font-size:15px;line-height:1.6;'>
+                {$body}
+            </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+            <td style='background:#ffffff;padding:0 28px 24px;'>
+                <table role='presentation' width='100%' cellpadding='0' cellspacing='0'>
+                    <tr><td style='border-top:1px solid #e0e0e0;padding-top:16px;'>
+                        <p style='margin:0;font-size:13px;color:#666666;line-height:1.5;'>Bhutanese Buddhist &amp; Cultural Centre Canberra</p>
+                    </td></tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</td></tr>
+</table>
+</body>
+</html>";
 }
 
 function pcm_notify_admin_enrolment(string $childName, string $parentName): void {
     $html = pcm_email_wrap('New Enrolment Request', "
-        <p><strong>{$parentName}</strong> submitted an enrolment for <strong>{$childName}</strong>.</p>
-        <p>Please review it in the admin panel.</p>
+        <p style='margin:0 0 14px;'><strong>" . htmlspecialchars($parentName) . "</strong> submitted an enrolment for <strong>" . htmlspecialchars($childName) . "</strong>.</p>
+        <p style='margin:0 0 14px;'>Please review it in the admin panel.</p>
     ");
     @send_mail(MAIL_FROM_EMAIL, 'Admin', 'New Enrolment — ' . $childName, $html);
 }
 
 function pcm_notify_parent_enrolment(string $toEmail, string $parentName, string $childName, string $status, string $note): void {
-    $colour = ($status === 'Approved') ? '#1cc88a' : '#e74a3b';
-    $html = pcm_email_wrap('Enrolment ' . $status, "
-        <p>Hi {$parentName},</p>
-        <p>The enrolment for <strong>{$childName}</strong> has been
+    $colour = ($status === 'Approved') ? '#0d7a3e' : '#c0392b';
+    $html = pcm_email_wrap('Enrolment ' . htmlspecialchars($status), "
+        <p style='margin:0 0 14px;'>Hi " . htmlspecialchars($parentName) . ",</p>
+        <p style='margin:0 0 14px;'>The enrolment for <strong>" . htmlspecialchars($childName) . "</strong> has been
            <span style='color:{$colour};font-weight:700;'>{$status}</span>.</p>
-        " . ($note ? "<p><em>Note: {$note}</em></p>" : "") . "
+        " . ($note ? "<p style='margin:0 0 14px;background:#fef3f2;padding:12px 16px;border-radius:6px;border-left:4px solid #881b12;'><em>" . htmlspecialchars($note) . "</em></p>" : "") . "
     ");
     @send_mail($toEmail, $parentName, "Enrolment {$status} — {$childName}", $html);
 }
 
 function pcm_notify_parent_fee(string $toEmail, string $parentName, string $childName, string $label, string $status): void {
-    $colour = ($status === 'Verified') ? '#1cc88a' : '#e74a3b';
-    $html = pcm_email_wrap('Fee Payment ' . $status, "
-        <p>Hi {$parentName},</p>
-        <p>Payment for <strong>{$childName}</strong> — {$label} has been
+    $colour = ($status === 'Verified') ? '#0d7a3e' : '#c0392b';
+    $html = pcm_email_wrap('Fee Payment ' . htmlspecialchars($status), "
+        <p style='margin:0 0 14px;'>Hi " . htmlspecialchars($parentName) . ",</p>
+        <p style='margin:0 0 14px;'>Payment for <strong>" . htmlspecialchars($childName) . "</strong> — " . htmlspecialchars($label) . " has been
            <span style='color:{$colour};font-weight:700;'>{$status}</span>.</p>
     ");
     @send_mail($toEmail, $parentName, "Fee {$status} — {$childName}", $html);
@@ -155,7 +189,7 @@ function pcm_notify_parent_fee(string $toEmail, string $parentName, string $chil
 
 function pcm_notify_admin_absence(string $childName, string $parentName, string $date): void {
     $html = pcm_email_wrap('Absence Request', "
-        <p><strong>{$parentName}</strong> submitted an absence request for <strong>{$childName}</strong> on <strong>{$date}</strong>.</p>
+        <p style='margin:0 0 14px;'><strong>" . htmlspecialchars($parentName) . "</strong> submitted an absence request for <strong>" . htmlspecialchars($childName) . "</strong> on <strong>" . htmlspecialchars($date) . "</strong>.</p>
     ");
     @send_mail(MAIL_FROM_EMAIL, 'Admin', 'Absence Request — ' . $childName, $html);
 }

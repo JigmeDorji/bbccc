@@ -1,6 +1,7 @@
 <?php
 require_once "include/config.php";
 require_once "include/mailer.php";
+require_once "include/pcm_helpers.php";
 
 $message    = "";
 $msgType    = "success";
@@ -52,13 +53,14 @@ try {
         $eventStmt->execute([':eid' => $booking['event_id']]);
         $event = $eventStmt->fetch(PDO::FETCH_ASSOC);
 
-        $emailBody = "
-        <h2>Booking Approved!</h2>
-        <p>Dear {$booking['name']},</p>
-        <p>Your booking request for <strong>{$event['title']}</strong> on <strong>" . date('d M Y', strtotime($event['event_date'])) . "</strong> has been <span style='color:green;font-weight:bold;'>APPROVED</span>.</p>
-        <p>Thank you for sponsoring this event!</p>
-        <br>
-        <p>Best regards,<br>Bhutanese Buddhist & Cultural Centre, Canberra</p>";
+        $safeName  = htmlspecialchars($booking['name']);
+        $safeTitle = htmlspecialchars($event['title']);
+        $safeDate  = date('d M Y', strtotime($event['event_date']));
+        $emailBody = pcm_email_wrap('Booking Approved', "
+        <p style='margin:0 0 14px;'>Dear {$safeName},</p>
+        <p style='margin:0 0 14px;'>Your booking request for <strong>{$safeTitle}</strong> on <strong>{$safeDate}</strong> has been <span style='color:#0d7a3e;font-weight:700;'>Approved</span>.</p>
+        <p style='margin:0 0 14px;'>Thank you for sponsoring this event!</p>
+        ");
         send_mail($booking['email'], $booking['name'], "Booking Approved – " . $event['title'], $emailBody);
 
         $message    = "Booking approved successfully.";
@@ -105,13 +107,14 @@ try {
         $eventStmt->execute([':eid' => $booking['event_id']]);
         $event = $eventStmt->fetch(PDO::FETCH_ASSOC);
 
-        $emailBody = "
-        <h2>Booking Update</h2>
-        <p>Dear {$booking['name']},</p>
-        <p>We regret to inform you that your booking request for <strong>{$event['title']}</strong> on <strong>" . date('d M Y', strtotime($event['event_date'])) . "</strong> has been <span style='color:red;font-weight:bold;'>REJECTED</span>.</p>
-        <p>Please feel free to book another available event.</p>
-        <br>
-        <p>Best regards,<br>Bhutanese Buddhist & Cultural Centre, Canberra</p>";
+        $safeName  = htmlspecialchars($booking['name']);
+        $safeTitle = htmlspecialchars($event['title']);
+        $safeDate  = date('d M Y', strtotime($event['event_date']));
+        $emailBody = pcm_email_wrap('Booking Update', "
+        <p style='margin:0 0 14px;'>Dear {$safeName},</p>
+        <p style='margin:0 0 14px;'>We regret to inform you that your booking request for <strong>{$safeTitle}</strong> on <strong>{$safeDate}</strong> has been <span style='color:#c0392b;font-weight:700;'>Rejected</span>.</p>
+        <p style='margin:0 0 14px;'>Please feel free to book another available event.</p>
+        ");
         send_mail($booking['email'], $booking['name'], "Booking Update – " . $event['title'], $emailBody);
 
         $message    = "Booking rejected.";

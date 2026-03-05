@@ -1,0 +1,39 @@
+# ─────────────────────────────────────────────────────────
+# Auto-deploy to GoDaddy cPanel on push to main
+# ─────────────────────────────────────────────────────────
+name: Deploy to GoDaddy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: FTP Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Sync files to GoDaddy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ftp.bhutanesecentre.org
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASS }}
+          server-dir: /public_html/
+          protocol: ftps
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            .github/**
+            include/config.php
+            README.md
+            Read me
+            TECH_STACK.md
+            bbc_db_full_dump.sql
+            restWeb_db_full_dump.sql
+            dbScript.sql
+            db_migration_events.sql
+            db_migration_parent_class_mgmt.sql

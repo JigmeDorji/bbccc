@@ -101,47 +101,44 @@ try {
         $contactMessages = (int)$pdo->query("SELECT COUNT(*) FROM contact")->fetchColumn();
     }
 
-    /* ═══ FINANCE DATA ═══ */
-    $stmtTypes = $pdo->query("SELECT id, typeName FROM account_head_type");
-    $accountTypes = $stmtTypes->fetchAll(PDO::FETCH_ASSOC);
+    /* ═══ FEE COLLECTION DATA ═══ */
+    $feeCollected    = 0;
+    $feePending      = 0;
+    $feeTotal        = 0;
+    $feePendingCount = 0;
+    $feeVerifiedCount= 0;
+    $todaySignIns    = 0;
+    $todaySignOuts   = 0;
+    $totalClasses    = 0;
 
-    $stmtHeads = $pdo->prepare("SELECT id, accountHeadName, accountHeadTypeID FROM account_head WHERE companyID = ? AND projectID = ?");
-    $stmtHeads->execute([$filterCompanyID, $filterProjectID]);
-    $accountHeads = [];
-    while ($row = $stmtHeads->fetch(PDO::FETCH_ASSOC)) {
-        $accountHeads[$row['accountHeadTypeID']][] = $row;
+    if ($role !== 'parent') {
+        // Fee collection stats
+        $stmtFees = $pdo->query("SELECT
+            COALESCE(SUM(due_amount), 0) AS total_due,
+            COALESCE(SUM(CASE WHEN status = 'Verified' THEN paid_amount ELSE 0 END), 0) AS collected,
+            COALESCE(SUM(CASE WHEN status IN ('Unpaid','Pending','Rejected') THEN due_amount ELSE 0 END), 0) AS pending,
+            SUM(CASE WHEN status = 'Verified' THEN 1 ELSE 0 END) AS verified_count,
+            SUM(CASE WHEN status IN ('Unpaid','Pending') THEN 1 ELSE 0 END) AS pending_count
+            FROM pcm_fee_payments");
+        $feeRow = $stmtFees->fetch(PDO::FETCH_ASSOC);
+        $feeTotal        = (float)($feeRow['total_due'] ?? 0);
+        $feeCollected    = (float)($feeRow['collected'] ?? 0);
+        $feePending      = (float)($feeRow['pending'] ?? 0);
+        $feeVerifiedCount= (int)($feeRow['verified_count'] ?? 0);
+        $feePendingCount = (int)($feeRow['pending_count'] ?? 0);
+
+        // Today's kiosk attendance
+        $stmtToday = $pdo->query("SELECT
+            SUM(CASE WHEN time_in IS NOT NULL THEN 1 ELSE 0 END) AS sign_ins,
+            SUM(CASE WHEN time_out IS NOT NULL THEN 1 ELSE 0 END) AS sign_outs
+            FROM pcm_kiosk_log WHERE log_date = CURDATE()");
+        $todayRow = $stmtToday->fetch(PDO::FETCH_ASSOC);
+        $todaySignIns  = (int)($todayRow['sign_ins'] ?? 0);
+        $todaySignOuts = (int)($todayRow['sign_outs'] ?? 0);
+
+        // Total classes
+        $totalClasses = (int)$pdo->query("SELECT COUNT(*) FROM classes")->fetchColumn();
     }
-
-    $query = "SELECT accountHeadID, SUM(amount) as total FROM journal_entry WHERE 1=1";
-    $params = [];
-    if ($filterCompanyID) { $query .= " AND companyID = ?"; $params[] = $filterCompanyID; }
-    if ($filterProjectID) { $query .= " AND projectID = ?"; $params[] = $filterProjectID; }
-    $query .= " GROUP BY accountHeadID";
-    $stmtAmounts = $pdo->prepare($query);
-    $stmtAmounts->execute($params);
-    $amounts = $stmtAmounts->fetchAll(PDO::FETCH_KEY_PAIR);
-
-    $groupedReport = [];
-    $totals = [];
-    foreach ($accountTypes as $type) {
-        $typeID = $type['id'];
-        $typeName = $type['typeName'];
-        $groupedReport[$typeName] = [];
-        $total = 0;
-        if (!empty($accountHeads[$typeID])) {
-            foreach ($accountHeads[$typeID] as $head) {
-                $amount = isset($amounts[$head['id']]) ? $amounts[$head['id']] : 0;
-                $groupedReport[$typeName][] = ['name' => $head['accountHeadName'], 'amount' => $amount];
-                $total += $amount;
-            }
-        }
-        $totals[strtoupper(trim($typeName))] = $total;
-    }
-
-    $income           = $totals['INCOME/RECEIPTS'] ?? 0;
-    $directExpenses   = $totals['DIRECT EXPENSES'] ?? 0;
-    $indirectExpenses = $totals['INDIRECT EXPENSES'] ?? 0;
-    $remaining        = $income - ($directExpenses + $indirectExpenses);
 
 } catch (PDOException $e) {
     die("DB Error: " . $e->getMessage());
@@ -149,25 +146,6 @@ try {
     die("Error: " . $e->getMessage());
 }
 
-// Excel export
-if (isset($_GET['export']) && $_GET['export'] === 'excel') {
-    header('Content-Type: application/vnd.ms-excel');
-    header('Content-Disposition: attachment; filename="account_summary_'.date('Y-m-d').'.xls"');
-    echo "<table border='1'><tr><th>Sl.No</th><th>Particulars</th><th>Net Value (Nu.)</th><th>Total (Nu.)</th></tr>";
-    $sectionLabel = 'A';
-    foreach ($groupedReport as $typeName => $items) {
-        $isIncome = strtoupper($typeName) === 'INCOME/RECEIPTS';
-        echo "<tr style='background-color:".($isIncome ? '#cfe2ff' : '#f8d7da')."'><td>".$sectionLabel."</td><td colspan='3'><strong>".htmlspecialchars($typeName)."</strong></td></tr>";
-        $i = 1;
-        foreach ($items as $entry) {
-            echo "<tr><td>".$i++."</td><td>".htmlspecialchars($entry['name'])."</td><td>".number_format($entry['amount'], 2)."</td><td></td></tr>";
-        }
-        echo "<tr style='background-color:".($isIncome ? '#d1e7dd' : '#fff3cd').";font-weight:bold;'><td colspan='3' style='text-align:right;'>Total</td><td>".number_format($totals[strtoupper(trim($typeName))] ?? 0, 2)."</td></tr>";
-        $sectionLabel = chr(ord($sectionLabel) + 1);
-    }
-    echo "<tr style='background-color:#e7f1ff;font-weight:bold;'><td>".$sectionLabel."</td><td>Remaining Fund Balance</td><td></td><td>".number_format($remaining, 2)."</td></tr></table>";
-    exit;
-}
 
 function badge_class($st) {
     $st = strtolower($st ?? '');
@@ -246,9 +224,9 @@ function badge_class($st) {
     .stat-icon.bg-parents    { background: linear-gradient(135deg, #1cc88a, #13855c); }
     .stat-icon.bg-events     { background: linear-gradient(135deg, #f6c23e, #dda20a); }
     .stat-icon.bg-bookings   { background: linear-gradient(135deg, #e74a3b, #be2617); }
-    .stat-icon.bg-income     { background: linear-gradient(135deg, #1cc88a, #13855c); }
-    .stat-icon.bg-expenses   { background: linear-gradient(135deg, #e74a3b, #be2617); }
-    .stat-icon.bg-balance    { background: linear-gradient(135deg, #4e73df, #224abe); }
+    .stat-icon.bg-fees       { background: linear-gradient(135deg, #1cc88a, #13855c); }
+    .stat-icon.bg-attendance { background: linear-gradient(135deg, #36b9cc, #258391); }
+    .stat-icon.bg-classes    { background: linear-gradient(135deg, #6f42c1, #5a32a3); }
     .stat-icon.bg-messages   { background: linear-gradient(135deg, #36b9cc, #258391); }
 
     /* Welcome banner */
@@ -391,16 +369,16 @@ function badge_class($st) {
     .dot-available { background: #fff3e0; color: #e65100; }
     .dot-pending   { background: #fff8e1; color: #f57f17; }
 
-    /* Finance widget */
-    .finance-row {
+    /* Fee collection widget */
+    .fee-row {
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 12px 0;
         border-bottom: 1px solid #f5f5f5;
     }
-    .finance-row:last-child { border-bottom: none; }
-    .finance-row .label {
+    .fee-row:last-child { border-bottom: none; }
+    .fee-row .label {
         font-size: 0.84rem;
         font-weight: 500;
         color: #555;
@@ -408,17 +386,17 @@ function badge_class($st) {
         align-items: center;
         gap: 8px;
     }
-    .finance-row .label .dot {
+    .fee-row .label .dot {
         width: 8px; height: 8px;
         border-radius: 50%;
         flex-shrink: 0;
     }
-    .finance-row .val {
+    .fee-row .val {
         font-size: 0.9rem;
         font-weight: 700;
         color: #1a1a2e;
     }
-    .finance-bar {
+    .fee-bar {
         height: 8px;
         border-radius: 4px;
         background: #f0f2f5;
@@ -426,7 +404,7 @@ function badge_class($st) {
         overflow: hidden;
         display: flex;
     }
-    .finance-bar .seg {
+    .fee-bar .seg {
         height: 100%;
         transition: width 0.6s ease;
     }
@@ -647,7 +625,7 @@ function badge_class($st) {
                         <a href="dzoClassManagement.php"><i class="fas fa-user-graduate"></i> Enrollments</a>
                         <a href="eventManagement.php"><i class="fas fa-calendar-alt"></i> Events</a>
                         <a href="bookingManagement.php"><i class="fas fa-bookmark"></i> Bookings</a>
-                        <a href="createJournalEntry.php"><i class="fas fa-receipt"></i> Journal Entry</a>
+                        <a href="admin-attendance.php"><i class="fas fa-clipboard-check"></i> Attendance</a>
                     </div>
                 </div>
 
@@ -763,56 +741,51 @@ function badge_class($st) {
                         </div>
                     </div>
 
-                    <!-- Financial Summary -->
+                    <!-- Fee Collection Overview -->
                     <div class="col-lg-5 mb-4">
                         <div class="card dash-card shadow">
                             <div class="card-body">
                                 <div class="section-title">
-                                    <span><i class="fas fa-chart-pie mr-2" style="color:#1cc88a;"></i>Financial Summary</span>
-                                    <a href="generateStatement.php">Full Report</a>
+                                    <span><i class="fas fa-money-check-alt mr-2" style="color:#1cc88a;"></i>Fee Collection</span>
+                                    <a href="feesManagement.php">View All</a>
                                 </div>
 
-                                <div class="finance-row">
-                                    <span class="label"><span class="dot" style="background:#1cc88a;"></span> Income / Receipts</span>
-                                    <span class="val" style="color:#1cc88a;">$<?php echo number_format($income, 2); ?></span>
+                                <div class="fee-row">
+                                    <span class="label"><span class="dot" style="background:#1cc88a;"></span> Collected</span>
+                                    <span class="val" style="color:#1cc88a;">$<?php echo number_format($feeCollected, 2); ?></span>
                                 </div>
-                                <div class="finance-row">
-                                    <span class="label"><span class="dot" style="background:#e74a3b;"></span> Direct Expenses</span>
-                                    <span class="val" style="color:#e74a3b;">$<?php echo number_format($directExpenses, 2); ?></span>
+                                <div class="fee-row">
+                                    <span class="label"><span class="dot" style="background:#e74a3b;"></span> Outstanding</span>
+                                    <span class="val" style="color:#e74a3b;">$<?php echo number_format($feePending, 2); ?></span>
                                 </div>
-                                <div class="finance-row">
-                                    <span class="label"><span class="dot" style="background:#f6c23e;"></span> Indirect Expenses</span>
-                                    <span class="val" style="color:#f6c23e;">$<?php echo number_format($indirectExpenses, 2); ?></span>
+                                <div class="fee-row">
+                                    <span class="label"><span class="dot" style="background:#4e73df;"></span> Total Expected</span>
+                                    <span class="val">$<?php echo number_format($feeTotal, 2); ?></span>
                                 </div>
 
                                 <?php
-                                    $totalExp = $directExpenses + $indirectExpenses;
-                                    $totalAll = $income + $totalExp;
-                                    $incPct = $totalAll > 0 ? round(($income / $totalAll) * 100) : 50;
-                                    $dirPct = $totalAll > 0 ? round(($directExpenses / $totalAll) * 100) : 25;
-                                    $indPct = 100 - $incPct - $dirPct;
+                                    $collPct = $feeTotal > 0 ? round(($feeCollected / $feeTotal) * 100) : 0;
+                                    $pendPct = 100 - $collPct;
                                 ?>
-                                <div class="finance-bar">
-                                    <div class="seg" style="width:<?php echo $incPct; ?>%; background:#1cc88a;"></div>
-                                    <div class="seg" style="width:<?php echo $dirPct; ?>%; background:#e74a3b;"></div>
-                                    <div class="seg" style="width:<?php echo $indPct; ?>%; background:#f6c23e;"></div>
+                                <div class="fee-bar">
+                                    <div class="seg" style="width:<?php echo $collPct; ?>%; background:#1cc88a;"></div>
+                                    <div class="seg" style="width:<?php echo $pendPct; ?>%; background:#e74a3b;"></div>
                                 </div>
 
-                                <div style="margin-top:18px; padding:16px; background:linear-gradient(135deg,#f0f4ff,#e8ecff); border-radius:10px;">
+                                <div style="margin-top:18px; padding:16px; background:linear-gradient(135deg,#e8f5e9,#c8e6c9); border-radius:10px;">
                                     <div style="display:flex; justify-content:space-between; align-items:center;">
                                         <span style="font-size:0.84rem; font-weight:600; color:#555;">
-                                            <i class="fas fa-wallet mr-1" style="color:#4e73df;"></i> Remaining Balance
+                                            <i class="fas fa-percentage mr-1" style="color:#1cc88a;"></i> Collection Rate
                                         </span>
-                                        <span style="font-size:1.3rem; font-weight:800; color:<?php echo $remaining >= 0 ? '#1cc88a' : '#e74a3b'; ?>;">
-                                            $<?php echo number_format($remaining, 2); ?>
+                                        <span style="font-size:1.3rem; font-weight:800; color:<?php echo $collPct >= 70 ? '#1cc88a' : ($collPct >= 40 ? '#f6c23e' : '#e74a3b'); ?>;">
+                                            <?php echo $collPct; ?>%
                                         </span>
                                     </div>
                                 </div>
 
-                                <div style="margin-top:14px; text-align:center;">
-                                    <a href="?export=excel" class="btn btn-sm" style="background:#f0f2f5; border-radius:8px; font-size:0.78rem; font-weight:600; color:#555;">
-                                        <i class="fas fa-file-excel mr-1" style="color:#1cc88a;"></i> Export to Excel
-                                    </a>
+                                <div style="margin-top:10px; display:flex; justify-content:center; gap:16px; font-size:0.76rem; color:#888;">
+                                    <span><i class="fas fa-check-circle" style="color:#1cc88a;"></i> <?php echo $feeVerifiedCount; ?> verified</span>
+                                    <span><i class="fas fa-clock" style="color:#f6c23e;"></i> <?php echo $feePendingCount; ?> pending</span>
                                 </div>
                             </div>
                         </div>
@@ -904,30 +877,34 @@ function badge_class($st) {
                     <div class="col-md-4 mb-3">
                         <div class="card dash-card shadow">
                             <div class="dash-stat-card" style="padding: 20px 24px;">
+                                <div class="stat-icon bg-attendance" style="width:42px;height:42px;border-radius:10px;font-size:1rem;"><i class="fas fa-clipboard-check"></i></div>
+                                <div class="stat-label">Today's Attendance</div>
+                                <div class="stat-value" style="font-size:1.6rem;"><?php echo $todaySignIns; ?></div>
+                                <div class="stat-footer">
+                                    <span style="color:#1cc88a;"><i class="fas fa-sign-in-alt"></i> <?php echo $todaySignIns; ?> in</span>
+                                    &middot;
+                                    <span style="color:#e74a3b;"><i class="fas fa-sign-out-alt"></i> <?php echo $todaySignOuts; ?> out</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card dash-card shadow">
+                            <div class="dash-stat-card" style="padding: 20px 24px;">
+                                <div class="stat-icon bg-classes" style="width:42px;height:42px;border-radius:10px;font-size:1rem;"><i class="fas fa-chalkboard-teacher"></i></div>
+                                <div class="stat-label">Active Classes</div>
+                                <div class="stat-value" style="font-size:1.6rem;"><?php echo $totalClasses; ?></div>
+                                <div class="stat-footer"><a href="admin-class-setup.php">Manage classes <i class="fas fa-arrow-right"></i></a></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <div class="card dash-card shadow">
+                            <div class="dash-stat-card" style="padding: 20px 24px;">
                                 <div class="stat-icon bg-messages" style="width:42px;height:42px;border-radius:10px;font-size:1rem;"><i class="fas fa-envelope"></i></div>
                                 <div class="stat-label">Contact Messages</div>
                                 <div class="stat-value" style="font-size:1.6rem;"><?php echo $contactMessages; ?></div>
                                 <div class="stat-footer"><a href="viewFeedback.php">View messages <i class="fas fa-arrow-right"></i></a></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <div class="card dash-card shadow">
-                            <div class="dash-stat-card" style="padding: 20px 24px;">
-                                <div class="stat-icon bg-income" style="width:42px;height:42px;border-radius:10px;font-size:1rem;"><i class="fas fa-dollar-sign"></i></div>
-                                <div class="stat-label">Total Income</div>
-                                <div class="stat-value" style="font-size:1.6rem;">$<?php echo number_format($income, 0); ?></div>
-                                <div class="stat-footer"><a href="generateStatement.php">View statement <i class="fas fa-arrow-right"></i></a></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <div class="card dash-card shadow">
-                            <div class="dash-stat-card" style="padding: 20px 24px;">
-                                <div class="stat-icon bg-balance" style="width:42px;height:42px;border-radius:10px;font-size:1rem;"><i class="fas fa-wallet"></i></div>
-                                <div class="stat-label">Fund Balance</div>
-                                <div class="stat-value" style="font-size:1.6rem; color:<?php echo $remaining >= 0 ? '#1cc88a' : '#e74a3b'; ?>;">$<?php echo number_format($remaining, 0); ?></div>
-                                <div class="stat-footer"><a href="?export=excel">Export report <i class="fas fa-arrow-right"></i></a></div>
                             </div>
                         </div>
                     </div>

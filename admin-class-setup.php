@@ -461,7 +461,7 @@ $teachers = $pdo->query(
                                         <tbody>
                                         <?php
                                         $allTeachers = $pdo->query(
-                                            "SELECT t.*, u.username FROM teachers t LEFT JOIN user u ON u.userid COLLATE utf8mb4_0900_ai_ci = t.user_id COLLATE utf8mb4_0900_ai_ci ORDER BY t.created_at DESC"
+                                            "SELECT t.*, u.username FROM teachers t LEFT JOIN user u ON u.userid = t.user_id ORDER BY t.created_at DESC"
                                         )->fetchAll(PDO::FETCH_ASSOC);
                                         foreach ($allTeachers as $teacher): ?>
                                             <tr>

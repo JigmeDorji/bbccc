@@ -51,7 +51,8 @@ echo '
         </div>
 
         <div class="bbcc-footer__bottom">
-            &copy; ' . date('Y') . ' Bhutanese Buddhist &amp; Cultural Centre (BBCC). All rights reserved.
+            <p>&copy; ' . date('Y') . ' Bhutanese Buddhist &amp; Cultural Centre (BBCC). All rights reserved.</p>
+            <p class="bbcc-footer__credit">Designed &amp; Developed by <a href="https://www.linkedin.com/in/jigme-dorji-b18405200" target="_blank" rel="noopener noreferrer">Jigme Dorji</a> &amp; <a href="https://www.linkedin.com/in/tshering-tshering/" target="_blank" rel="noopener noreferrer">Tshering</a></p>
         </div>
     </div>
 </footer>
