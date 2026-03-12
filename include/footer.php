@@ -52,7 +52,55 @@ echo '
 
         <div class="bbcc-footer__bottom">
             <p>&copy; ' . date('Y') . ' Bhutanese Buddhist &amp; Cultural Centre (BBCC). All rights reserved.</p>
-            <p class="bbcc-footer__credit">Designed &amp; Developed by <a href="https://www.linkedin.com/in/jigme-dorji-b18405200" target="_blank" rel="noopener noreferrer">Jigme Dorji</a> &amp; <a href="https://www.linkedin.com/in/tshering-tshering/" target="_blank" rel="noopener noreferrer">Tshering</a></p>
+            <p class="bbcc-footer__credit">Designed &amp; Developed by
+                <span class="dev-card-wrap">
+                    <a href="https://www.linkedin.com/in/jigme-dorji-b18405200" target="_blank" rel="noopener noreferrer" class="dev-card-trigger">Jigme Dorji</a>
+                    <span class="dev-card" aria-hidden="true">
+                        <span class="dev-card__accent"></span>
+                        <span class="dev-card__header">
+                            <span class="dev-card__avatar"><i class="fa-solid fa-laptop-code"></i></span>
+                            <span class="dev-card__info">
+                                <strong>JD &amp; T Digital Solutions</strong>
+                                <em>Web &middot; Software &middot; Mobile</em>
+                            </span>
+                        </span>
+                        <span class="dev-card__services">
+                            <span class="dev-card__badge"><i class="fa-solid fa-globe"></i> Web Design</span>
+                            <span class="dev-card__badge"><i class="fa-solid fa-code"></i> Software Dev</span>
+                            <span class="dev-card__badge"><i class="fa-solid fa-mobile-screen-button"></i> Mobile Apps</span>
+                        </span>
+                        <span class="dev-card__tagline">Cutting-edge web &amp; app solutions at surprisingly reasonable prices. Contact us today!</span>
+                        <span class="dev-card__contact">
+                            <span><i class="fa-solid fa-envelope"></i> dorjijigme32@gmail.com</span>
+                            <span><i class="fa-solid fa-phone"></i> 0404 902 044</span>
+                        </span>
+                    </span>
+                </span>
+                &amp;
+                <span class="dev-card-wrap">
+                    <a href="https://www.linkedin.com/in/tshering-tshering/" target="_blank" rel="noopener noreferrer" class="dev-card-trigger">Tshering</a>
+                    <span class="dev-card" aria-hidden="true">
+                        <span class="dev-card__accent"></span>
+                        <span class="dev-card__header">
+                            <span class="dev-card__avatar"><i class="fa-solid fa-laptop-code"></i></span>
+                            <span class="dev-card__info">
+                                <strong>JD &amp; T Digital Solutions</strong>
+                                <em>Web &middot; Software &middot; Mobile</em>
+                            </span>
+                        </span>
+                        <span class="dev-card__services">
+                            <span class="dev-card__badge"><i class="fa-solid fa-globe"></i> Web Design</span>
+                            <span class="dev-card__badge"><i class="fa-solid fa-code"></i> Software Dev</span>
+                            <span class="dev-card__badge"><i class="fa-solid fa-mobile-screen-button"></i> Mobile Apps</span>
+                        </span>
+                        <span class="dev-card__tagline">Cutting-edge web &amp; app solutions at surprisingly reasonable prices. Contact us today!</span>
+                        <span class="dev-card__contact">
+                            <span><i class="fa-solid fa-envelope"></i> dorjijigme32@gmail.com</span>
+                            <span><i class="fa-solid fa-phone"></i> 0404 902 044</span>
+                        </span>
+                    </span>
+                </span>
+            </p>
         </div>
     </div>
 </footer>

@@ -615,8 +615,180 @@ body.bbcc-public {
     color: #fff; text-decoration: underline;
 }
 
+/* ─── Developer Business Card Popup ─── */
+.dev-card-wrap {
+    position: relative;
+    display: inline-block;
+}
+.dev-card-trigger {
+    color: var(--gold) !important;
+    text-decoration: none !important;
+    cursor: pointer;
+    position: relative;
+    z-index: 2;
+}
+.dev-card {
+    position: absolute;
+    bottom: calc(100% + 14px);
+    left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    width: 310px;
+    background: rgba(20, 20, 30, 0.92);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 0;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s;
+    z-index: 9999;
+    box-shadow: 0 20px 50px rgba(0,0,0,.45), 0 0 0 1px rgba(201,168,76,0.1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    text-align: left;
+}
+/* Arrow */
+.dev-card::after {
+    content: '';
+    position: absolute;
+    bottom: -7px;
+    left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+    width: 14px;
+    height: 14px;
+    background: rgba(20, 20, 30, 0.92);
+    border-right: 1px solid rgba(255,255,255,0.08);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.dev-card-wrap:hover .dev-card {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+}
+/* Gold accent bar */
+.dev-card__accent {
+    display: block;
+    height: 3px;
+    background: linear-gradient(90deg, var(--gold), #e8c84a, var(--gold));
+    border-radius: 14px 14px 0 0;
+}
+/* Header - avatar + name */
+.dev-card__header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 18px 10px;
+}
+.dev-card__avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--gold), #e8c84a);
+    color: #1a1a2e;
+    font-weight: 800;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    letter-spacing: -0.5px;
+}
+.dev-card__info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.dev-card__info strong {
+    color: #fff;
+    font-size: 0.92rem;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+.dev-card__info em {
+    color: rgba(255,255,255,0.45);
+    font-style: normal;
+    font-size: 0.72rem;
+    letter-spacing: 0.3px;
+}
+/* Service badges */
+.dev-card__services {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 18px 12px;
+}
+.dev-card__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(201,168,76,0.1);
+    border: 1px solid rgba(201,168,76,0.18);
+    color: var(--gold);
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+}
+.dev-card__badge i {
+    font-size: 0.62rem;
+    opacity: 0.8;
+}
+/* Tagline */
+.dev-card__tagline {
+    display: block;
+    padding: 0 18px 10px;
+    font-size: 0.73rem;
+    line-height: 1.55;
+    color: rgba(255,255,255,0.55);
+    font-style: italic;
+}
+/* Contact info */
+.dev-card__contact {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 0 18px 14px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding-top: 10px;
+}
+.dev-card__contact span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.5);
+}
+.dev-card__contact i {
+    color: var(--gold);
+    font-size: 0.62rem;
+    width: 14px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+/* Responsive positioning for dev card */
 @media (max-width: 991px) { .bbcc-footer__grid { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 576px) { .bbcc-footer__grid { grid-template-columns: 1fr; } }
+@media (max-width: 576px) {
+    .bbcc-footer__grid { grid-template-columns: 1fr; }
+    .dev-card {
+        position: fixed;
+        bottom: auto;
+        top: 50%;
+        left: 50% !important;
+        transform: translate(-50%, -50%) scale(0.96) !important;
+        width: min(310px, 90vw);
+    }
+    .dev-card-wrap:hover .dev-card {
+        transform: translate(-50%, -50%) scale(1) !important;
+    }
+    .dev-card::after { display: none; }
+}
 
 /* ═══════════════════════════════════════════════════════════════
    SERVICES PAGE — EXTENDED
