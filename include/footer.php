@@ -58,18 +58,18 @@ echo '
                     <span class="dev-card" aria-hidden="true">
                         <span class="dev-card__accent"></span>
                         <span class="dev-card__header">
-                            <span class="dev-card__avatar"><i class="fa-solid fa-laptop-code"></i></span>
+                            <span class="dev-card__avatar"><i class="fa-solid fa-rocket"></i></span>
                             <span class="dev-card__info">
-                                <strong>JD &amp; T Digital Solutions</strong>
-                                <em>Web &middot; Software &middot; Mobile</em>
+                                <strong>Need a Website or App?</strong>
+                                <em>We build. You grow.</em>
                             </span>
                         </span>
                         <span class="dev-card__services">
-                            <span class="dev-card__badge"><i class="fa-solid fa-globe"></i> Web Design</span>
-                            <span class="dev-card__badge"><i class="fa-solid fa-code"></i> Software Dev</span>
+                            <span class="dev-card__badge"><i class="fa-solid fa-palette"></i> Web Design</span>
+                            <span class="dev-card__badge"><i class="fa-solid fa-code"></i> Custom Software</span>
                             <span class="dev-card__badge"><i class="fa-solid fa-mobile-screen-button"></i> Mobile Apps</span>
                         </span>
-                        <span class="dev-card__tagline">Cutting-edge web &amp; app solutions at surprisingly reasonable prices. Contact us today!</span>
+                        <span class="dev-card__tagline">Tailored digital solutions to automate &amp; elevate your business &mdash; built with cutting-edge tech, offered at genuinely affordable rates.</span>
                         <span class="dev-card__contact">
                             <span><i class="fa-solid fa-envelope"></i> dorjijigme32@gmail.com</span>
                             <span><i class="fa-solid fa-phone"></i> 0404 902 044</span>
@@ -82,18 +82,18 @@ echo '
                     <span class="dev-card" aria-hidden="true">
                         <span class="dev-card__accent"></span>
                         <span class="dev-card__header">
-                            <span class="dev-card__avatar"><i class="fa-solid fa-laptop-code"></i></span>
+                            <span class="dev-card__avatar"><i class="fa-solid fa-rocket"></i></span>
                             <span class="dev-card__info">
-                                <strong>JD &amp; T Digital Solutions</strong>
-                                <em>Web &middot; Software &middot; Mobile</em>
+                                <strong>Need a Website or App?</strong>
+                                <em>We build. You grow.</em>
                             </span>
                         </span>
                         <span class="dev-card__services">
-                            <span class="dev-card__badge"><i class="fa-solid fa-globe"></i> Web Design</span>
-                            <span class="dev-card__badge"><i class="fa-solid fa-code"></i> Software Dev</span>
+                            <span class="dev-card__badge"><i class="fa-solid fa-palette"></i> Web Design</span>
+                            <span class="dev-card__badge"><i class="fa-solid fa-code"></i> Custom Software</span>
                             <span class="dev-card__badge"><i class="fa-solid fa-mobile-screen-button"></i> Mobile Apps</span>
                         </span>
-                        <span class="dev-card__tagline">Cutting-edge web &amp; app solutions at surprisingly reasonable prices. Contact us today!</span>
+                        <span class="dev-card__tagline">Tailored digital solutions to automate &amp; elevate your business &mdash; built with cutting-edge tech, offered at genuinely affordable rates.</span>
                         <span class="dev-card__contact">
                             <span><i class="fa-solid fa-envelope"></i> dorjijigme32@gmail.com</span>
                             <span><i class="fa-solid fa-phone"></i> 0404 902 044</span>
