@@ -161,7 +161,7 @@ function h($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
                                 title: msg,
                                 showConfirmButton: true,
                                 timer: ok ? 1400 : 6000
-                            }).then(()=> { if (ok && reload) window.location.href = 'feesSettings.php'; });
+                            }).then(()=> { if (ok && reload) window.location.href = 'feesSetting.php'; });
                         }
                     });
                 </script>
