@@ -171,7 +171,7 @@ try {
                 <h5 class="modal-title" id="tModalTitleLabel"><i class="fas fa-user-plus" id="tModalIcon" aria-hidden="true"></i> <span id="tModalTitle">Add Team Member</span></h5>
                 <button type="button" class="btn-close-modal" data-dismiss="modal" aria-label="Close dialog"><i class="fas fa-times" aria-hidden="true"></i></button>
             </div>
-            <form method="POST" action="ourTeamSetup.php" enctype="multipart/form-data" id="teamForm">
+            <form method="POST" action="ourTeamSetup" enctype="multipart/form-data" id="teamForm">
                 <div class="modal-body">
                     <input type="hidden" name="edit_id" id="t_edit_id" value="">
 
@@ -250,7 +250,7 @@ $(document).ready(function(){
         e.preventDefault();
         var id = $(this).data('id');
         Swal.fire({ title:'Delete this member?', text:'This action cannot be undone.', icon:'warning', showCancelButton:true, confirmButtonColor:'#d33', confirmButtonText:'Yes, delete' })
-        .then(r => { if(r.isConfirmed) window.location.href='ourTeamSetup.php?delete='+id; });
+        .then(r => { if(r.isConfirmed) window.location.href='ourTeamSetup?delete='+id; });
     });
 
     // Loading
@@ -261,7 +261,7 @@ $(document).ready(function(){
 
 <?php if ($message): ?>
 Swal.fire({ icon:'<?= $msgType ?>', title:'<?= addslashes($message) ?>', showConfirmButton:false, timer:1800 })
-.then(() => { <?php if ($reloadPage): ?>window.location.href='ourTeamSetup.php';<?php endif; ?> });
+.then(() => { <?php if ($reloadPage): ?>window.location.href='ourTeamSetup';<?php endif; ?> });
 <?php endif; ?>
 </script>
 </body>

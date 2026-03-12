@@ -48,7 +48,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <h1><i class="fa-solid fa-envelope"></i> Contact Us</h1>
         <p class="bbcc-page-hero__subtitle">Get in touch with the Bhutanese Buddhist &amp; Cultural Center</p>
         <ul class="bbcc-page-hero__breadcrumb">
-            <li><a href="index.php">Home</a></li>
+            <li><a href="index">Home</a></li>
             <li class="sep">/</li>
             <li>Contact Us</li>
         </ul>
@@ -67,7 +67,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <div class="bbcc-contact-grid">
             <!-- Contact Form -->
             <div class="bbcc-contact-form fade-up">
-                <form action="contact-us.php" method="POST">
+                <form action="contact-us" method="POST">
                     <div class="form-group">
                         <label><i class="fa-solid fa-user"></i> Full Name</label>
                         <input type="text" name="name" placeholder="Enter your full name" required>

@@ -162,7 +162,7 @@ $monthName   = $firstDayObj->format('F');
         <h1><i class="fa-solid fa-calendar-days"></i> Events Calendar</h1>
         <p class="bbcc-page-hero__subtitle">Browse and book upcoming community events</p>
         <ul class="bbcc-page-hero__breadcrumb">
-            <li><a href="index.php">Home</a></li>
+            <li><a href="index">Home</a></li>
             <li class="sep">/</li>
             <li>Events</li>
         </ul>
@@ -205,7 +205,7 @@ $monthName   = $firstDayObj->format('F');
                 <button type="submit" class="bbcc-btn bbcc-btn--primary bbcc-btn--sm">
                     <i class="fa-solid fa-search"></i> Filter
                 </button>
-                <a href="events.php" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm">Reset</a>
+                <a href="events" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm">Reset</a>
             </div>
         </form>
 
@@ -265,7 +265,7 @@ $monthName   = $firstDayObj->format('F');
                             }
                             ?>
                             <?php if (!$isBooked && $ev['status'] === 'Available'): ?>
-                            <a href="book-event.php?id=<?= $ev['id'] ?>" class="bbcc-btn bbcc-btn--primary bbcc-btn--sm">
+                            <a href="book-event?id=<?= $ev['id'] ?>" class="bbcc-btn bbcc-btn--primary bbcc-btn--sm">
                                 <i class="fa-solid fa-ticket"></i> Book / Sponsor
                             </a>
                             <?php endif; ?>
@@ -285,9 +285,9 @@ $monthName   = $firstDayObj->format('F');
                 $nextM = $calMonth + 1; $nextY = $calYear;
                 if ($nextM > 12) { $nextM = 1; $nextY++; }
                 ?>
-                <a href="events.php?year=<?= $prevY ?>&month=<?= $prevM ?>" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm">&laquo; Prev</a>
+                <a href="events?year=<?= $prevY ?>&month=<?= $prevM ?>" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm">&laquo; Prev</a>
                 <h3><?= $monthName ?> <?= $calYear ?></h3>
-                <a href="events.php?year=<?= $nextY ?>&month=<?= $nextM ?>" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm">Next &raquo;</a>
+                <a href="events?year=<?= $nextY ?>&month=<?= $nextM ?>" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm">Next &raquo;</a>
             </div>
 
             <table class="cal-table">
@@ -321,7 +321,7 @@ $monthName   = $firstDayObj->format('F');
                             if ($cev['status'] === 'Pending Approval') $evClass = 'pend';
                             elseif (!empty($cev['sponsors']) || $cev['status'] === 'Booked') $evClass = 'booked';
                             ?>
-                            <a href="book-event.php?id=<?= $cev['id'] ?>" class="cal-ev <?= $evClass ?>"
+                            <a href="book-event?id=<?= $cev['id'] ?>" class="cal-ev <?= $evClass ?>"
                                title="<?= htmlspecialchars($cev['title']) ?> (<?= $cev['status'] ?>)">
                                 <?= htmlspecialchars($cev['title']) ?>
                             </a>

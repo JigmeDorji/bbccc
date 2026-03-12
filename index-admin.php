@@ -494,9 +494,9 @@ function badge_class($st) {
                     <h2><i class="fas fa-namaste"></i> Welcome, <?php echo htmlspecialchars($parentProfile['full_name'] ?? $_SESSION['username'] ?? 'Parent'); ?>!</h2>
                     <p>Manage your children's enrollments, track attendance, and make fee payments from your dashboard.</p>
                     <div class="quick-actions">
-                        <a href="parent-enrolment.php"><i class="fas fa-plus"></i> Add Student</a>
-                        <a href="parentFeesPayment.php"><i class="fas fa-money-check-alt"></i> Pay Fees</a>
-                        <a href="attendanceParent.php"><i class="fas fa-clipboard-check"></i> Attendance</a>
+                        <a href="parent-enrolment"><i class="fas fa-plus"></i> Add Student</a>
+                        <a href="parentFeesPayment"><i class="fas fa-money-check-alt"></i> Pay Fees</a>
+                        <a href="attendanceParent"><i class="fas fa-clipboard-check"></i> Attendance</a>
                     </div>
                 </div>
 
@@ -535,7 +535,7 @@ function badge_class($st) {
                     <div class="card-body p-0">
                         <div class="p-3 d-flex justify-content-between align-items-center" style="border-bottom: 1px solid #f0f0f0;">
                             <div class="section-title mb-0">My Children Enrollments</div>
-                            <a href="parent-enrolment.php" class="btn btn-primary btn-sm" style="border-radius:8px;">
+                            <a href="parent-enrolment" class="btn btn-primary btn-sm" style="border-radius:8px;">
                                 <i class="fas fa-plus"></i> Add New Student
                             </a>
                         </div>
@@ -594,10 +594,10 @@ function badge_class($st) {
                                                 <?php if ($isApproved): ?>
                                                     <span class="badge badge-success">Approved</span>
                                                 <?php else: ?>
-                                                    <a class="btn btn-info btn-sm" style="border-radius:6px;font-size:0.75rem;" href="parent-enrolment.php?edit=<?php echo (int)$c['id']; ?>">Edit</a>
+                                                    <a class="btn btn-info btn-sm" style="border-radius:6px;font-size:0.75rem;" href="parent-enrolment?edit=<?php echo (int)$c['id']; ?>">Edit</a>
                                                     <?php if ($isPending): ?>
                                                         <a class="btn btn-danger btn-sm" style="border-radius:6px;font-size:0.75rem;"
-                                                           href="parent-enrolment.php?delete=<?php echo (int)$c['id']; ?>"
+                                                           href="parent-enrolment?delete=<?php echo (int)$c['id']; ?>"
                                                            onclick="return confirm('Delete this enrollment?');">Delete</a>
                                                     <?php endif; ?>
                                                 <?php endif; ?>
@@ -622,10 +622,10 @@ function badge_class($st) {
                     <h2>Welcome back, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Admin'); ?>!</h2>
                     <p>Here's an overview of your community centre. Today is <?php echo date('l, d F Y'); ?>.</p>
                     <div class="quick-actions">
-                        <a href="dzoClassManagement.php"><i class="fas fa-user-graduate"></i> Enrollments</a>
-                        <a href="eventManagement.php"><i class="fas fa-calendar-alt"></i> Events</a>
-                        <a href="bookingManagement.php"><i class="fas fa-bookmark"></i> Bookings</a>
-                        <a href="admin-attendance.php"><i class="fas fa-clipboard-check"></i> Attendance</a>
+                        <a href="dzoClassManagement"><i class="fas fa-user-graduate"></i> Enrollments</a>
+                        <a href="eventManagement"><i class="fas fa-calendar-alt"></i> Events</a>
+                        <a href="bookingManagement"><i class="fas fa-bookmark"></i> Bookings</a>
+                        <a href="admin-attendance"><i class="fas fa-clipboard-check"></i> Attendance</a>
                     </div>
                 </div>
 
@@ -655,7 +655,7 @@ function badge_class($st) {
                                 <div class="stat-label">Registered Parents</div>
                                 <div class="stat-value"><?php echo $totalParents; ?></div>
                                 <div class="stat-footer">
-                                    <a href="dzoClassManagement.php">View all families <i class="fas fa-arrow-right"></i></a>
+                                    <a href="dzoClassManagement">View all families <i class="fas fa-arrow-right"></i></a>
                                 </div>
                             </div>
                         </div>
@@ -686,7 +686,7 @@ function badge_class($st) {
                                 <div class="stat-value"><?php echo $totalBookings; ?></div>
                                 <div class="stat-footer">
                                     <?php if ($pendingBookings > 0): ?>
-                                        <a href="bookingManagement.php" style="color:#e74a3b;"><i class="fas fa-exclamation-circle"></i> <?php echo $pendingBookings; ?> pending approval</a>
+                                        <a href="bookingManagement" style="color:#e74a3b;"><i class="fas fa-exclamation-circle"></i> <?php echo $pendingBookings; ?> pending approval</a>
                                     <?php else: ?>
                                         <span style="color:#1cc88a;"><i class="fas fa-check-circle"></i> All handled</span>
                                     <?php endif; ?>
@@ -704,7 +704,7 @@ function badge_class($st) {
                             <div class="card-body">
                                 <div class="section-title">
                                     <span><i class="fas fa-calendar-day mr-2" style="color:#4e73df;"></i>Upcoming Events</span>
-                                    <a href="eventManagement.php">View All</a>
+                                    <a href="eventManagement">View All</a>
                                 </div>
 
                                 <?php if (empty($upcomingEvents)): ?>
@@ -747,7 +747,7 @@ function badge_class($st) {
                             <div class="card-body">
                                 <div class="section-title">
                                     <span><i class="fas fa-money-check-alt mr-2" style="color:#1cc88a;"></i>Fee Collection</span>
-                                    <a href="feesManagement.php">View All</a>
+                                    <a href="feesManagement">View All</a>
                                 </div>
 
                                 <div class="fee-row">
@@ -801,7 +801,7 @@ function badge_class($st) {
                                 <div class="p-3">
                                     <div class="section-title mb-0">
                                         <span><i class="fas fa-user-graduate mr-2" style="color:#4e73df;"></i>Recent Enrollments</span>
-                                        <a href="dzoClassManagement.php">View All</a>
+                                        <a href="dzoClassManagement">View All</a>
                                     </div>
                                 </div>
                                 <?php if (empty($recentStudents)): ?>
@@ -840,7 +840,7 @@ function badge_class($st) {
                                 <div class="p-3">
                                     <div class="section-title mb-0">
                                         <span><i class="fas fa-bookmark mr-2" style="color:#e74a3b;"></i>Recent Booking Requests</span>
-                                        <a href="bookingManagement.php">View All</a>
+                                        <a href="bookingManagement">View All</a>
                                     </div>
                                 </div>
                                 <?php if (empty($recentBookings)): ?>
@@ -894,7 +894,7 @@ function badge_class($st) {
                                 <div class="stat-icon bg-classes" style="width:42px;height:42px;border-radius:10px;font-size:1rem;"><i class="fas fa-chalkboard-teacher"></i></div>
                                 <div class="stat-label">Active Classes</div>
                                 <div class="stat-value" style="font-size:1.6rem;"><?php echo $totalClasses; ?></div>
-                                <div class="stat-footer"><a href="admin-class-setup.php">Manage classes <i class="fas fa-arrow-right"></i></a></div>
+                                <div class="stat-footer"><a href="admin-class-setup">Manage classes <i class="fas fa-arrow-right"></i></a></div>
                             </div>
                         </div>
                     </div>
@@ -904,7 +904,7 @@ function badge_class($st) {
                                 <div class="stat-icon bg-messages" style="width:42px;height:42px;border-radius:10px;font-size:1rem;"><i class="fas fa-envelope"></i></div>
                                 <div class="stat-label">Contact Messages</div>
                                 <div class="stat-value" style="font-size:1.6rem;"><?php echo $contactMessages; ?></div>
-                                <div class="stat-footer"><a href="viewFeedback.php">View messages <i class="fas fa-arrow-right"></i></a></div>
+                                <div class="stat-footer"><a href="viewFeedback">View messages <i class="fas fa-arrow-right"></i></a></div>
                             </div>
                         </div>
                     </div>

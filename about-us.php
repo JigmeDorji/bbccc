@@ -40,7 +40,7 @@ try {
         <h1><i class="fa-solid fa-circle-info"></i> About Us</h1>
         <p class="bbcc-page-hero__subtitle">Learn about our mission, vision and community</p>
         <ul class="bbcc-page-hero__breadcrumb">
-            <li><a href="index.php">Home</a></li>
+            <li><a href="index">Home</a></li>
             <li class="sep">/</li>
             <li>About Us</li>
         </ul>
@@ -112,7 +112,7 @@ try {
     <div class="bbcc-container" style="position:relative;z-index:1;">
         <h2>Get Involved</h2>
         <p>Join our community programs, volunteer, or support BBCC in preserving Bhutanese culture in Canberra.</p>
-        <a href="contact-us.php" class="bbcc-btn bbcc-btn--white">
+        <a href="contact-us" class="bbcc-btn bbcc-btn--white">
             <i class="fa-solid fa-envelope"></i> Contact Us
         </a>
     </div>

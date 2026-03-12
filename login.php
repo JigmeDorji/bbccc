@@ -113,7 +113,7 @@ if (!empty($userName) && !empty($password)) {
                     setcookie("remember_user", "", time() - 3600, "/");
                 }
 
-                header('Location: index-admin.php');
+                header('Location: index-admin');
                 exit;
 
             } else {
@@ -409,7 +409,7 @@ if (!empty($userName) && !empty($password)) {
                         <div class="error-box"><i class="fas fa-exclamation-circle"></i>Invalid email or password. Please try again.</div>
                     <?php endif; ?>
 
-                    <form action="login.php" method="post" id="loginForm">
+                    <form action="login" method="post" id="loginForm">
                         <div class="input-group">
                             <label for="userName"><i class="fas fa-envelope"></i> Email Address</label>
                             <input type="email" name="userName" id="userName"
@@ -432,7 +432,7 @@ if (!empty($userName) && !empty($password)) {
                                 <input type="checkbox" id="remember" name="remember" <?php if(!empty($_COOKIE['remember_user'])) echo "checked"; ?>>
                                 <label for="remember">Remember me</label>
                             </div>
-                            <a href="forgotPassword.php" class="forgot-password">Forgot Password?</a>
+                            <a href="forgotPassword" class="forgot-password">Forgot Password?</a>
                         </div>
 
                         <button type="submit" class="login-button" id="loginBtn">
@@ -457,7 +457,7 @@ if (!empty($userName) && !empty($password)) {
                 </div>
 
                 <div class="signup-link">
-                    Don't have account? <a href="parentAccountSetup.php">Sign Up</a>
+                    Don't have account? <a href="parentAccountSetup">Sign Up</a>
                 </div>
             </div>
 

@@ -48,10 +48,10 @@ try {
                 <h1><?= htmlspecialchars($banner['title']) ?></h1>
                 <p><?= htmlspecialchars($banner['subtitle']) ?></p>
                 <div class="bbcc-hero__actions">
-                    <a href="parentAccountSetup.php" class="bbcc-btn bbcc-btn--primary">
+                    <a href="parentAccountSetup" class="bbcc-btn bbcc-btn--primary">
                         <i class="fa-solid fa-user-plus"></i> Register Now
                     </a>
-                    <a href="about-us.php" class="bbcc-btn bbcc-btn--outline">
+                    <a href="about-us" class="bbcc-btn bbcc-btn--outline">
                         Learn More <i class="fa-solid fa-arrow-right"></i>
                     </a>
                 </div>
@@ -122,7 +122,7 @@ try {
                 <p class="subtitle">Serving the Bhutanese Community in Canberra</p>
                 <p>The Bhutanese Buddhist and Cultural Centre (BBCC) is dedicated to providing spiritual guidance, cultural preservation, and pastoral support to Bhutanese residents in Canberra and nearby NSW towns.</p>
                 <p>Our focus is on fostering unity, harmony, and the preservation of Bhutanese identity within a diverse community.</p>
-                <a href="about-us.php" class="bbcc-btn bbcc-btn--primary bbcc-btn--sm" style="margin-top:16px;">
+                <a href="about-us" class="bbcc-btn bbcc-btn--primary bbcc-btn--sm" style="margin-top:16px;">
                     Read More <i class="fa-solid fa-arrow-right"></i>
                 </a>
             </div>
@@ -148,7 +148,7 @@ try {
                     $formattedDate = date("d M Y – g:i A", strtotime($menu['eventStartDateTime']));
                 }
             ?>
-            <a href="event_detail.php?id=<?= $menu['id'] ?>" class="bbcc-event-card fade-up">
+            <a href="event_detail?id=<?= $menu['id'] ?>" class="bbcc-event-card fade-up">
                 <div class="bbcc-event-card__image">
                     <img src="<?= htmlspecialchars($menu['menuImgUrl']) ?>" alt="<?= htmlspecialchars($menu['menuName']) ?>">
                 </div>
@@ -166,7 +166,7 @@ try {
             <?php endforeach; ?>
         </div>
         <div style="text-align:center;margin-top:48px;">
-            <a href="events.php" class="bbcc-btn bbcc-btn--outline">
+            <a href="events" class="bbcc-btn bbcc-btn--outline">
                 View All Events <i class="fa-solid fa-arrow-right"></i>
             </a>
         </div>
@@ -180,10 +180,10 @@ try {
         <h2>Join Our Community</h2>
         <p>Register for Dzongkha classes, cultural programs, and spiritual services offered by BBCC in Canberra.</p>
         <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
-            <a href="parentAccountSetup.php" class="bbcc-btn bbcc-btn--white">
+            <a href="parentAccountSetup" class="bbcc-btn bbcc-btn--white">
                 <i class="fa-solid fa-user-plus"></i> Register Now
             </a>
-            <a href="contact-us.php" class="bbcc-btn bbcc-btn--outline" style="border-color:rgba(255,255,255,.4);color:#fff;">
+            <a href="contact-us" class="bbcc-btn bbcc-btn--outline" style="border-color:rgba(255,255,255,.4);color:#fff;">
                 Contact Us <i class="fa-solid fa-arrow-right"></i>
             </a>
         </div>

@@ -83,7 +83,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <h2 style='color:#881b12;'>Welcome, ".htmlspecialchars($full_name)."!</h2>
                     <p>Thank you for creating a parent account at <strong style='color:#881b12;'>Bhutanese Centre Canberra</strong>.</p>
                     <p><strong>Login email:</strong> ".htmlspecialchars($email)."</p>
-                    <a href='login.php' style='display:inline-block;padding:10px 20px;background-color:#881b12;color:#fff;text-decoration:none;border-radius:5px;margin-top:10px;'>Login Now</a>
+                    <a href='login' style='display:inline-block;padding:10px 20px;background-color:#881b12;color:#fff;text-decoration:none;border-radius:5px;margin-top:10px;'>Login Now</a>
                     <p style='margin-top:20px;'>Thank you,<br><strong style='color:#881b12;'>Bhutanese Centre Canberra</strong></p>
                 </div></body></html>";
             $mail->send();
@@ -319,7 +319,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
             </form>
 
-            <div class="footer-links">Already have an account? <a href="login.php">Login here</a></div>
+            <div class="footer-links">Already have an account? <a href="login">Login here</a></div>
         </div>
     </div>
 </div>

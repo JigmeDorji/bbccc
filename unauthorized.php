@@ -37,7 +37,7 @@ require_once "include/auth.php";
 <div class="error-box">
     <h1><i class="fas fa-exclamation-triangle"></i> 403 - Unauthorized</h1>
     <p>You do not have permission to access this page.</p>
-    <a href="index-admin.php" class="btn btn-danger btn-back">Back to Dashboard</a>
+    <a href="index-admin" class="btn btn-danger btn-back">Back to Dashboard</a>
 </div>
 </body>
 </html>

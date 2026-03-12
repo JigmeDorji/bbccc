@@ -7,7 +7,7 @@ require_once "include/csrf.php";
 require_once "include/pcm_helpers.php";
 require_login();
 
-if (!is_admin_role()) { header("Location: unauthorized.php"); exit; }
+if (!is_admin_role()) { header("Location: unauthorized"); exit; }
 
 $pdo   = pcm_pdo();
 $flash = '';
@@ -156,7 +156,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                 </div>
                 <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i><?= $editing ? 'Update' : 'Add' ?></button>
                 <?php if ($editing): ?>
-                    <a href="admin-bank-settings.php" class="btn btn-secondary ml-2">Cancel</a>
+                    <a href="admin-bank-settings" class="btn btn-secondary ml-2">Cancel</a>
                 <?php endif; ?>
             </form>
         </div>

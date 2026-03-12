@@ -82,7 +82,7 @@ function logged_in_user_role() {
  */
 function require_login() {
     if (!is_logged_in()) {
-        header('Location: index.php');
+        header('Location: index');
         exit;
     }
 }

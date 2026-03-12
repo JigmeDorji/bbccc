@@ -5,7 +5,7 @@ require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
 if ($role !== 'parent') {
-    header("Location: index-admin.php");
+    header("Location: index-admin");
     exit;
 }
 
@@ -377,7 +377,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay_student_id'], $_P
 }
 
 if ($reload) {
-    header("Location: parentFees.php?msg=" . urlencode($message) . "&ok=" . ($success ? "1" : "0"));
+    header("Location: parentFees?msg=" . urlencode($message) . "&ok=" . ($success ? "1" : "0"));
     exit;
 }
 if (isset($_GET['msg'])) {

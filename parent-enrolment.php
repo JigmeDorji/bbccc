@@ -8,7 +8,7 @@ require_once "include/csrf.php";
 require_once "include/pcm_helpers.php";
 require_login();
 
-if (!is_parent_role()) { header("Location: unauthorized.php"); exit; }
+if (!is_parent_role()) { header("Location: unauthorized"); exit; }
 
 $pdo      = pcm_pdo();
 $parent   = pcm_current_parent($pdo);
@@ -713,7 +713,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         <div class="card-body text-center">
             <i class="fas fa-headset fa-2x text-muted mb-2" style="opacity:0.4;"></i>
             <p class="small text-muted mb-1">Need help with enrolment?</p>
-            <a href="contact-us.php" class="btn btn-outline-primary btn-sm"><i class="fas fa-envelope mr-1"></i>Contact Us</a>
+            <a href="contact-us" class="btn btn-outline-primary btn-sm"><i class="fas fa-envelope mr-1"></i>Contact Us</a>
         </div>
     </div>
 

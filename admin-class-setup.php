@@ -410,7 +410,7 @@ $teachers = $pdo->query(
                                 <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-user-plus mr-1"></i> Add New Teacher</h6>
                             </div>
                             <div class="card-body">
-                                <form method="POST" action="admin-teacher-setup.php">
+                                <form method="POST" action="admin-teacher-setup">
                                     <div class="form-row">
                                         <div class="form-group col-md-4">
                                             <label><i class="fas fa-user mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Full Name <span class="text-danger">*</span></label>

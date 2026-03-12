@@ -170,7 +170,7 @@ try {
                 <h5 class="modal-title" id="eModalTitleLabel"><i class="fas fa-calendar-plus" id="eModalIcon" aria-hidden="true"></i> <span id="eModalTitle">Add New Event</span></h5>
                 <button type="button" class="btn-close-modal" data-dismiss="modal" aria-label="Close dialog"><i class="fas fa-times" aria-hidden="true"></i></button>
             </div>
-            <form method="POST" action="serviceSetup.php" enctype="multipart/form-data" id="eventForm">
+            <form method="POST" action="serviceSetup" enctype="multipart/form-data" id="eventForm">
                 <div class="modal-body">
                     <input type="hidden" name="edit_id" id="e_edit_id" value="">
 
@@ -269,7 +269,7 @@ $(document).ready(function(){
         e.preventDefault();
         var id = $(this).data('id');
         Swal.fire({ title:'Delete this event?', icon:'warning', showCancelButton:true, confirmButtonColor:'#d33', confirmButtonText:'Yes, delete' })
-        .then(r => { if(r.isConfirmed) window.location.href='serviceSetup.php?delete='+id; });
+        .then(r => { if(r.isConfirmed) window.location.href='serviceSetup?delete='+id; });
     });
 
     // Loading
@@ -280,7 +280,7 @@ $(document).ready(function(){
 
 <?php if ($message): ?>
 Swal.fire({ icon:'<?= $msgType ?>', title:'<?= addslashes($message) ?>', showConfirmButton:false, timer:1800 })
-.then(() => { <?php if ($reloadPage): ?>window.location.href='serviceSetup.php';<?php endif; ?> });
+.then(() => { <?php if ($reloadPage): ?>window.location.href='serviceSetup';<?php endif; ?> });
 <?php endif; ?>
 </script>
 </body>

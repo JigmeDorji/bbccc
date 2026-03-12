@@ -7,7 +7,7 @@ require_once "include/csrf.php";
 require_once "include/pcm_helpers.php";
 require_login();
 
-if (!is_parent_role()) { header("Location: unauthorized.php"); exit; }
+if (!is_parent_role()) { header("Location: unauthorized"); exit; }
 
 $pdo     = pcm_pdo();
 $parent  = pcm_current_parent($pdo);

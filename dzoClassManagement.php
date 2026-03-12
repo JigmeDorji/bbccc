@@ -7,7 +7,7 @@ require_once "include/pcm_helpers.php";
 require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
-if ($role === 'parent') { header("Location: index-admin.php"); exit; }
+if ($role === 'parent') { header("Location: index-admin"); exit; }
 
 $pdo   = pcm_pdo();
 $flash = '';
@@ -273,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <p class="text-muted mb-0" style="font-size:.88rem;">Review, approve and manage all student enrolments in one place.</p>
     </div>
     <div>
-        <a href="attendanceManagement.php" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;">
+        <a href="attendanceManagement" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;">
             <i class="fas fa-clipboard-check mr-1"></i> Attendance
         </a>
     </div>

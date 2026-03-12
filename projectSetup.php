@@ -88,7 +88,7 @@ try {
 }
 
 //if ($reloadPage) {
-//    header("Location: projectSetup.php");
+//    header("Location: projectSetup");
 //    exit;
 //}
 
@@ -186,7 +186,7 @@ echo "<script>
                 <div class="card shadow mb-4">
                     <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary"><?= isset($_GET['edit']) ? 'Edit Project' : 'New Project'; ?></h6></div>
                     <div class="card-body">
-                        <form action="projectSetup.php<?= isset($_GET['edit']) ? '?edit=' . urlencode($_GET['edit']) : ''; ?>" method="POST">
+                        <form action="projectSetup<?= isset($_GET['edit']) ? '?edit=' . urlencode($_GET['edit']) : ''; ?>" method="POST">
                             <input type="hidden" name="projectID" value="<?= htmlspecialchars($existing_projectID); ?>">
 
                             <div class="form-row">
@@ -224,7 +224,7 @@ echo "<script>
                                 </div>
                             </div>
                             <button type="submit" class="btn btn-primary"><?= isset($_GET['edit']) ? 'Update' : 'Create'; ?></button>
-                            <a href="projectSetup.php" class="btn btn-secondary ml-2">Reset</a>
+                            <a href="projectSetup" class="btn btn-secondary ml-2">Reset</a>
                         </form>
                     </div>
                 </div>

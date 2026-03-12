@@ -10,7 +10,7 @@ $role = strtolower(trim($_SESSION['role'] ?? ''));
 $allowedRoles = ['administrator', 'company_admin', 'system_owner'];
 
 if (!in_array($role, $allowedRoles, true)) {
-    header("Location: index-admin.php");
+    header("Location: index-admin");
     exit;
 }
 
@@ -279,7 +279,7 @@ function h($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
                     <button class="btn btn-primary" type="submit">
                         <i class="fas fa-save"></i> Save Settings
                     </button>
-                    <a href="feesManagement.php" class="btn btn-secondary ml-2">Back to Fees Management</a>
+                    <a href="feesManagement" class="btn btn-secondary ml-2">Back to Fees Management</a>
                 </form>
 
             </div>

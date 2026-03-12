@@ -17,7 +17,7 @@ try {
 }
 
 if (!$menu) {
-    header('Location: index.php');
+    header('Location: index');
     exit;
 }
 
@@ -57,9 +57,9 @@ if (!empty($menu['eventStartDateTime'])) {
         <h1><i class="fa-solid fa-calendar-check"></i> Event Detail</h1>
         <p class="bbcc-page-hero__subtitle">View event information and details</p>
         <ul class="bbcc-page-hero__breadcrumb">
-            <li><a href="index.php">Home</a></li>
+            <li><a href="index">Home</a></li>
             <li class="sep">/</li>
-            <li><a href="events.php">Events</a></li>
+            <li><a href="events">Events</a></li>
             <li class="sep">/</li>
             <li>Detail</li>
         </ul>
@@ -81,7 +81,7 @@ if (!empty($menu['eventStartDateTime'])) {
                 <div class="ed-body">
                     <p><?= nl2br(htmlspecialchars($menu['menuDetail'])) ?></p>
                 </div>
-                <a href="events.php" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:24px;">
+                <a href="events" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:24px;">
                     <i class="fa-solid fa-arrow-left"></i> Back to Events
                 </a>
             </div>

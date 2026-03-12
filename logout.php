@@ -15,4 +15,4 @@ if($_SERVER['REQUEST_METHOD'] == 'POST') {
 
 // Always redirect the browser back to index.php
 // regardless of whether the logout request was a POST
-header('Location: index.php');
+header('Location: index');

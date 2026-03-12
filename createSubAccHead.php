@@ -142,7 +142,7 @@ echo "<script>
                 <h1 class="h3 mb-2 text-gray-800">Sub Account Setup</h1>
                 <div class="card shadow mb-4">
                     <div class="card-body">
-                        <form action="createSubAccHead.php<?= isset($_GET['edit']) ? '?edit=' . urlencode($_GET['edit']) : '' ?>" method="POST">
+                        <form action="createSubAccHead<?= isset($_GET['edit']) ? '?edit=' . urlencode($_GET['edit']) : '' ?>" method="POST">
                             <input type="hidden" name="id" value="<?= htmlspecialchars($existing_id) ?>">
 
                             <div class="form-row row">
@@ -166,7 +166,7 @@ echo "<script>
                             <div class="form-row mt-3">
                                 <div class="col-md-4">
                                     <button type="submit" class="btn btn-primary">Submit</button>
-                                    <a href="createSubAccHead.php" class="btn btn-secondary">Reset</a>
+                                    <a href="createSubAccHead" class="btn btn-secondary">Reset</a>
                                 </div>
                             </div>
                         </form>
@@ -196,8 +196,8 @@ echo "<script>
                                         <td><?= htmlspecialchars($sub['subAccountName']) ?></td>
                                         <td><?= htmlspecialchars($sub['accountHeadName']) ?></td>
                                         <td>
-                                            <a href="createSubAccHead.php?edit=<?= $sub['id'] ?>" class="btn btn-info btn-sm">Edit</a>
-                                            <a href="createSubAccHead.php?delete=<?= $sub['id'] ?>" onclick="return confirm('Delete this sub account?')" class="btn btn-danger btn-sm">Delete</a>
+                                            <a href="createSubAccHead?edit=<?= $sub['id'] ?>" class="btn btn-info btn-sm">Edit</a>
+                                            <a href="createSubAccHead?delete=<?= $sub['id'] ?>" onclick="return confirm('Delete this sub account?')" class="btn btn-danger btn-sm">Delete</a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>

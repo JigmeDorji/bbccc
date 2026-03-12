@@ -210,7 +210,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </form>
 
         <div class="footer-links">
-            <a href="login.php"><i class="fas fa-arrow-left me-1"></i>Back to Login</a>
+            <a href="login"><i class="fas fa-arrow-left me-1"></i>Back to Login</a>
         </div>
     </div>
 </div>

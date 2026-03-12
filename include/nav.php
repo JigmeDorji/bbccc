@@ -10,7 +10,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <span><i class="fa-solid fa-phone"></i> 0420 942 340</span>
         </div>
         <div class="bbcc-topbar__social">
-            <a href="https://www.facebook.com/profile.php?id=100084018901076" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
+            <a href="https://www.facebook.com/profile?id=100084018901076" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
             <a href="#" aria-label="YouTube"><i class="fa-brands fa-youtube"></i></a>
             <a href="#" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
         </div>
@@ -22,7 +22,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
     <div class="bbcc-container bbcc-navbar__inner">
 
         <!-- Brand -->
-        <a href="index.php" class="bbcc-navbar__brand">
+        <a href="index" class="bbcc-navbar__brand">
             <img src="bbccassests/img/logo/logo5.jpg" alt="BBCC Logo">
             <div class="bbcc-navbar__brand-text">
                 Bhutanese Buddhist &amp; Cultural Center
@@ -33,22 +33,22 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         <!-- Nav Links -->
         <ul class="bbcc-nav" id="bbccNav">
             <li class="<?= ($currentPage === 'index.php') ? 'active' : '' ?>">
-                <a href="index.php">Home</a>
+                <a href="index">Home</a>
             </li>
             <li class="<?= ($currentPage === 'about-us.php') ? 'active' : '' ?>">
-                <a href="about-us.php">About</a>
+                <a href="about-us">About</a>
             </li>
             <li class="<?= ($currentPage === 'services.php') ? 'active' : '' ?>">
-                <a href="services.php">Services</a>
+                <a href="services">Services</a>
             </li>
             <li class="<?= ($currentPage === 'events.php' || $currentPage === 'event_detail.php' || $currentPage === 'book-event.php') ? 'active' : '' ?>">
-                <a href="events.php">Events</a>
+                <a href="events">Events</a>
             </li>
             <li class="<?= ($currentPage === 'contact-us.php') ? 'active' : '' ?>">
-                <a href="contact-us.php">Contact</a>
+                <a href="contact-us">Contact</a>
             </li>
             <li>
-                <a href="login.php" class="bbcc-nav__login">
+                <a href="login" class="bbcc-nav__login">
                     <i class="fa-solid fa-right-to-bracket"></i> Login
                 </a>
             </li>

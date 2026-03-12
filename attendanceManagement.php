@@ -5,7 +5,7 @@ require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
 if ($role === 'parent') {
-    header("Location: index-admin.php");
+    header("Location: index-admin");
     exit;
 }
 
@@ -167,7 +167,7 @@ if ($classId) {
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center">
                         <h6 class="m-0 font-weight-bold text-primary">Mark Attendance (Approved Students)</h6>
-                        <a href="dzoClassManagement.php" class="btn btn-secondary btn-sm">Back to Enrollments</a>
+                        <a href="dzoClassManagement" class="btn btn-secondary btn-sm">Back to Enrollments</a>
                     </div>
 
                     <div class="card-body">

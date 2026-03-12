@@ -5,7 +5,7 @@ require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
 if ($role !== 'parent') {
-    header("Location: index-admin.php");
+    header("Location: index-admin");
     exit;
 }
 
@@ -208,7 +208,7 @@ if ($isEditMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['username'] = $email;
 
             // Redirect to VIEW mode (prevents resubmit)
-            header("Location: parentProfile.php?updated=1");
+            header("Location: parentProfile?updated=1");
             exit;
 
         } catch (Exception $e) {
@@ -262,11 +262,11 @@ $address   = $parent['address'] ?? '';
                     <h1 class="h3 text-gray-800 mb-0"><i class="fas fa-user-circle mr-2" style="color:var(--brand);"></i>My Profile</h1>
 
                     <?php if (!$isEditMode): ?>
-                        <a href="parentProfile.php?edit=1" class="btn btn-primary">
+                        <a href="parentProfile?edit=1" class="btn btn-primary">
                             <i class="fas fa-user-edit mr-1"></i> Edit Profile
                         </a>
                     <?php else: ?>
-                        <a href="parentProfile.php" class="btn btn-secondary">
+                        <a href="parentProfile" class="btn btn-secondary">
                             <i class="fas fa-times mr-1"></i> Cancel
                         </a>
                     <?php endif; ?>
@@ -343,7 +343,7 @@ $address   = $parent['address'] ?? '';
                         </div>
 
                         <div class="card-body">
-                            <form method="POST" action="parentProfile.php?edit=1" id="profileForm">
+                            <form method="POST" action="parentProfile?edit=1" id="profileForm">
 
                                 <div class="row">
                                     <div class="col-md-6">
@@ -452,7 +452,7 @@ $address   = $parent['address'] ?? '';
                                     <button class="btn btn-primary" type="submit" id="saveBtn">
                                         <i class="fas fa-save mr-1"></i> Save Changes
                                     </button>
-                                    <a class="btn btn-secondary ml-2" href="parentProfile.php">Cancel</a>
+                                    <a class="btn btn-secondary ml-2" href="parentProfile">Cancel</a>
                                 </div>
 
                             </form>

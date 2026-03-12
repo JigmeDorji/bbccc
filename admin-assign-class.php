@@ -97,7 +97,7 @@ $assignments = $pdo->query(
                         <h1 class="h3 mb-0 text-gray-800 font-weight-bold">Assign Students to Classes</h1>
                         <p class="text-muted mb-0" style="font-size:.88rem;">Allocate approved students into active classes.</p>
                     </div>
-                    <a href="admin-class-setup.php" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;">
+                    <a href="admin-class-setup" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;">
                         <i class="fas fa-cog mr-1"></i> Classes & Teachers
                     </a>
                 </div>

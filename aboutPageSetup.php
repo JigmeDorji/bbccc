@@ -134,7 +134,7 @@ try {
                 <h5 class="modal-title" id="aboutModalLabel"><i class="fas fa-file-alt" aria-hidden="true"></i> Edit About Page</h5>
                 <button type="button" class="btn-close-modal" data-dismiss="modal" aria-label="Close dialog"><i class="fas fa-times" aria-hidden="true"></i></button>
             </div>
-            <form method="POST" action="aboutPageSetup.php" enctype="multipart/form-data" id="aboutForm">
+            <form method="POST" action="aboutPageSetup" enctype="multipart/form-data" id="aboutForm">
                 <div class="modal-body">
                     <div class="section-divider"><i class="fas fa-align-left mr-1"></i> Description</div>
                     <div class="form-group">

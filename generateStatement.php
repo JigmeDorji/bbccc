@@ -267,7 +267,7 @@ echo "<script>
 
                         <div id="collapseJournal" class="collapse <?= (!empty($existing_id) ? 'show' : '') ?>" aria-labelledby="headingJournal" data-parent="#journalAccordion">
                             <div class="card-body">
-                                <form method="GET" action="generateStatement.php">
+                                <form method="GET" action="generateStatement">
                                     <div class="form-row row">
                                         <div class="form-group col-md-3">
                                             <label>Account Head</label>
@@ -305,7 +305,7 @@ echo "<script>
 
                                         <div class="form-group col-md-2 d-flex align-items-end">
                                             <button type="submit" class="btn btn-primary mr-2">Search</button>
-                                            <a href="generateStatement.php" class="btn btn-secondary">Reset</a>
+                                            <a href="generateStatement" class="btn btn-secondary">Reset</a>
                                         </div>
                                     </div>
                                 </form>

@@ -168,7 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <i class="fas fa-check-circle text-success fa-3x mb-3"></i>
             <h5 class="fw-bold">Password Updated Successfully</h5>
             <p class="text-muted">Redirecting to login...</p>
-            <a class="btn btn-brand" href="login.php"><i class="fas fa-sign-in-alt me-2"></i>Go to Login</a>
+            <a class="btn btn-brand" href="login"><i class="fas fa-sign-in-alt me-2"></i>Go to Login</a>
         </div>
     <?php else: ?>
 
@@ -214,7 +214,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </form>
 
         <div class="footer-links">
-            <a href="login.php"><i class="fas fa-arrow-left me-1"></i>Back to Login</a>
+            <a href="login"><i class="fas fa-arrow-left me-1"></i>Back to Login</a>
         </div>
 
     <?php endif; ?>

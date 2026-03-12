@@ -173,7 +173,7 @@ try {
                 <h5 class="modal-title" id="bModalTitleLabel"><i class="fas fa-image" id="bModalIcon" aria-hidden="true"></i> <span id="bModalTitle">Add New Banner</span></h5>
                 <button type="button" class="btn-close-modal" data-dismiss="modal" aria-label="Close dialog"><i class="fas fa-times" aria-hidden="true"></i></button>
             </div>
-            <form method="POST" action="bannerSetup.php" enctype="multipart/form-data" id="bannerForm">
+            <form method="POST" action="bannerSetup" enctype="multipart/form-data" id="bannerForm">
                 <div class="modal-body">
                     <input type="hidden" name="edit_id" id="b_edit_id" value="">
 
@@ -252,7 +252,7 @@ $(document).ready(function(){
         e.preventDefault();
         var id = $(this).data('id');
         Swal.fire({ title:'Delete this banner?', icon:'warning', showCancelButton:true, confirmButtonColor:'#d33', confirmButtonText:'Yes, delete' })
-        .then(r => { if(r.isConfirmed) window.location.href='bannerSetup.php?delete='+id; });
+        .then(r => { if(r.isConfirmed) window.location.href='bannerSetup?delete='+id; });
     });
 
     // Loading
@@ -263,7 +263,7 @@ $(document).ready(function(){
 
 <?php if ($message): ?>
 Swal.fire({ icon:'<?= $msgType ?>', title:'<?= addslashes($message) ?>', showConfirmButton:false, timer:1800 })
-.then(() => { <?php if ($reloadPage): ?>window.location.href='bannerSetup.php';<?php endif; ?> });
+.then(() => { <?php if ($reloadPage): ?>window.location.href='bannerSetup';<?php endif; ?> });
 <?php endif; ?>
 </script>
 </body>

@@ -5,7 +5,7 @@ require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
 if ($role !== 'parent') {
-    header("Location: index-admin.php");
+    header("Location: index-admin");
     exit;
 }
 

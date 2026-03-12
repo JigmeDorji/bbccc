@@ -301,7 +301,7 @@ $csrf = $_SESSION['csrf_token'];
             <input type="text" name="search" class="form-control form-control-sm mr-2"
                    value="<?= htmlspecialchars($search) ?>" placeholder="Search title...">
             <button class="btn btn-sm btn-primary mr-2"><i class="fas fa-search"></i> Filter</button>
-            <a href="eventManagement.php" class="btn btn-sm btn-secondary">Clear</a>
+            <a href="eventManagement" class="btn btn-sm btn-secondary">Clear</a>
         </form>
     </div>
 </div>
@@ -383,7 +383,7 @@ $csrf = $_SESSION['csrf_token'];
                     <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
             </div>
-            <form method="POST" action="eventManagement.php" id="eventFormInner">
+            <form method="POST" action="eventManagement" id="eventFormInner">
                 <div class="modal-body">
                     <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
                     <input type="hidden" name="edit_id" id="modal_edit_id" value="">

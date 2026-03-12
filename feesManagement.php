@@ -5,7 +5,7 @@ require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
 if ($role === 'parent') {
-    header("Location: index-admin.php");
+    header("Location: index-admin");
     exit;
 }
 
@@ -395,7 +395,7 @@ $due4 = $feesSettings['due_term4'] ?? null;
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <h1 class="h3 text-gray-800 mb-0">Fees Management</h1>
 
-                    <a href="feesSetting.php" class="btn btn-sm btn-primary">
+                    <a href="feesSetting" class="btn btn-sm btn-primary">
                         <i class="fas fa-cog"></i> Fees Settings
                     </a>
                 </div>
@@ -603,12 +603,12 @@ $due4 = $feesSettings['due_term4'] ?? null;
                                                             <?php else: ?>
                                                                 <div class="btn-group btn-group-sm" role="group">
                                                                     <a class="btn btn-success"
-                                                                       href="feesManagement.php?fee_action=approve&fee_id=<?php echo (int)$feeId; ?>"
+                                                                       href="feesManagement?fee_action=approve&fee_id=<?php echo (int)$feeId; ?>"
                                                                        onclick="return confirm('Approve this installment?');">
                                                                         Approve
                                                                     </a>
                                                                     <a class="btn btn-warning"
-                                                                       href="feesManagement.php?fee_action=reject&fee_id=<?php echo (int)$feeId; ?>"
+                                                                       href="feesManagement?fee_action=reject&fee_id=<?php echo (int)$feeId; ?>"
                                                                        onclick="return confirm('Reject this installment?');">
                                                                         Reject
                                                                     </a>

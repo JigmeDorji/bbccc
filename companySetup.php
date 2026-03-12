@@ -181,8 +181,8 @@ echo "<script>
                                         <td><?= $row['contact_person'] ?></td>
                                         <td><?= $row['gst'] ?></td>
                                         <td>
-                                            <a href="companySetup.php?edit=<?= $row['companyID'] ?>" class="btn btn-info btn-sm">Edit</a>
-                                            <a href="companySetup.php?delete=<?= $row['companyID'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this company?')">Delete</a>
+                                            <a href="companySetup?edit=<?= $row['companyID'] ?>" class="btn btn-info btn-sm">Edit</a>
+                                            <a href="companySetup?delete=<?= $row['companyID'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this company?')">Delete</a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -195,7 +195,7 @@ echo "<script>
                 <!-- Form -->
                 <div class="card shadow mb-4">
                     <div class="card-body">
-                        <form action="companySetup.php<?= isset($_GET['edit']) ? '?edit=' . $_GET['edit'] : '' ?>" method="POST">
+                        <form action="companySetup<?= isset($_GET['edit']) ? '?edit=' . $_GET['edit'] : '' ?>" method="POST">
                             <div class="form-row row">
                                 <input type="hidden" name="companyID" class="form-control" value="<?= $existing_companyID ?>" <?= isset($_GET['edit']) ? 'readonly' : '' ?> required>
 
@@ -234,7 +234,7 @@ echo "<script>
                             <div class="form-row row mt-3">
                                 <div class="col-md-4">
                                     <button type="submit" class="btn btn-primary">Submit</button>
-                                    <a href="companySetup.php" class="btn btn-secondary">Reset</a>
+                                    <a href="companySetup" class="btn btn-secondary">Reset</a>
                                 </div>
                             </div>
                         </form>

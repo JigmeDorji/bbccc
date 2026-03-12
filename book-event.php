@@ -18,13 +18,13 @@ try {
     ]);
 
     $eventId = isset($_GET['id']) ? (int)$_GET['id'] : 0;
-    if ($eventId <= 0) { header('Location: events.php'); exit; }
+    if ($eventId <= 0) { header('Location: events'); exit; }
 
     $stmt = $pdo->prepare("SELECT * FROM events WHERE id = :id");
     $stmt->execute([':id' => $eventId]);
     $event = $stmt->fetch(PDO::FETCH_ASSOC);
 
-    if (!$event) { header('Location: events.php'); exit; }
+    if (!$event) { header('Location: events'); exit; }
 
     // Handle form submission
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -200,9 +200,9 @@ $isEventBooked = $event && (!empty($event['sponsors']) || $event['status'] === '
         <h1><i class="fa-solid fa-ticket"></i> <?= htmlspecialchars($event['title'] ?? 'Book Event') ?></h1>
         <p class="bbcc-page-hero__subtitle">Submit a booking or sponsorship request</p>
         <ul class="bbcc-page-hero__breadcrumb">
-            <li><a href="index.php">Home</a></li>
+            <li><a href="index">Home</a></li>
             <li class="sep">/</li>
-            <li><a href="events.php">Events</a></li>
+            <li><a href="events">Events</a></li>
             <li class="sep">/</li>
             <li>Book</li>
         </ul>
@@ -265,7 +265,7 @@ $isEventBooked = $event && (!empty($event['sponsors']) || $event['status'] === '
                         <?php endif; ?>
                     </div>
                 </div>
-                <a href="events.php" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:16px;">
+                <a href="events" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:16px;">
                     <i class="fa-solid fa-arrow-left"></i> Back to Events
                 </a>
             </div>
@@ -277,7 +277,7 @@ $isEventBooked = $event && (!empty($event['sponsors']) || $event['status'] === '
                     <i class="fa-solid fa-circle-check"></i>
                     <h3>Thank You!</h3>
                     <p><?= $message ?></p>
-                    <a href="events.php" class="bbcc-btn bbcc-btn--primary">Browse More Events</a>
+                    <a href="events" class="bbcc-btn bbcc-btn--primary">Browse More Events</a>
                 </div>
 
                 <?php elseif ($isEventBooked): ?>
@@ -285,7 +285,7 @@ $isEventBooked = $event && (!empty($event['sponsors']) || $event['status'] === '
                     <i class="fa-solid fa-circle-xmark"></i>
                     <h3 style="margin:16px 0 8px;">This Event is Already Booked</h3>
                     <p style="color:var(--gray-600);margin-bottom:24px;">Please check other available events.</p>
-                    <a href="events.php" class="bbcc-btn bbcc-btn--primary">Browse Events</a>
+                    <a href="events" class="bbcc-btn bbcc-btn--primary">Browse Events</a>
                 </div>
 
                 <?php else: ?>
@@ -296,7 +296,7 @@ $isEventBooked = $event && (!empty($event['sponsors']) || $event['status'] === '
 
                 <div class="bk-form fade-up">
                     <h4><i class="fa-solid fa-ticket" style="color:var(--brand);margin-right:8px;"></i> Booking / Sponsorship Request</h4>
-                    <form method="POST" action="book-event.php?id=<?= $event['id'] ?>" id="bookingForm">
+                    <form method="POST" action="book-event?id=<?= $event['id'] ?>" id="bookingForm">
                         <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
 
                         <div class="fg">

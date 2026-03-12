@@ -108,9 +108,9 @@ $stats['payments_pending'] = (int)$stmt->fetchColumn();
                         <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
                     </div>
                     <div class="card-body">
-                        <a href="parent-students.php" class="btn btn-primary mr-2">Manage Students</a>
-                        <a href="parent-payments.php" class="btn btn-secondary mr-2">Upload Payment</a>
-                        <a href="parent-signinout.php" class="btn btn-info">Sign In/Out</a>
+                        <a href="parent-students" class="btn btn-primary mr-2">Manage Students</a>
+                        <a href="parent-payments" class="btn btn-secondary mr-2">Upload Payment</a>
+                        <a href="parent-signinout" class="btn btn-info">Sign In/Out</a>
                     </div>
                 </div>
             </div>

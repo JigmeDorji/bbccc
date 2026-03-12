@@ -6,7 +6,7 @@ require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
 if ($role === 'parent') {
-    header("Location: parentProfile.php");
+    header("Location: parentProfile");
     exit;
 }
 
@@ -88,18 +88,18 @@ $userRole = logged_in_user_role();
                                 <h6 class="m-0 font-weight-bold text-primary">Quick Actions</h6>
                             </div>
                             <div class="card-body">
-                                <a href="index-admin.php" class="btn btn-primary btn-sm mr-2 mb-2">
+                                <a href="index-admin" class="btn btn-primary btn-sm mr-2 mb-2">
                                     <i class="fas fa-tachometer-alt"></i> Dashboard
                                 </a>
-                                <a href="dzoClassManagement.php" class="btn btn-success btn-sm mr-2 mb-2">
+                                <a href="dzoClassManagement" class="btn btn-success btn-sm mr-2 mb-2">
                                     <i class="fas fa-users"></i> Enrollments
                                 </a>
-                                <a href="attendanceManagement.php" class="btn btn-info btn-sm mr-2 mb-2">
+                                <a href="attendanceManagement" class="btn btn-info btn-sm mr-2 mb-2">
                                     <i class="fas fa-clipboard-check"></i> Attendance
                                 </a>
 
                                 <div class="mt-3">
-                                    <form action="logout.php" method="POST" style="display:inline;">
+                                    <form action="logout" method="POST" style="display:inline;">
                                         <button type="submit" class="btn btn-danger btn-sm mb-2">
                                             <i class="fas fa-sign-out-alt"></i> Logout
                                         </button>

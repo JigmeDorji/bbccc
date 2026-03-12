@@ -170,13 +170,13 @@ $(document).ready(function(){
         e.preventDefault();
         var id = $(this).data('id');
         Swal.fire({ title:'Delete this message?', text:'This action cannot be undone.', icon:'warning', showCancelButton:true, confirmButtonColor:'#d33', confirmButtonText:'Yes, delete' })
-        .then(r => { if(r.isConfirmed) window.location.href='viewFeedback.php?delete='+id; });
+        .then(r => { if(r.isConfirmed) window.location.href='viewFeedback?delete='+id; });
     });
 });
 
 <?php if ($message): ?>
 Swal.fire({ icon:'<?= $msgType ?>', title:'<?= addslashes($message) ?>', showConfirmButton:false, timer:1800 })
-.then(() => { <?php if ($reloadPage): ?>window.location.href='viewFeedback.php';<?php endif; ?> });
+.then(() => { <?php if ($reloadPage): ?>window.location.href='viewFeedback';<?php endif; ?> });
 <?php endif; ?>
 </script>
 </body>

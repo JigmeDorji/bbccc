@@ -392,7 +392,7 @@ h1, h6 { font-size: 1rem !important; }
         <h1 class="topbar-page-title"><?php echo $_pageTitle; ?></h1>
         <nav aria-label="Breadcrumb">
             <p class="topbar-breadcrumb">
-                <a href="index-admin.php">Dashboard</a>
+                <a href="index-admin">Dashboard</a>
                 <?php if ($_pageFile !== 'index-admin'): ?>
                     <span class="sep" aria-hidden="true">/</span>
                     <span aria-current="page"><?php echo $_pageTitle; ?></span>
@@ -410,7 +410,7 @@ h1, h6 { font-size: 1rem !important; }
         </div>
 
         <!-- Visit Website -->
-        <a href="index.php" target="_blank" class="topbar-icon-btn" title="View Website" aria-label="Open public website in new tab">
+        <a href="index" target="_blank" class="topbar-icon-btn" title="View Website" aria-label="Open public website in new tab">
             <i class="fas fa-external-link-alt" aria-hidden="true"></i>
         </a>
 
@@ -442,13 +442,13 @@ h1, h6 { font-size: 1rem !important; }
                     My Profile
                 </a>
 
-                <a href="index-admin.php" role="menuitem">
+                <a href="index-admin" role="menuitem">
                     <i class="fas fa-tachometer-alt" aria-hidden="true"></i>
                     Dashboard
                 </a>
 
                 <?php if ($role !== 'parent'): ?>
-                <a href="viewFeedback.php" role="menuitem">
+                <a href="viewFeedback" role="menuitem">
                     <i class="fas fa-envelope" aria-hidden="true"></i>
                     Messages
                 </a>
@@ -456,7 +456,7 @@ h1, h6 { font-size: 1rem !important; }
 
                 <div class="dd-divider" role="separator"></div>
 
-                <form action="logout.php" method="POST" style="margin:0;">
+                <form action="logout" method="POST" style="margin:0;">
                     <button type="submit" class="logout-item" role="menuitem">
                         <i class="fas fa-sign-out-alt" aria-hidden="true"></i>
                         Sign Out

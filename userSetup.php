@@ -216,7 +216,7 @@ echo "<script>
                         <h6 class="m-0 font-weight-bold text-primary">Create or Update user detail</h6>
                     </div>
                     <div class="card-body">
-                        <form action="userSetup.php<?= isset($_GET['edit']) ? '?edit=' . urlencode($_GET['edit']) : '' ?>" method="POST" onsubmit="return validatePasswords();">
+                        <form action="userSetup<?= isset($_GET['edit']) ? '?edit=' . urlencode($_GET['edit']) : '' ?>" method="POST" onsubmit="return validatePasswords();">
                             <div class="form-row row">
                                 <input type="hidden" name="userid" class="form-control" value="<?= htmlspecialchars($existing_userid) ?>" <?= isset($_GET['edit']) ? 'readonly' : '' ?> required />
 
@@ -289,7 +289,7 @@ echo "<script>
                             <div class="form-row row mt-3">
                                 <div class="col-md-4">
                                     <button type="submit" class="btn btn-primary">Submit</button>
-                                    <a href="userSetup.php" class="btn btn-secondary">Reset</a>
+                                    <a href="userSetup" class="btn btn-secondary">Reset</a>
                                 </div>
                             </div>
                         </form>
@@ -326,8 +326,8 @@ echo "<script>
                                             <td><?= htmlspecialchars($user['role']) ?></td>
                                             <td><?= htmlspecialchars($user['createdDate']) ?></td>
                                             <td>
-                                                <a href="userSetup.php?edit=<?= urlencode($user['userid']) ?>" class="btn btn-info btn-sm">Edit</a>
-                                                <a href="userSetup.php?delete=<?= urlencode($user['userid']) ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this user?')">Delete</a>
+                                                <a href="userSetup?edit=<?= urlencode($user['userid']) ?>" class="btn btn-info btn-sm">Edit</a>
+                                                <a href="userSetup?delete=<?= urlencode($user['userid']) ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this user?')">Delete</a>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>

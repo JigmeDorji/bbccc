@@ -176,7 +176,7 @@ echo "<script>
                 <!-- Account Head Form -->
                 <div class="card shadow mb-4">
                     <div class="card-body">
-                        <form action="createAccHead.php<?= isset($_GET['edit']) ? '?edit=' . urlencode($_GET['edit']) : '' ?>" method="POST">
+                        <form action="createAccHead<?= isset($_GET['edit']) ? '?edit=' . urlencode($_GET['edit']) : '' ?>" method="POST">
                             <input type="hidden" name="id" value="<?= htmlspecialchars($existing_id) ?>" />
 
                             <div class="form-row row">
@@ -202,7 +202,7 @@ echo "<script>
                             <div class="form-row mt-3">
                                 <div class="col-md-4">
                                     <button type="submit" class="btn btn-primary">Submit</button>
-                                    <a href="createAccHead.php" class="btn btn-secondary">Reset</a>
+                                    <a href="createAccHead" class="btn btn-secondary">Reset</a>
                                 </div>
                             </div>
                         </form>
@@ -237,8 +237,8 @@ echo "<script>
 <!--                                            <td>--><?php //= htmlspecialchars($head['companyName']) ?><!--</td>-->
 <!--                                            <td>--><?php //= htmlspecialchars($head['projectID']) ?><!--</td>-->
                                             <td>
-                                                <a href="createAccHead.php?edit=<?= urlencode($head['id']) ?>" class="btn btn-info btn-sm">Edit</a>
-                                                <a href="createAccHead.php?delete=<?= urlencode($head['id']) ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this account head?')">Delete</a>
+                                                <a href="createAccHead?edit=<?= urlencode($head['id']) ?>" class="btn btn-info btn-sm">Edit</a>
+                                                <a href="createAccHead?delete=<?= urlencode($head['id']) ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this account head?')">Delete</a>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>

@@ -21,7 +21,7 @@ require_once "include/config.php";
         <h1><i class="fa-solid fa-hands-praying"></i> Our Services</h1>
         <p class="bbcc-page-hero__subtitle">Spiritual guidance, cultural preservation and pastoral support</p>
         <ul class="bbcc-page-hero__breadcrumb">
-            <li><a href="index.php">Home</a></li>
+            <li><a href="index">Home</a></li>
             <li class="sep">/</li>
             <li>Services</li>
         </ul>
@@ -95,10 +95,10 @@ require_once "include/config.php";
         <h2>Ready to Get Started?</h2>
         <p>Register your family for Dzongkha classes or join our community programs today.</p>
         <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
-            <a href="parentAccountSetup.php" class="bbcc-btn bbcc-btn--white">
+            <a href="parentAccountSetup" class="bbcc-btn bbcc-btn--white">
                 <i class="fa-solid fa-user-plus"></i> Register Now
             </a>
-            <a href="contact-us.php" class="bbcc-btn bbcc-btn--outline" style="border-color:rgba(255,255,255,.4);color:#fff;">
+            <a href="contact-us" class="bbcc-btn bbcc-btn--outline" style="border-color:rgba(255,255,255,.4);color:#fff;">
                 Contact Us <i class="fa-solid fa-arrow-right"></i>
             </a>
         </div>

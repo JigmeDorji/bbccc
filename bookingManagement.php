@@ -217,9 +217,9 @@ $redirectBase = 'bookingManagement.php' . ($eventFilter ? "?event_id=$eventFilte
         <?php endif; ?>
     </h1>
     <div>
-        <a href="eventManagement.php" class="btn btn-sm btn-secondary"><i class="fas fa-arrow-left"></i> Back to Events</a>
+        <a href="eventManagement" class="btn btn-sm btn-secondary"><i class="fas fa-arrow-left"></i> Back to Events</a>
         <?php if (!empty($bookings)): ?>
-            <a href="exportBookings.php<?= $eventFilter ? '?event_id='.$eventFilter : '' ?>" class="btn btn-sm btn-success"><i class="fas fa-file-csv"></i> Export CSV</a>
+            <a href="exportBookings<?= $eventFilter ? '?event_id='.$eventFilter : '' ?>" class="btn btn-sm btn-success"><i class="fas fa-file-csv"></i> Export CSV</a>
         <?php endif; ?>
     </div>
 </div>

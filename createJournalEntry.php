@@ -294,7 +294,7 @@ echo "<script>
 
                         <div id="collapseJournal" class="collapse <?= (!empty($existing_id) ? 'show' : '') ?>" aria-labelledby="headingJournal" data-parent="#journalAccordion">
                             <div class="card-body">
-                                <form id="journalForm" action="createJournalEntry.php<?= isset($_GET['edit']) ? '?edit=' . urlencode($_GET['edit']) : '' ?>" method="POST">
+                                <form id="journalForm" action="createJournalEntry<?= isset($_GET['edit']) ? '?edit=' . urlencode($_GET['edit']) : '' ?>" method="POST">
                                     <input type="hidden" name="id" value="<?= htmlspecialchars($existing_id) ?>" />
 
                                     <div class="form-row row">
@@ -347,7 +347,7 @@ echo "<script>
                                     <div class="form-row mt-3">
                                         <div class="col-md-4">
                                             <button type="submit" class="btn btn-primary">Submit</button>
-                                            <a href="createJournalEntry.php" class="btn btn-secondary">Reset</a>
+                                            <a href="createJournalEntry" class="btn btn-secondary">Reset</a>
                                         </div>
                                     </div>
                                 </form>
@@ -395,7 +395,7 @@ echo "<script>
                                         </div>
                                         <div class="form-group col-md-3 d-flex align-items-end">
                                             <button type="submit" class="btn btn-primary mr-2">Search</button>
-                                            <a href="createJournalEntry.php" class="btn btn-secondary">Reset</a>
+                                            <a href="createJournalEntry" class="btn btn-secondary">Reset</a>
                                         </div>
                                     </div>
                                 </form>
@@ -435,8 +435,8 @@ echo "<script>
                                             <td><?= htmlspecialchars(number_format($entry['amount'], 2)) ?></td>
                                             <td><?= htmlspecialchars($entry['remarks']) ?></td>
                                             <td>
-                                                <a href="createJournalEntry.php?edit=<?= urlencode($entry['id']) ?>" class="btn btn-info btn-sm">Edit</a>
-                                                <a href="createJournalEntry.php?delete=<?= urlencode($entry['id']) ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this journal entry?')">Delete</a>
+                                                <a href="createJournalEntry?edit=<?= urlencode($entry['id']) ?>" class="btn btn-info btn-sm">Edit</a>
+                                                <a href="createJournalEntry?delete=<?= urlencode($entry['id']) ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this journal entry?')">Delete</a>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>

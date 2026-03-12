@@ -10,7 +10,7 @@ echo '
                 <h3>Bhutanese Buddhist &amp; Cultural Centre</h3>
                 <p>BBCC provides spiritual and pastoral services, cultural programs, and community engagement activities for Bhutanese residents in Canberra and nearby regions.</p>
                 <div class="bbcc-footer__social">
-                    <a href="https://www.facebook.com/profile.php?id=100084018901076" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
+                    <a href="https://www.facebook.com/profile?id=100084018901076" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
                     <a href="#" aria-label="YouTube"><i class="fa-brands fa-youtube"></i></a>
                     <a href="#" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
                 </div>
@@ -20,10 +20,10 @@ echo '
             <div class="bbcc-footer__col">
                 <h4>Quick Links</h4>
                 <ul>
-                    <li><a href="index.php">Home</a></li>
-                    <li><a href="about-us.php">About Us</a></li>
-                    <li><a href="services.php">Services</a></li>
-                    <li><a href="events.php">Events</a></li>
+                    <li><a href="index">Home</a></li>
+                    <li><a href="about-us">About Us</a></li>
+                    <li><a href="services">Services</a></li>
+                    <li><a href="events">Events</a></li>
                 </ul>
             </div>
 
@@ -31,10 +31,10 @@ echo '
             <div class="bbcc-footer__col">
                 <h4>Programs</h4>
                 <ul>
-                    <li><a href="services.php">Spiritual Services</a></li>
-                    <li><a href="services.php">Dzongkha Classes</a></li>
-                    <li><a href="events.php">Community Events</a></li>
-                    <li><a href="parentAccountSetup.php">Register</a></li>
+                    <li><a href="services">Spiritual Services</a></li>
+                    <li><a href="services">Dzongkha Classes</a></li>
+                    <li><a href="events">Community Events</a></li>
+                    <li><a href="parentAccountSetup">Register</a></li>
                 </ul>
             </div>
 
