@@ -16,8 +16,15 @@ $parentId = (int)$parent['id'];
 $flash    = '';
 $ok       = false;
 
-// ── Bank details ──
-$banks = $pdo->query("SELECT * FROM pcm_bank_accounts WHERE is_active=1 ORDER BY id")->fetchAll();
+// ── Bank details from fees_settings (single source of truth) ──
+$_fs = $pdo->query("SELECT bank_name, account_name, bsb, account_number, bank_notes FROM fees_settings WHERE id=1 LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+$banks = (!empty($_fs['bank_name'])) ? [[
+    'bank_name'      => $_fs['bank_name'],
+    'account_name'   => $_fs['account_name'],
+    'bsb'            => $_fs['bsb'],
+    'account_number' => $_fs['account_number'],
+    'reference_hint' => $_fs['bank_notes'],
+]] : [];
 
 // ── POST: upload proof for a specific instalment ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'upload_proof') {

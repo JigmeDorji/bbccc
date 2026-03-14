@@ -71,6 +71,23 @@ body {
     font-size: 0.85rem !important;
     background: #f4f6f9 !important;
 }
+
+/* ── Sticky footer: always pinned to viewport bottom ────────── */
+#content-wrapper {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: 100vh;
+}
+#content {
+    flex: 1 0 auto;
+}
+.sticky-footer {
+    flex-shrink: 0;
+    padding: 14px 0;
+    border-top: 1px solid #e9ecef;
+    font-size: 0.78rem;
+    color: #888;
+}
 table, input, select, label, .form-control, .btn, .card, .accordion { font-size: 0.85rem !important; }
 h1, h6 { font-size: 1rem !important; }
 
@@ -134,49 +151,56 @@ h1, h6 { font-size: 1rem !important; }
 .bbcc-admin-topbar {
     background: #fff;
     border-bottom: 1px solid #e9ecef;
-    padding: 0 24px;
+    padding: 0 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    min-height: 64px;
+    min-height: 60px;
     position: sticky;
     top: 0;
     z-index: 1020;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    gap: 12px;
 }
 
-/* Left: Page title + breadcrumb */
+/* Left: Hamburger + Page title + Breadcrumb */
 .topbar-left {
     display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 2px;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 0; /* allow text truncation */
 }
+.topbar-titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .topbar-page-title {
-    font-size: 1.15rem;
+    font-size: 1.05rem;
     font-weight: 700;
     color: #1a1a2e;
     margin: 0;
     line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .topbar-breadcrumb {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     color: #8c8c9e;
     margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
-.topbar-breadcrumb a {
-    color: #6c757d;
-    text-decoration: none;
-    transition: color 0.2s;
-}
+.topbar-breadcrumb a { color: #6c757d; text-decoration: none; transition: color 0.2s; }
 .topbar-breadcrumb a:hover { color: #881b12; }
-.topbar-breadcrumb .sep { margin: 0 5px; opacity: 0.4; }
+.topbar-breadcrumb .sep { margin: 0 4px; opacity: 0.4; }
 
 /* Right: actions cluster */
 .topbar-right {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    flex-shrink: 0;
 }
 
 /* Date/Time badge */
@@ -184,19 +208,16 @@ h1, h6 { font-size: 1rem !important; }
     display: none;
     align-items: center;
     gap: 6px;
-    padding: 6px 14px;
+    padding: 6px 12px;
     background: #f0f2f5;
     border-radius: 8px;
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     color: #555;
     font-weight: 500;
     white-space: nowrap;
 }
-.topbar-date i { color: #881b12; font-size: 0.82rem; }
-
-@media (min-width: 768px) {
-    .topbar-date { display: flex; }
-}
+.topbar-date i { color: #881b12; font-size: 0.8rem; }
+@media (min-width: 768px) { .topbar-date { display: flex; } }
 
 /* Quick-action icon buttons */
 .topbar-icon-btn {
@@ -374,11 +395,38 @@ h1, h6 { font-size: 1rem !important; }
 .topbar-dropdown .logout-item { color: #e74a3b; }
 .topbar-dropdown .logout-item i { background: #fce8e6; color: #e74a3b; }
 
-/* ── Mobile adjustments ──────────────────────────────────── */
-@media (max-width: 576px) {
-    .bbcc-admin-topbar { padding: 0 14px; min-height: 56px; }
-    .topbar-page-title { font-size: 0.98rem; }
-    .topbar-breadcrumb { display: none; }
+/* ── Hamburger toggle button (mobile only) ───────────────── */
+.topbar-hamburger {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    background: #f0f2f5;
+    border: none;
+    display: none; /* hidden on desktop */
+    align-items: center;
+    justify-content: center;
+    color: #444;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+}
+.topbar-hamburger:hover, .topbar-hamburger:active { background: #e2e6ea; color: #881b12; }
+@media (max-width: 991.98px) {
+    .topbar-hamburger { display: flex; }
+}
+
+/* ── Mobile topbar adjustments ───────────────────────────── */
+@media (max-width: 767.98px) {
+    .bbcc-admin-topbar    { padding: 0 12px; min-height: 56px; }
+    .topbar-page-title    { font-size: 0.95rem; }
+    .topbar-breadcrumb    { display: none; }
+    .topbar-right         { gap: 4px; }
+    .topbar-divider       { display: none; }
+    .topbar-user-info     { display: none !important; }
+}
+@media (max-width: 374.98px) {
+    .topbar-page-title    { font-size: 0.88rem; }
 }
 </style>
 
@@ -387,18 +435,23 @@ h1, h6 { font-size: 1rem !important; }
 
 <!-- ═══ Professional Admin Header Bar ═══ -->
 <nav class="bbcc-admin-topbar" role="navigation" aria-label="Admin top navigation">
-    <!-- Left: Page Title + Breadcrumb -->
+    <!-- Left: Hamburger + Page Title + Breadcrumb -->
     <div class="topbar-left">
-        <h1 class="topbar-page-title"><?php echo $_pageTitle; ?></h1>
-        <nav aria-label="Breadcrumb">
-            <p class="topbar-breadcrumb">
-                <a href="index-admin">Dashboard</a>
-                <?php if ($_pageFile !== 'index-admin'): ?>
-                    <span class="sep" aria-hidden="true">/</span>
-                    <span aria-current="page"><?php echo $_pageTitle; ?></span>
-                <?php endif; ?>
-            </p>
-        </nav>
+        <button class="topbar-hamburger" id="sidebarToggleBtn" aria-label="Toggle navigation menu" aria-controls="accordionSidebar" aria-expanded="false">
+            <i class="fas fa-bars"></i>
+        </button>
+        <div class="topbar-titles">
+            <h1 class="topbar-page-title"><?php echo $_pageTitle; ?></h1>
+            <nav aria-label="Breadcrumb">
+                <p class="topbar-breadcrumb">
+                    <a href="index-admin">Dashboard</a>
+                    <?php if ($_pageFile !== 'index-admin'): ?>
+                        <span class="sep" aria-hidden="true">/</span>
+                        <span aria-current="page"><?php echo $_pageTitle; ?></span>
+                    <?php endif; ?>
+                </p>
+            </nav>
+        </div>
     </div>
 
     <!-- Right: Actions -->

@@ -10,7 +10,7 @@ try {
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     // Fetch banner data
-    $stmt = $pdo->prepare("SELECT * FROM banner LIMIT 2");
+    $stmt = $pdo->prepare("SELECT * FROM banner ORDER BY id ASC");
     $stmt->execute();
     $banners = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

@@ -17,8 +17,15 @@ $parentId = (int)$parent['id'];
 $flash    = '';
 $ok       = false;
 
-// ── Bank details for display ──
-$banks = $pdo->query("SELECT * FROM pcm_bank_accounts WHERE is_active = 1 ORDER BY id")->fetchAll();
+// ── Bank details from fees_settings (single source of truth) ──
+$_fs = $pdo->query("SELECT bank_name, account_name, bsb, account_number, bank_notes FROM fees_settings WHERE id=1 LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+$banks = (!empty($_fs['bank_name'])) ? [[
+    'bank_name'      => $_fs['bank_name'],
+    'account_name'   => $_fs['account_name'],
+    'bsb'            => $_fs['bsb'],
+    'account_number' => $_fs['account_number'],
+    'reference_hint' => $_fs['bank_notes'],
+]] : [];
 
 // ── POST ACTIONS ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -104,8 +111,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 }
 
                 if ($flash === '') {
-                    $ins = $pdo->prepare("INSERT INTO pcm_enrolments (student_id, parent_id, class_id, fee_plan, fee_amount, payment_ref, proof_path) VALUES (:sid, :pid, :cid, :plan, :amt, :ref, :proof)");
-                    $ins->execute([':sid'=>$childId, ':pid'=>$parentId, ':cid'=>$classId, ':plan'=>$plan, ':amt'=>$amount, ':ref'=>$ref?:null, ':proof'=>$proofPath]);
+                    $ins = $pdo->prepare("INSERT INTO pcm_enrolments (student_id, parent_id, fee_plan, fee_amount, payment_ref, proof_path) VALUES (:sid, :pid, :plan, :amt, :ref, :proof)");
+                    $ins->execute([':sid'=>$childId, ':pid'=>$parentId, ':plan'=>$plan, ':amt'=>$amount, ':ref'=>$ref?:null, ':proof'=>$proofPath]);
+
+                    // Assign the selected class in class_assignments
+                    $delOld = $pdo->prepare("DELETE FROM class_assignments WHERE student_id = :sid");
+                    $delOld->execute([':sid' => $childId]);
+                    $insCA = $pdo->prepare("INSERT INTO class_assignments (class_id, student_id, assigned_by) VALUES (:cid, :sid, :by)");
+                    $insCA->execute([':cid' => $classId, ':sid' => $childId, ':by' => 'parent']);
+
                     pcm_notify_admin_enrolment($child['student_name'], $parent['full_name']);
                     $flash = "Enrolment submitted for <strong>{$child['student_name']}</strong>. You will be notified once reviewed.";
                     $ok = true;
@@ -126,7 +140,7 @@ $eligible->execute([':pid'=>$parentId]);
 $eligible = $eligible->fetchAll();
 
 // ── Existing enrolments ──
-$enrolments = $pdo->prepare("SELECT e.*, s.student_id AS stu_code, s.student_name, c.class_name AS class_name FROM pcm_enrolments e JOIN students s ON s.id = e.student_id LEFT JOIN classes c ON c.id = e.class_id WHERE e.parent_id = :pid ORDER BY e.submitted_at DESC");
+$enrolments = $pdo->prepare("SELECT e.*, s.student_id AS stu_code, s.student_name, c.class_name AS class_name FROM pcm_enrolments e JOIN students s ON s.id = e.student_id LEFT JOIN class_assignments ca ON ca.student_id = e.student_id LEFT JOIN classes c ON c.id = ca.class_id WHERE e.parent_id = :pid ORDER BY e.submitted_at DESC");
 $enrolments->execute([':pid'=>$parentId]);
 $enrolments = $enrolments->fetchAll();
 

@@ -9,9 +9,7 @@
 <footer class="sticky-footer bg-white" role="contentinfo">
     <div class="container my-auto">
         <div class="copyright text-center my-auto">
-            <span>Copyright &copy; Bhutanese Buddhist Centre <?php echo date('Y'); ?></span>
-            <br>
-            <small class="text-muted">Designed &amp; Developed by <a href="https://www.linkedin.com/in/jigme-dorji-b18405200" target="_blank" rel="noopener noreferrer">Jigme Dorji</a> &amp; <a href="https://www.linkedin.com/in/tshering-tshering/" target="_blank" rel="noopener noreferrer">Tshering</a></small>
+            <span>Copyright &copy; Bhutanese Buddhist Centre Canberra <?php echo date('Y'); ?></span>
         </div>
     </div>
 </footer>

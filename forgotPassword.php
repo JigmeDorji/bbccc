@@ -88,8 +88,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':ua'    => user_agent(),
             ]);
 
-            // reset link (CHANGE to your real domain/path)
-            $resetLink = "http://localhost/bbccc/resetPassword.php?token=" . urlencode($rawToken);
+            // reset link — uses BASE_URL from include/config.php
+            $resetLink = rtrim(BASE_URL, '/') . "/resetPassword.php?token=" . urlencode($rawToken);
 
             $subject = "Reset your password - Bhutanese Centre Canberra";
             $safeName = htmlspecialchars($parentName);
@@ -107,8 +107,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sent = send_mail($emailToReset, $parentName, $subject, $body);
 
             if (!$sent) {
-                // keep UI generic, but log for you
-                file_put_contents(__DIR__ . "/mail_error.log", date('c')." ForgotPassword send failed for {$emailToReset}\n", FILE_APPEND);
+                // Log for admin and surface a clear error to the user
+                file_put_contents(__DIR__ . "/mail_error.log", date('c') . " ForgotPassword send failed for {$emailToReset}\n", FILE_APPEND);
+                $errors[] = "We could not send the reset email at this time. Please try again later or contact support.";
+                $message = ''; // suppress the generic success message
             }
         }
     }

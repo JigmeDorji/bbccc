@@ -7,7 +7,7 @@ require_login();
  * ✅ Admin-only guard
  */
 $role = strtolower(trim($_SESSION['role'] ?? ''));
-$allowedRoles = ['administrator', 'company_admin', 'system_owner'];
+$allowedRoles = ['administrator', 'admin', 'company_admin', 'system_owner', 'staff'];
 
 if (!in_array($role, $allowedRoles, true)) {
     header("Location: index-admin");

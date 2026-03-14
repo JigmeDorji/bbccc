@@ -125,7 +125,7 @@ $students = $pdo->query("
            p.email       AS parent_email,
            p.phone       AS parent_phone,
            e.id          AS pcm_enrolment_id,
-           e.class_id    AS pcm_class_id,
+           ca.class_id   AS pcm_class_id,
            e.fee_plan    AS pcm_fee_plan,
            e.fee_amount  AS pcm_fee_amount,
            e.payment_ref AS pcm_payment_ref,
@@ -138,7 +138,8 @@ $students = $pdo->query("
     FROM students s
     LEFT JOIN parents p ON p.id = s.parentId
     LEFT JOIN pcm_enrolments e ON e.student_id = s.id
-    LEFT JOIN classes cl ON cl.id = e.class_id
+    LEFT JOIN class_assignments ca ON ca.student_id = s.id
+    LEFT JOIN classes cl ON cl.id = ca.class_id
     ORDER BY s.id DESC
 ")->fetchAll();
 

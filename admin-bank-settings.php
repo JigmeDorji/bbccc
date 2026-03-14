@@ -1,7 +1,10 @@
 <?php
-// admin-bank-settings.php — CRUD bank account details shown to parents
+// admin-bank-settings.php — merged into feesSetting.php
 require_once "include/config.php";
 require_once "include/auth.php";
+// Redirect permanently to the unified Fees Settings page
+header("Location: feesSetting");
+exit;
 require_once "include/role_helpers.php";
 require_once "include/csrf.php";
 require_once "include/pcm_helpers.php";

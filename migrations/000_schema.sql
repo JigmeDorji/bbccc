@@ -92,6 +92,10 @@ CREATE TABLE IF NOT EXISTS `students` (
     `parentId`           INT          DEFAULT NULL,
     `parent_id`          INT          DEFAULT NULL,
     `status`             VARCHAR(20)  DEFAULT 'Active',
+    `payment_plan`       VARCHAR(50)  DEFAULT NULL,
+    `payment_amount`     DECIMAL(10,2) DEFAULT NULL,
+    `payment_reference`  VARCHAR(150) DEFAULT NULL,
+    `payment_proof`      VARCHAR(255) DEFAULT NULL,
     `created_at`         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

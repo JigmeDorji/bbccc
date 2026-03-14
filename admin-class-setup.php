@@ -63,18 +63,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("Class ID and name are required.");
             }
 
+            $teacherId = (int)($_POST['teacher_id'] ?? 0) ?: null;
+
             $stmt = $pdo->prepare(
                 "UPDATE classes SET class_name = :class_name, description = :description,
-                 capacity = :capacity, schedule_text = :schedule_text, active = :active
-                 WHERE id = :id"
+                 capacity = :capacity, schedule_text = :schedule_text, active = :active,
+                 teacher_id = :teacher_id WHERE id = :id"
             );
             $stmt->execute([
-                ':class_name' => $className,
-                ':description' => $description === '' ? null : $description,
-                ':capacity' => $capacity,
-                ':schedule_text' => $scheduleText === '' ? null : $scheduleText,
-                ':active' => $active,
-                ':id' => $editId
+                ':class_name'   => $className,
+                ':description'  => $description === '' ? null : $description,
+                ':capacity'     => $capacity,
+                ':schedule_text'=> $scheduleText === '' ? null : $scheduleText,
+                ':active'       => $active,
+                ':teacher_id'   => $teacherId,
+                ':id'           => $editId
             ]);
 
             $message = "Class updated successfully.";
@@ -195,6 +198,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Teacher assignment updated.";
         } catch (Exception $e) {
             $message = "Error: " . $e->getMessage();
+        }
+    }
+
+    // Create Teacher
+    if ($action === 'create_teacher') {
+        try {
+            $fullName = trim($_POST['full_name'] ?? '');
+            $email    = trim($_POST['email'] ?? '');
+            $phone    = trim($_POST['phone'] ?? '');
+            $username = $email; // email is the login username
+            $password = $_POST['password'] ?? '';
+
+            if ($fullName === '' || $email === '' || $password === '') {
+                throw new Exception("Full name, email and password are required.");
+            }
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                throw new Exception("Please enter a valid email address.");
+            }
+
+            $chk = $pdo->prepare("SELECT userid FROM user WHERE username = :username");
+            $chk->execute([':username' => $username]);
+            if ($chk->fetch()) {
+                throw new Exception("Username already exists.");
+            }
+
+            $row    = $pdo->query("SELECT MAX(CAST(userid AS UNSIGNED)) AS max_id FROM user")->fetch(PDO::FETCH_ASSOC);
+            $userId = (string)((int)($row['max_id'] ?? 0) + 1);
+
+            $pdo->beginTransaction();
+
+            $pdo->prepare(
+                "INSERT INTO user (userid, username, password, role, createdDate)
+                 VALUES (:userid, :username, :password, 'teacher', :createdDate)"
+            )->execute([
+                ':userid'      => $userId,
+                ':username'    => $username,
+                ':password'    => password_hash($password, PASSWORD_DEFAULT),
+                ':createdDate' => date('Y-m-d H:i:s'),
+            ]);
+
+            $pdo->prepare(
+                "INSERT INTO teachers (user_id, full_name, email, phone)
+                 VALUES (:user_id, :full_name, :email, :phone)"
+            )->execute([
+                ':user_id'   => $userId,
+                ':full_name' => $fullName,
+                ':email'     => $email === '' ? null : $email,
+                ':phone'     => $phone === '' ? null : $phone,
+            ]);
+
+            $pdo->commit();
+
+            $message    = "Teacher created successfully.";
+            $messageTab = 'teachers';
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $message    = "Error: " . $e->getMessage();
+            $messageTab = 'teachers';
         }
     }
 }
@@ -410,15 +471,16 @@ $teachers = $pdo->query(
                                 <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-user-plus mr-1"></i> Add New Teacher</h6>
                             </div>
                             <div class="card-body">
-                                <form method="POST" action="admin-teacher-setup">
+                                <form method="POST" action="admin-class-setup">
+                                    <input type="hidden" name="action" value="create_teacher">
                                     <div class="form-row">
                                         <div class="form-group col-md-4">
                                             <label><i class="fas fa-user mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Full Name <span class="text-danger">*</span></label>
                                             <input type="text" class="form-control" name="full_name" required placeholder="e.g. Karma Tshering">
                                         </div>
                                         <div class="form-group col-md-4">
-                                            <label><i class="fas fa-envelope mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Email</label>
-                                            <input type="email" class="form-control" name="email" placeholder="teacher@example.com">
+                                            <label><i class="fas fa-envelope mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Email (Login Username) <span class="text-danger">*</span></label>
+                                            <input type="email" class="form-control" name="email" placeholder="teacher@example.com" required>
                                         </div>
                                         <div class="form-group col-md-4">
                                             <label><i class="fas fa-phone mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Phone</label>
@@ -426,11 +488,7 @@ $teachers = $pdo->query(
                                         </div>
                                     </div>
                                     <div class="form-row">
-                                        <div class="form-group col-md-6">
-                                            <label><i class="fas fa-id-badge mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Username <span class="text-danger">*</span></label>
-                                            <input type="text" class="form-control" name="username" required placeholder="Login username">
-                                        </div>
-                                        <div class="form-group col-md-6">
+                                        <div class="form-group col-md-12">
                                             <label><i class="fas fa-key mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Temp Password <span class="text-danger">*</span></label>
                                             <input type="password" class="form-control" name="password" required placeholder="Initial password">
                                         </div>
@@ -549,7 +607,16 @@ $teachers = $pdo->query(
                         <label><i class="fas fa-align-left mr-1" style="color:#881b12;font-size:.7rem;"></i> Description</label>
                         <textarea class="form-control" name="description" id="edit_description" rows="2"></textarea>
                     </div>
-                    <div class="custom-control custom-switch">
+                    <div class="form-group mt-2">
+                        <label><i class="fas fa-chalkboard-teacher mr-1" style="color:#881b12;font-size:.7rem;"></i> Assign Teacher</label>
+                        <select class="form-control" name="teacher_id" id="edit_class_teacher">
+                            <option value="">— Unassigned —</option>
+                            <?php foreach ($teachers as $t): ?>
+                                <option value="<?= (int)$t['id'] ?>"><?= htmlspecialchars($t['full_name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="custom-control custom-switch mt-2">
                         <input type="checkbox" class="custom-control-input" id="edit_active" name="active" value="1">
                         <label class="custom-control-label" for="edit_active">Active</label>
                     </div>
@@ -645,6 +712,8 @@ $(document).on('click', '.btn-edit-class', function(){
     $('#edit_capacity').val(btn.data('capacity'));
     $('#edit_schedule').val(btn.data('schedule'));
     $('#edit_active').prop('checked', btn.data('active') == 1);
+    var tid = btn.data('teacher-id');
+    $('#edit_class_teacher').val(tid ? String(tid) : '');
     $('#editClassModal').modal('show');
 });
 

@@ -56,7 +56,8 @@ try {
                        COALESCE(e.proof_path, s.payment_proof) AS payment_proof
                 FROM students s
                 LEFT JOIN pcm_enrolments e ON e.student_id = s.id
-                LEFT JOIN classes c ON c.id = e.class_id
+                LEFT JOIN class_assignments ca ON ca.student_id = s.id
+                LEFT JOIN classes c ON c.id = ca.class_id
                 WHERE s.parentId = :pid ORDER BY s.id DESC
             ");
             $stmtKids->execute([':pid' => $parentDbId]);
