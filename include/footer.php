@@ -95,8 +95,8 @@ echo '
                         </span>
                         <span class="dev-card__tagline">Tailored digital solutions to automate &amp; elevate your business &mdash; built with cutting-edge tech, offered at genuinely affordable rates.</span>
                         <span class="dev-card__contact">
-                            <span><i class="fa-solid fa-envelope"></i> dorjijigme32@gmail.com</span>
-                            <span><i class="fa-solid fa-phone"></i> 0404 902 044</span>
+                            <span><i class="fa-solid fa-envelope"></i> bhutanesecentrecanberra@gmail.com</span>
+                            <span><i class="fa-solid fa-phone"></i> 0434 522 720</span>
                         </span>
                     </span>
                 </span>
