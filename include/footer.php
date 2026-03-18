@@ -42,8 +42,8 @@ echo '
             <div class="bbcc-footer__col">
                 <h4>Contact</h4>
                 <ul>
-                    <li><i class="fa-solid fa-envelope" style="color:#c9a84c;margin-right:6px;font-size:.7rem;"></i> bbbccc@gmail.com</li>
-                    <li><i class="fa-solid fa-phone" style="color:#c9a84c;margin-right:6px;font-size:.7rem;"></i> 0404 902 044</li>
+                    <li><i class="fa-solid fa-envelope" style="color:#c9a84c;margin-right:6px;font-size:.7rem;"></i> bhutanesecentrecanberra@gmail.com</li>
+                    <li><i class="fa-solid fa-phone" style="color:#c9a84c;margin-right:6px;font-size:.7rem;"></i> 0434 522 720</li>
                     <li><i class="fa-solid fa-location-dot" style="color:#c9a84c;margin-right:6px;font-size:.7rem;"></i> Canberra, ACT, Australia</li>
                 </ul>
             </div>
@@ -95,8 +95,8 @@ echo '
                         </span>
                         <span class="dev-card__tagline">Tailored digital solutions to automate &amp; elevate your business &mdash; built with cutting-edge tech, offered at genuinely affordable rates.</span>
                         <span class="dev-card__contact">
-                            <span><i class="fa-solid fa-envelope"></i> bhutanesecentrecanberra@gmail.com</span>
-                            <span><i class="fa-solid fa-phone"></i> 0434 522 720</span>
+                            <span><i class="fa-solid fa-envelope"></i> tsheringkoney@gmail.com</span>
+                            <span><i class="fa-solid fa-phone"></i> 0420 942 340</span>
                         </span>
                     </span>
                 </span>

@@ -106,9 +106,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <i class="fa-solid fa-phone"></i>
                     </div>
                     <div class="bbcc-contact-info__text">
-                        <h4>Phone Number</h4>
-                        <p>0420 942 340</p>
-                    </div>
+                        <h4>Contact Persons</h4>                    
+                        <p>
+                            <strong>Khenchen Kinzang  Thinley</strong><br>
+                            Resident Lam<br>
+                            📞 0411 786 688
+                        </p>
+
+                        <p style="margin-top:10px;">
+                            <strong>Khenpo Sonam Gyeltshen</strong><br>
+                            Khenpo<br>
+                            📞 0434 522 720
+                        </p>
+
+                        <p style="margin-top:10px;">
+                            <strong>Chencho Tshering</strong><br>
+                            President<br>
+                            📞 0450 727 541
+                        </p>
+                        </div>
                 </div>
                 <div class="bbcc-contact-info__card">
                     <div class="bbcc-contact-info__icon">
@@ -116,7 +132,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     </div>
                     <div class="bbcc-contact-info__text">
                         <h4>Email Address</h4>
-                        <p>bbbccc@gmail.com</p>
+                        <p>bhutanesecentrecanberra@gmail.com</p>
                     </div>
                 </div>
                 <div class="bbcc-contact-info__card">
@@ -125,7 +141,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     </div>
                     <div class="bbcc-contact-info__text">
                         <h4>Operating Hours</h4>
-                        <p>Saturday &amp; Sunday: 9 AM – 5 PM<br>Weekdays: By Appointment</p>
+                        <p>Everyday : 6 AM – 10 PM</p>
                     </div>
                 </div>
             </div>
