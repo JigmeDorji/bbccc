@@ -453,7 +453,7 @@ $monthName   = $firstDayObj->format('F');
                 </div>
             <?php else: ?>
                 <?php foreach ($upcomingEvents as $ev): ?>
-                    <div class="ev-card fade-up">
+                    <div class="ev-card">
                         <div class="ev-card__date">
                             <span class="day"><?= date('d', strtotime($ev['event_date'])) ?></span>
                             <span class="month"><?= date('M', strtotime($ev['event_date'])) ?></span>
@@ -537,7 +537,7 @@ $monthName   = $firstDayObj->format('F');
                 </div>
             <?php else: ?>
                 <?php foreach ($pastEvents as $ev): ?>
-                    <div class="ev-card fade-up" style="opacity:.92;">
+                    <div class="ev-card" style="opacity:.92;">
                         <div class="ev-card__date" style="background:#6b7280;">
                             <span class="day"><?= date('d', strtotime($ev['event_date'])) ?></span>
                             <span class="month"><?= date('M', strtotime($ev['event_date'])) ?></span>
