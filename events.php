@@ -362,6 +362,18 @@ $monthName   = $firstDayObj->format('F');
                 align-items: center;
             }
         }
+        /* Event Card Share Buttons */
+        .ev-share-row { display:flex; gap:6px; margin-top:8px; }
+        .ev-share-btn {
+            display:inline-flex; align-items:center; justify-content:center;
+            width:30px; height:30px; border-radius:50% ;
+            font-size:.78rem; text-decoration:none;
+            transition:opacity .18s; flex-shrink:0;
+        }
+        .ev-share-btn--fb { background:#1877F2; color:#fff; }
+        .ev-share-btn--fb:hover { opacity:.82; color:#fff; }
+        .ev-share-btn--wa { background:#25D366; color:#fff; }
+        .ev-share-btn--wa:hover { opacity:.82; color:#fff; }
     </style>
 </head>
 <body class="bbcc-public">
@@ -495,6 +507,21 @@ $monthName   = $firstDayObj->format('F');
                                         <i class="fa-solid fa-ticket"></i> Book / Sponsor
                                     </a>
                                 <?php endif; ?>
+                                <?php $evShareUrl = rtrim(BASE_URL, '/') . '/book-event?id=' . (int)$ev['id']; ?>
+                                <div class="ev-share-row">
+                                    <a href="https://www.facebook.com/sharer/sharer.php?u=<?= urlencode($evShareUrl) ?>"
+                                       class="ev-share-btn ev-share-btn--fb"
+                                       onclick="bbccOpenShare(this.href);return false;"
+                                       title="Share on Facebook" rel="noopener noreferrer">
+                                        <i class="fa-brands fa-facebook-f"></i>
+                                    </a>
+                                    <a href="https://wa.me/?text=<?= urlencode($ev['title'] . ' - ' . $evShareUrl) ?>"
+                                       target="_blank" rel="noopener noreferrer"
+                                       class="ev-share-btn ev-share-btn--wa"
+                                       title="Share on WhatsApp">
+                                        <i class="fa-brands fa-whatsapp"></i>
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -550,6 +577,21 @@ $monthName   = $firstDayObj->format('F');
                                 <span class="badge-status badge-past">
                                     <i class="fa-solid fa-clock-rotate-left"></i> Past Event
                                 </span>
+                                <?php $evShareUrl = rtrim(BASE_URL, '/') . '/book-event?id=' . (int)$ev['id']; ?>
+                                <div class="ev-share-row">
+                                    <a href="https://www.facebook.com/sharer/sharer.php?u=<?= urlencode($evShareUrl) ?>"
+                                       class="ev-share-btn ev-share-btn--fb"
+                                       onclick="bbccOpenShare(this.href);return false;"
+                                       title="Share on Facebook" rel="noopener noreferrer">
+                                        <i class="fa-brands fa-facebook-f"></i>
+                                    </a>
+                                    <a href="https://wa.me/?text=<?= urlencode($ev['title'] . ' - ' . $evShareUrl) ?>"
+                                       target="_blank" rel="noopener noreferrer"
+                                       class="ev-share-btn ev-share-btn--wa"
+                                       title="Share on WhatsApp">
+                                        <i class="fa-brands fa-whatsapp"></i>
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -676,6 +718,12 @@ document.getElementById('btnCal').addEventListener('click', function() {
 
 if (localStorage.getItem('eventsView') === 'calendar') {
     document.getElementById('btnCal').click();
+}
+function bbccOpenShare(url) {
+    var w = 600, h = 450;
+    var left = ((screen.width  - w) / 2)|0;
+    var top  = ((screen.height - h) / 3)|0;
+    window.open(url, 'bbccShare', 'width='+w+',height='+h+',left='+left+',top='+top+',resizable=yes,scrollbars=yes');
 }
 </script>
 

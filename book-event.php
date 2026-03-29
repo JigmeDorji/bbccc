@@ -135,14 +135,45 @@ if (!isset($_SESSION['csrf_token'])) {
 $csrf = $_SESSION['csrf_token'];
 
 $isEventBooked = $event && (!empty($event['sponsors']) || $event['status'] === 'Booked');
+
+// Social sharing metadata
+$_baseUrl      = rtrim(BASE_URL, '/');
+$_canonicalUrl = $_baseUrl . '/book-event?id=' . (int)$event['id'];
+$_ogImage      = !empty($event['image'])
+    ? $_baseUrl . '/uploads/events/' . rawurlencode($event['image'])
+    : $_baseUrl . '/bbccassests/img/logo/logo5.jpg';
+$_ogDateStr = date('l, d F Y', strtotime($event['event_date']));
+if (!empty($event['start_time'])) {
+    $_ogDateStr .= ' at ' . date('g:i A', strtotime($event['start_time']));
+}
+$_ogDesc = !empty($event['description'])
+    ? mb_substr(strip_tags($event['description']), 0, 160)
+    : 'Join us for this event at BBCC Canberra.';
+$_ogDesc = $_ogDateStr . ' · ' . $_ogDesc;
 ?>
 <!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= htmlspecialchars($event['title'] ?? 'Event') ?> — BBCC</title>
+    <title><?= htmlspecialchars($event['title'] ?? 'Event') ?> — BBCC Canberra</title>
     <?php include_once 'include/global_css.php'; ?>
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type"         content="article">
+    <meta property="og:url"          content="<?= htmlspecialchars($_canonicalUrl) ?>">
+    <meta property="og:title"        content="<?= htmlspecialchars(($event['title'] ?? 'Event') . ' — BBCC Canberra') ?>">
+    <meta property="og:description"  content="<?= htmlspecialchars($_ogDesc) ?>">
+    <meta property="og:image"        content="<?= htmlspecialchars($_ogImage) ?>">
+    <meta property="og:image:width"  content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:site_name"    content="Bhutanese Buddhist &amp; Cultural Center Canberra">
+    <meta property="og:locale"       content="en_AU">
+    <!-- Twitter Card -->
+    <meta name="twitter:card"        content="summary_large_image">
+    <meta name="twitter:title"       content="<?= htmlspecialchars(($event['title'] ?? 'Event') . ' — BBCC Canberra') ?>">
+    <meta name="twitter:description" content="<?= htmlspecialchars($_ogDesc) ?>">
+    <meta name="twitter:image"       content="<?= htmlspecialchars($_ogImage) ?>">
+    <link rel="canonical"            href="<?= htmlspecialchars($_canonicalUrl) ?>">
     <style>
         .bk-grid { display: grid; grid-template-columns: 5fr 7fr; gap: 40px; align-items: flex-start; }
         .bk-detail {
@@ -190,6 +221,23 @@ $isEventBooked = $event && (!empty($event['sponsors']) || $event['status'] === '
 
         @media (max-width: 991px) { .bk-grid { grid-template-columns: 1fr; } }
         @media (max-width: 576px) { .bk-row { grid-template-columns: 1fr; } }
+
+        /* Share Buttons */
+        .share-btns { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:16px; }
+        .share-label { font-size:.82rem; font-weight:600; color:var(--gray-500); white-space:nowrap; }
+        .share-btn {
+            display:inline-flex; align-items:center; gap:6px;
+            padding:8px 14px; border-radius:var(--radius-md);
+            font-size:.82rem; font-weight:600; text-decoration:none;
+            cursor:pointer; border:none; transition:opacity .18s;
+            font-family:var(--font-body); line-height:1;
+        }
+        .share-btn--fb   { background:#1877F2; color:#fff; }
+        .share-btn--fb:hover { opacity:.85; color:#fff; }
+        .share-btn--wa   { background:#25D366; color:#fff; }
+        .share-btn--wa:hover { opacity:.85; color:#fff; }
+        .share-btn--copy { background:var(--gray-200); color:var(--gray-900); }
+        .share-btn--copy:hover { background:var(--gray-300); }
     </style>
 </head>
 <body class="bbcc-public">
@@ -269,6 +317,28 @@ $isEventBooked = $event && (!empty($event['sponsors']) || $event['status'] === '
                 <a href="events" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:16px;">
                     <i class="fa-solid fa-arrow-left"></i> Back to Events
                 </a>
+                <!-- Share Buttons -->
+                <div class="share-btns" style="margin-top:14px;">
+                    <span class="share-label"><i class="fa-solid fa-share-nodes"></i> Share:</span>
+                    <a href="https://www.facebook.com/sharer/sharer.php?u=<?= urlencode($_canonicalUrl) ?>"
+                       class="share-btn share-btn--fb"
+                       onclick="bbccOpenShare(this.href);return false;"
+                       title="Share on Facebook"
+                       rel="noopener noreferrer">
+                        <i class="fa-brands fa-facebook-f"></i> Facebook
+                    </a>
+                    <a href="https://wa.me/?text=<?= urlencode(($event['title'] ?? '') . ' - ' . $_canonicalUrl) ?>"
+                       target="_blank" rel="noopener noreferrer"
+                       class="share-btn share-btn--wa"
+                       title="Share on WhatsApp">
+                        <i class="fa-brands fa-whatsapp"></i> WhatsApp
+                    </a>
+                    <button onclick="bbccCopyLink('<?= htmlspecialchars($_canonicalUrl, ENT_QUOTES) ?>')"
+                            class="share-btn share-btn--copy"
+                            title="Copy event link">
+                        <i class="fa-solid fa-link"></i> <span id="copyLbl">Copy Link</span>
+                    </button>
+                </div>
             </div>
 
             <!-- Booking Form -->
@@ -345,6 +415,28 @@ if (form) {
         btn.disabled = true;
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting...';
     });
+}
+function bbccOpenShare(url) {
+    var w = 600, h = 450;
+    var left = ((screen.width  - w) / 2)|0;
+    var top  = ((screen.height - h) / 3)|0;
+    window.open(url, 'bbccShare', 'width='+w+',height='+h+',left='+left+',top='+top+',resizable=yes,scrollbars=yes');
+}
+function bbccCopyLink(url) {
+    var lbl = document.getElementById('copyLbl');
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(url).then(function() {
+            lbl.textContent = 'Copied!';
+            setTimeout(function(){ lbl.textContent = 'Copy Link'; }, 2000);
+        });
+    } else {
+        var el = document.createElement('textarea');
+        el.value = url; el.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(el); el.select();
+        try { document.execCommand('copy'); lbl.textContent = 'Copied!'; } catch(e) {}
+        document.body.removeChild(el);
+        setTimeout(function(){ lbl.textContent = 'Copy Link'; }, 2000);
+    }
 }
 </script>
 
