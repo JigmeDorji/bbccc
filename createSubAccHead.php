@@ -15,8 +15,10 @@ $companyID = $_SESSION['companyID'] ?? null;
 $projectID = $_SESSION['projectID'] ?? null;
 
 try {
-    $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME", $DB_USER, $DB_PASSWORD);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+    ]);
 
     // Load Account Heads for dropdown
     $stmt = $pdo->prepare("SELECT id, accountHeadName FROM account_head WHERE companyID = :companyID AND projectID = :projectID");
