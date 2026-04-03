@@ -17,7 +17,7 @@ try {
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
     );
 } catch (Exception $e) {
-    die("DB connection failed: " . $e->getMessage());
+    bbcc_fail_db($e);
 }
 
 $sessionUsername = logged_in_username();

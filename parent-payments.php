@@ -14,7 +14,7 @@ try {
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
 } catch (Exception $e) {
-    die("DB connection failed: " . $e->getMessage());
+    bbcc_fail_db($e);
 }
 
 $parent = fetch_parent_record($pdo);

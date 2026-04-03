@@ -2,6 +2,7 @@
 require_once "include/config.php";
 require_once "include/mailer.php";
 require_once "include/pcm_helpers.php";
+require_once "include/csrf.php";
 
 $message = "";
 $errors = [];
@@ -17,7 +18,7 @@ try {
         ]
     );
 } catch (Exception $e) {
-    die("DB connection failed: " . $e->getMessage());
+    bbcc_fail_db($e);
 }
 
 function is_email(string $v): bool {
@@ -33,6 +34,8 @@ function user_agent(): ?string {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
+
     $identifier = trim($_POST['identifier'] ?? '');
 
     if ($identifier === '') {
@@ -202,6 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <form method="post" id="forgotForm">
+            <?= csrf_field() ?>
             <div class="form-floating mb-3">
                 <input type="text" class="form-control" id="identifier" name="identifier"
                        placeholder="Email or Phone" required

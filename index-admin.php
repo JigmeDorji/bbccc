@@ -143,9 +143,9 @@ try {
     }
 
 } catch (PDOException $e) {
-    die("DB Error: " . $e->getMessage());
+    bbcc_fail_db($e);
 } catch (Exception $e) {
-    die("Error: " . $e->getMessage());
+    bbcc_fail("Service temporarily unavailable. Please try again shortly.", $e);
 }
 
 

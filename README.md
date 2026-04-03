@@ -83,3 +83,28 @@ A comprehensive web-based school management system built with PHP and MySQL, des
 ## Installation
 
 Please refer to the `Read me` file in the root directory for detailed deployment instructions.
+
+## Environment Configuration
+
+This project now supports environment-based configuration for database and mail credentials.
+
+Set these variables before starting the app:
+
+- `DB_HOST` (default: `127.0.0.1`)
+- `DB_USER` (default: `root`)
+- `DB_PASSWORD` (default: empty)
+- `DB_NAME` (default: `bbcc_db`)
+- `BASE_URL` (example: `http://localhost:8080`)
+- `APP_DEBUG` (`1` for debug mode, otherwise `0`)
+
+Mail settings:
+
+- `MAIL_HOST` (default: `smtp.gmail.com`)
+- `MAIL_PORT` (default: `587`)
+- `MAIL_ENCRYPTION` (default: `tls`)
+- `MAIL_USERNAME`
+- `MAIL_PASSWORD`
+- `MAIL_FROM_EMAIL`
+- `MAIL_FROM_NAME` (default: `Bhutanese Centre Canberra`)
+- `MAIL_DEBUG` (`1` to enable SMTP debug)
+- `MAIL_LOG_FILE` (optional log file path)

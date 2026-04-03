@@ -30,7 +30,7 @@ try {
         ]
     );
 } catch (Exception $e) {
-    die("DB connection failed: " . $e->getMessage());
+    bbcc_fail_db($e);
 }
 
 // Load settings

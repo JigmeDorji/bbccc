@@ -1,5 +1,6 @@
 <?php
 require_once "include/config.php";
+require_once "include/csrf.php";
 
 $message = "";
 $errors = [];
@@ -15,7 +16,7 @@ try {
         ]
     );
 } catch (Exception $e) {
-    die("DB connection failed: " . $e->getMessage());
+    bbcc_fail_db($e);
 }
 
 $rawToken = trim($_GET['token'] ?? '');
@@ -50,6 +51,8 @@ if (strtotime($resetRow['expires_at']) < time()) {
 $email = strtolower(trim($resetRow['user_email'] ?? ''));
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
+
     $password = $_POST['password'] ?? '';
     $confirm  = $_POST['confirm_password'] ?? '';
 
@@ -89,7 +92,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = "Password updated successfully. You can now log in.";
         } catch (Exception $e) {
             $pdo->rollBack();
-            $errors[] = "Update failed: " . $e->getMessage();
+            error_log("Password reset failed for {$email}: " . $e->getMessage());
+            $errors[] = "We could not update your password right now. Please try again.";
         }
     }
 }
@@ -190,6 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
 
         <form method="post" id="resetForm">
+            <?= csrf_field() ?>
             <div class="form-floating mb-2">
                 <div class="pw-wrapper">
                     <input type="password" class="form-control" id="password" name="password" placeholder="New Password" required minlength="8" autocomplete="new-password" style="height:50px; border-radius:10px; border:1.5px solid #dee2e6; padding-right:48px;">

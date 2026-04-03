@@ -2,6 +2,7 @@
 require_once "include/auth.php";
 require_once "include/config.php";
 require_once "include/utils.php";
+require_once "include/csrf.php";
 
 $login_error = false;
 
@@ -15,6 +16,7 @@ if (!empty($_COOKIE['remember_user'])) {
 $password = get_or_default($_POST, 'password', '');
 
 if (!empty($userName) && !empty($password)) {
+    verify_csrf();
 
     $conn = mysqli_connect($DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME);
     if (!$conn) {
@@ -412,6 +414,7 @@ if (!empty($userName) && !empty($password)) {
                     <?php endif; ?>
 
                     <form action="login" method="post" id="loginForm">
+                        <?= csrf_field() ?>
                         <div class="input-group">
                             <label for="userName"><i class="fas fa-envelope"></i> Email Address</label>
                             <input type="email" name="userName" id="userName"

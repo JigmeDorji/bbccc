@@ -1,9 +1,8 @@
 <?php
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
-
-require 'vendor/autoload.php';
 require_once "include/config.php";
+require_once "include/mailer.php";
+require_once "include/csrf.php";
+require_once "include/pcm_helpers.php";
 
 $message = "";
 $signupSuccess = false;
@@ -20,6 +19,8 @@ function clean($v) { return trim((string)$v); }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     try {
+        verify_csrf();
+
         $pdo = new PDO("mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME . ";charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
@@ -67,34 +68,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         $pdo->commit();
 
-        $mail = new PHPMailer(true);
-        try {
-            $mail->isSMTP();
-            $mail->Host       = 'smtp.gmail.com';
-            $mail->SMTPAuth   = true;
-            $mail->Username   = 'dorjijigme32@gmail.com';
-            $mail->Password   = 'qssf jqwo nptu lbfb';
-            $mail->SMTPSecure = 'tls';
-            $mail->Port       = 587;
-            $mail->setFrom('dorjijigme32@gmail.com', 'Bhutanese Centre Canberra');
-            $mail->addAddress($email, $full_name);
-            $mail->isHTML(true);
-            $mail->Subject = 'Welcome to Bhutanese Centre Canberra';
-            $mail->Body = "<html><body style='font-family:Arial,sans-serif;background:#f5f7fa;padding:20px;'>
-                <div style='max-width:600px;margin:auto;background:#fff;padding:30px;border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,0.1);'>
-                    <h2 style='color:#881b12;'>Welcome, ".htmlspecialchars($full_name)."!</h2>
-                    <p>Thank you for creating a parent account at <strong style='color:#881b12;'>Bhutanese Centre Canberra</strong>.</p>
-                    <p><strong>Login email:</strong> ".htmlspecialchars($email)."</p>
-                    <a href='login' style='display:inline-block;padding:10px 20px;background-color:#881b12;color:#fff;text-decoration:none;border-radius:5px;margin-top:10px;'>Login Now</a>
-                    <p style='margin-top:20px;'>Thank you,<br><strong style='color:#881b12;'>Bhutanese Centre Canberra</strong></p>
-                </div></body></html>";
-            $mail->send();
-            $message = "Account created successfully! Check your email and login.";
-            $signupSuccess = true;
-        } catch (Exception $e) {
+        $welcomeBody = pcm_email_wrap('Welcome to Bhutanese Centre Canberra', "
+            <p style='margin:0 0 14px;'>Hello <strong>" . htmlspecialchars($full_name) . "</strong>,</p>
+            <p style='margin:0 0 14px;'>Thank you for creating a parent account.</p>
+            <p style='margin:0 0 14px;'><strong>Login email:</strong> " . htmlspecialchars($email) . "</p>
+            <p style='margin:20px 0;'>
+                <a href='" . htmlspecialchars(rtrim(BASE_URL, '/') . "/login") . "' style='background:#881b12;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;font-size:15px;'>
+                    Login Now
+                </a>
+            </p>
+        ");
+
+        $sent = send_mail($email, $full_name, 'Welcome to Bhutanese Centre Canberra', $welcomeBody);
+        if (!$sent) {
+            error_log("Parent signup welcome email failed for {$email}");
             $message = "Account created successfully! Please login.";
-            $signupSuccess = true;
+        } else {
+            $message = "Account created successfully! Check your email and login.";
         }
+        $signupSuccess = true;
     } catch (Exception $e) {
         if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) $pdo->rollBack();
         $message = "Error: " . $e->getMessage();
@@ -212,6 +204,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
 
             <form method="POST" action="" id="signupForm" novalidate>
+                <?= csrf_field() ?>
 
                 <!-- STEP 1: Personal Info -->
                 <div class="step-panel active" id="step1">
