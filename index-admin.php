@@ -8,6 +8,10 @@ $filterCompanyID = $_SESSION['companyID'] ?? null;
 $filterProjectID = $_SESSION['projectID'] ?? null;
 
 $role = strtolower($_SESSION['role'] ?? '');
+if ($role === 'patron') {
+    header('Location: patron-dashboard');
+    exit;
+}
 
 // Parent dashboard data
 $parentDbId = null;

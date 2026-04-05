@@ -3,6 +3,9 @@ require_once "include/config.php";
 require_once "include/mailer.php";
 require_once "include/csrf.php";
 require_once "include/pcm_helpers.php";
+require_once "include/account_activation.php";
+require_once "include/patron_schema.php";
+require_once "include/user_id_helper.php";
 
 $message = "";
 $signupSuccess = false;
@@ -12,7 +15,8 @@ $old = [
     'gender'    => '',
     'email'     => '',
     'phone'     => '',
-    'address'   => ''
+    'address'   => '',
+    'register_as_patron' => ''
 ];
 
 function clean($v) { return trim((string)$v); }
@@ -25,16 +29,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
         ]);
+        bbcc_activation_ensure_schema($pdo);
+        bbcc_ensure_patrons_table($pdo);
 
         $full_name = clean($_POST['full_name'] ?? '');
         $gender    = clean($_POST['gender'] ?? '');
         $email     = strtolower(clean($_POST['email'] ?? ''));
         $phone     = clean($_POST['phone'] ?? '');
         $address   = clean($_POST['address'] ?? '');
+        $registerAsPatron = isset($_POST['register_as_patron']) ? 1 : 0;
         $password_plain   = (string)($_POST['password'] ?? '');
         $confirm_password = (string)($_POST['confirm_password'] ?? '');
 
         $old = compact('full_name','gender','email','phone','address');
+        $old['register_as_patron'] = $registerAsPatron ? '1' : '';
 
         if ($full_name === '') throw new Exception("Full Name is required.");
         if (!in_array($gender, ['Male','Female','Other'], true)) throw new Exception("Please select a valid Gender.");
@@ -58,33 +66,47 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         $password = password_hash($password_plain, PASSWORD_DEFAULT);
         $pdo->beginTransaction();
-        $userid = 'P' . substr(uniqid(), -9);
+        $userid = bbcc_generate_userid($pdo, 'P');
 
         $pdo->prepare("INSERT INTO parents (full_name, gender, email, phone, address, username, password) VALUES (:full_name, :gender, :email, :phone, :address, :username, :password)")
             ->execute([':full_name'=>$full_name, ':gender'=>$gender, ':email'=>$email, ':phone'=>$phone, ':address'=>$address, ':username'=>$username, ':password'=>$password]);
+        $parentId = (int)$pdo->lastInsertId();
 
-        $pdo->prepare("INSERT INTO `user` (userid, username, password, role, createdDate) VALUES (:userid, :username, :password, :role, :createdDate)")
-            ->execute([':userid'=>$userid, ':username'=>$username, ':password'=>$password, ':role'=>'parent', ':createdDate'=>date('Y-m-d H:i:s')]);
+        $pdo->prepare("INSERT INTO `user` (userid, username, password, role, is_active, createdDate) VALUES (:userid, :username, :password, :role, :is_active, :createdDate)")
+            ->execute([':userid'=>$userid, ':username'=>$username, ':password'=>$password, ':role'=>'parent', ':is_active'=>0, ':createdDate'=>date('Y-m-d H:i:s')]);
+
+        $activationToken = bbcc_issue_activation_token($pdo, $userid, $email, 48);
+
+        if ($registerAsPatron) {
+            $pdo->prepare("
+                INSERT INTO patrons (parent_id, full_name, email, phone, address, patron_type, status, created_at)
+                VALUES (:parent_id, :full_name, :email, :phone, :address, :patron_type, :status, NOW())
+                ON DUPLICATE KEY UPDATE
+                    parent_id = VALUES(parent_id),
+                    full_name = VALUES(full_name),
+                    phone = VALUES(phone),
+                    address = VALUES(address),
+                    status = VALUES(status)
+            ")->execute([
+                ':parent_id'   => $parentId,
+                ':full_name'   => $full_name,
+                ':email'       => $email,
+                ':phone'       => $phone,
+                ':address'     => $address,
+                ':patron_type' => 'Regular',
+                ':status'      => 'Active'
+            ]);
+        }
 
         $pdo->commit();
 
-        $welcomeBody = pcm_email_wrap('Welcome to Bhutanese Centre Canberra', "
-            <p style='margin:0 0 14px;'>Hello <strong>" . htmlspecialchars($full_name) . "</strong>,</p>
-            <p style='margin:0 0 14px;'>Thank you for creating a parent account.</p>
-            <p style='margin:0 0 14px;'><strong>Login email:</strong> " . htmlspecialchars($email) . "</p>
-            <p style='margin:20px 0;'>
-                <a href='" . htmlspecialchars(rtrim(BASE_URL, '/') . "/login") . "' style='background:#881b12;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;font-size:15px;'>
-                    Login Now
-                </a>
-            </p>
-        ");
-
-        $sent = send_mail($email, $full_name, 'Welcome to Bhutanese Centre Canberra', $welcomeBody);
+        $activationLink = bbcc_activation_link($activationToken);
+        $sent = bbcc_send_activation_email($email, $full_name, $activationLink);
         if (!$sent) {
-            error_log("Parent signup welcome email failed for {$email}");
-            $message = "Account created successfully! Please login.";
+            error_log("Parent signup activation email failed for {$email}");
+            $message = "Account created, but activation email could not be sent. Please contact admin.";
         } else {
-            $message = "Account created successfully! Check your email and login.";
+            $message = "Account created successfully! Please check your email to activate your account.";
         }
         $signupSuccess = true;
     } catch (Exception $e) {
@@ -303,6 +325,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <tr><td>Email</td><td id="revEmail">—</td></tr>
                         <tr><td>Mobile</td><td id="revPhone">—</td></tr>
                         <tr><td>Address</td><td id="revAddress">—</td></tr>
+                        <tr>
+                            <td>Patron Registration</td>
+                            <td>
+                                <div style="display:flex;align-items:flex-start;gap:8px;">
+                                    <input type="checkbox" id="registerAsPatron" name="register_as_patron" value="1" <?= !empty($old['register_as_patron']) ? 'checked' : '' ?> style="margin-top:4px;">
+                                    <label for="registerAsPatron" style="margin:0;font-weight:500;color:#333;">
+                                        I want to register as a patron for Bhutanese Buddhist and culture centre
+                                    </label>
+                                </div>
+                            </td>
+                        </tr>
                         <tr><td>Password</td><td><span style="color:#28a745"><i class="fas fa-check-circle me-1"></i>Set</span></td></tr>
                     </table>
 

@@ -3,8 +3,10 @@ require_once "include/auth.php";
 require_once "include/config.php";
 require_once "include/utils.php";
 require_once "include/csrf.php";
+require_once "include/account_activation.php";
 
 $login_error = false;
+$login_error_message = 'Invalid email or password. Please try again.';
 
 // Load email from cookie if available (Remember me)
 if (!empty($_COOKIE['remember_user'])) {
@@ -17,6 +19,16 @@ $password = get_or_default($_POST, 'password', '');
 
 if (!empty($userName) && !empty($password)) {
     verify_csrf();
+
+    try {
+        $pdoSchema = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+        ]);
+        bbcc_activation_ensure_schema($pdoSchema);
+    } catch (Throwable $e) {
+        // If schema check fails, continue with existing login behavior.
+    }
 
     $conn = mysqli_connect($DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME);
     if (!$conn) {
@@ -34,6 +46,7 @@ if (!empty($userName) && !empty($password)) {
             u.companyID,
             u.projectID,
             u.role,
+            IFNULL(u.is_active, 1) AS is_active,
             c.companyName,
             p.projectName
         FROM user u
@@ -64,62 +77,73 @@ if (!empty($userName) && !empty($password)) {
             }
 
             if ($password_ok) {
-
-                // Upgrade plain password to hashed
-                if (!$is_hashed) {
-                    $new_hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                    $update = mysqli_prepare($conn, "UPDATE user SET password=? WHERE userid=?");
-                    // ✅ userid is string -> use "ss"
-                    mysqli_stmt_bind_param($update, "ss", $new_hashed_password, $row['userid']);
-                    mysqli_stmt_execute($update);
-                    mysqli_stmt_close($update);
-                }
-
-                // ✅ Create session
-                login(
-                    $row['userid'],
-                    $row['username'],
-                    $row['companyID'] ?? null,
-                    $row['projectID'] ?? null,
-                    $row['companyName'] ?? null,
-                    $row['projectName'] ?? null,
-                    $row['role'] ?? null
-                );
-
-                // ✅ IMPORTANT: store email in session for parent matching
-                $_SESSION['email'] = $row['username'];
-
-                // Optional: load projects for this company (if you use it)
-                try {
-                    $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
-                        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-                        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
-                    ]);
-
-                    if (!empty($row['companyID'])) {
-                        $stmtP = $pdo->prepare("SELECT projectID, projectName FROM project WHERE companyID = ?");
-                        $stmtP->execute([$row['companyID']]);
-                        $_SESSION['projects'] = $stmtP->fetchAll(PDO::FETCH_ASSOC);
-
-                        // Default project if not set
-                        if (!empty($_SESSION['projects'][0]['projectID'])) {
-                            $_SESSION['projectID'] = $_SESSION['projects'][0]['projectID'];
-                        }
-                    }
-                } catch (Exception $e) {
-                    // ignore if project table not used
-                }
-
-                // Remember me cookie
-                if (!empty($_POST['remember'])) {
-                    setcookie("remember_user", $userName, time() + (86400 * 30), "/"); // 30 days
+                if ((int)($row['is_active'] ?? 1) !== 1) {
+                    $login_error = true;
+                    $login_error_message = 'Please activate your account from the email link before logging in.';
                 } else {
-                    setcookie("remember_user", "", time() - 3600, "/");
+                    // Upgrade plain password to hashed
+                    if (!$is_hashed) {
+                        $new_hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                        $update = mysqli_prepare($conn, "UPDATE user SET password=? WHERE userid=?");
+                        // ✅ userid is string -> use "ss"
+                        mysqli_stmt_bind_param($update, "ss", $new_hashed_password, $row['userid']);
+                        mysqli_stmt_execute($update);
+                        mysqli_stmt_close($update);
+                    }
+
+                    // ✅ Create session
+                    login(
+                        $row['userid'],
+                        $row['username'],
+                        $row['companyID'] ?? null,
+                        $row['projectID'] ?? null,
+                        $row['companyName'] ?? null,
+                        $row['projectName'] ?? null,
+                        $row['role'] ?? null
+                    );
+
+                    // ✅ IMPORTANT: store email in session for parent matching
+                    $_SESSION['email'] = $row['username'];
+
+                    // Optional: load projects for this company (if you use it)
+                    try {
+                        $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
+                            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+                        ]);
+
+                        if (!empty($row['companyID'])) {
+                            $stmtP = $pdo->prepare("SELECT projectID, projectName FROM project WHERE companyID = ?");
+                            $stmtP->execute([$row['companyID']]);
+                            $_SESSION['projects'] = $stmtP->fetchAll(PDO::FETCH_ASSOC);
+
+                            // Default project if not set
+                            if (!empty($_SESSION['projects'][0]['projectID'])) {
+                                $_SESSION['projectID'] = $_SESSION['projects'][0]['projectID'];
+                            }
+                        }
+                    } catch (Exception $e) {
+                        // ignore if project table not used
+                    }
+
+                    // Remember me cookie
+                    if (!empty($_POST['remember'])) {
+                        setcookie("remember_user", $userName, time() + (86400 * 30), "/"); // 30 days
+                    } else {
+                        setcookie("remember_user", "", time() - 3600, "/");
+                    }
+
+                    $role = strtolower(trim((string)($row['role'] ?? '')));
+                    $redirect = 'index-admin';
+                    if ($role === 'parent') {
+                        $redirect = 'parent-dashboard';
+                    } elseif ($role === 'patron') {
+                        $redirect = 'patron-dashboard';
+                    }
+
+                    header('Location: ' . $redirect);
+                    exit;
                 }
-
-                header('Location: index-admin');
-                exit;
-
             } else {
                 $login_error = true;
             }
@@ -410,7 +434,7 @@ if (!empty($userName) && !empty($password)) {
                     <p>Please enter your details to sign in.</p>
 
                     <?php if (!empty($login_error)): ?>
-                        <div class="error-box"><i class="fas fa-exclamation-circle"></i>Invalid email or password. Please try again.</div>
+                        <div class="error-box"><i class="fas fa-exclamation-circle"></i><?= htmlspecialchars($login_error_message) ?></div>
                     <?php endif; ?>
 
                     <form action="login" method="post" id="loginForm">
@@ -462,7 +486,7 @@ if (!empty($userName) && !empty($password)) {
                 </div>
 
                 <div class="signup-link">
-                    Don't have account? <a href="parentAccountSetup">Sign Up</a>
+                    Don't have account? <a href="parentAccountSetup">Parent Sign Up</a> or <a href="patronRegistration">Patron Sign Up</a>
                 </div>
             </div>
 

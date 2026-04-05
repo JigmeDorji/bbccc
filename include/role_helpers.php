@@ -12,6 +12,10 @@ function is_teacher_role() {
     return normalize_role($_SESSION['role'] ?? '') === 'teacher';
 }
 
+function is_patron_role() {
+    return normalize_role($_SESSION['role'] ?? '') === 'patron';
+}
+
 function is_admin_role() {
     $role = normalize_role($_SESSION['role'] ?? '');
     return in_array($role, ['administrator', 'admin', 'company admin', 'system_owner', 'system owner', 'staff'], true);

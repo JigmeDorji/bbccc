@@ -11,6 +11,7 @@ function isSystemOwner() { return ($_SESSION['role'] ?? '') === 'Administrator';
 function isCompanyAdmin() { return ($_SESSION['role'] ?? '') === 'company_admin'; }
 function isParent() { return strtolower($_SESSION['role'] ?? '') === 'parent'; }
 function isTeacher() { return strtolower($_SESSION['role'] ?? '') === 'teacher'; }
+function isPatron() { return strtolower($_SESSION['role'] ?? '') === 'patron'; }
 ?>
 
 <style>
@@ -287,7 +288,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
         </a>
     </li>
 
-    <?php if (!isParent() && !isTeacher()) { ?>
+    <?php if (!isParent() && !isTeacher() && !isPatron()) { ?>
 
         <hr class="sidebar-divider">
 
@@ -364,6 +365,26 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
             </div>
         </li>
 
+    <?php } ?>
+
+    <!-- Patron-only menu -->
+    <?php if (isPatron()) { ?>
+        <hr class="sidebar-divider">
+        <div class="sidebar-heading">Patron Portal</div>
+
+        <li class="nav-item <?= ($currentPage == 'patron-dashboard.php') ? 'active' : '' ?>">
+            <a class="nav-link" href="patron-dashboard">
+                <i class="fas fa-hands-helping"></i>
+                <span>Patron Dashboard</span>
+            </a>
+        </li>
+
+        <li class="nav-item <?= ($currentPage == 'adminProfile.php') ? 'active' : '' ?>">
+            <a class="nav-link" href="adminProfile">
+                <i class="fas fa-user"></i>
+                <span>My Profile</span>
+            </a>
+        </li>
     <?php } ?>
 
     <!-- Teacher-only menu -->
