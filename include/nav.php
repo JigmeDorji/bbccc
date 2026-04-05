@@ -41,6 +41,9 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <li class="<?= ($currentPage === 'services.php') ? 'active' : '' ?>">
                 <a href="services">Services</a>
             </li>
+            <li class="<?= ($currentPage === 'bhutanese-language-and-culture-school.php') ? 'active' : '' ?>">
+                <a href="bhutanese-language-and-culture-school">BLCS</a>
+            </li>
             <li class="<?= ($currentPage === 'events.php' || $currentPage === 'event_detail.php' || $currentPage === 'book-event.php') ? 'active' : '' ?>">
                 <a href="events">Events</a>
             </li>
