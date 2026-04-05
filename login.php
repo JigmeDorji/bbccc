@@ -35,9 +35,17 @@ if (!empty($userName) && !empty($password)) {
         die("Database connection failed: " . mysqli_connect_error());
     }
 
+    // Check whether activation column exists (for backward compatibility on hosting DBs)
+    $hasIsActive = false;
+    $colResult = @mysqli_query($conn, "SHOW COLUMNS FROM `user` LIKE 'is_active'");
+    if ($colResult instanceof mysqli_result && mysqli_num_rows($colResult) > 0) {
+        $hasIsActive = true;
+    }
+
     // ✅ Email as Username (u.username stores email)
     // ✅ Fix: WHERE userName=?  -> WHERE u.username=?
     // ✅ Also fetch projectID/companyName/projectName to match login() function args
+    $isActiveSelect = $hasIsActive ? "IFNULL(u.is_active, 1) AS is_active" : "1 AS is_active";
     $query = "
         SELECT
             u.userid,
@@ -46,7 +54,7 @@ if (!empty($userName) && !empty($password)) {
             u.companyID,
             u.projectID,
             u.role,
-            IFNULL(u.is_active, 1) AS is_active,
+            {$isActiveSelect},
             c.companyName,
             p.projectName
         FROM user u
@@ -57,6 +65,12 @@ if (!empty($userName) && !empty($password)) {
     ";
 
     $stmt = mysqli_prepare($conn, $query);
+    if (!$stmt) {
+        $login_error = true;
+        $login_error_message = 'Unable to login right now. Please try again shortly.';
+        mysqli_close($conn);
+        goto login_render;
+    }
     mysqli_stmt_bind_param($stmt, "s", $userName);
 
     if (mysqli_stmt_execute($stmt)) {
@@ -159,6 +173,7 @@ if (!empty($userName) && !empty($password)) {
     mysqli_close($conn);
 }
 ?>
+<?php login_render: ?>
 
 <!doctype html>
 <html lang="en">

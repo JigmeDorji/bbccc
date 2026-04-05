@@ -21,6 +21,11 @@ if (!$parent) {
 }
 
 $parentId = (int)$parent['id'];
+$studentParentColumn = 'parent_id';
+$colStmt = $pdo->query("SHOW COLUMNS FROM students LIKE 'parent_id'");
+if (!$colStmt || !$colStmt->fetch(PDO::FETCH_ASSOC)) {
+    $studentParentColumn = 'parentId';
+}
 
 $stats = [
     'students' => 0,
@@ -29,15 +34,15 @@ $stats = [
     'payments_pending' => 0
 ];
 
-$stmt = $pdo->prepare("SELECT COUNT(*) FROM students WHERE parent_id = ?");
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM students WHERE {$studentParentColumn} = ?");
 $stmt->execute([$parentId]);
 $stats['students'] = (int)$stmt->fetchColumn();
 
-$stmt = $pdo->prepare("SELECT COUNT(*) FROM students WHERE parent_id = ? AND approval_status = 'Pending'");
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM students WHERE {$studentParentColumn} = ? AND approval_status = 'Pending'");
 $stmt->execute([$parentId]);
 $stats['pending'] = (int)$stmt->fetchColumn();
 
-$stmt = $pdo->prepare("SELECT COUNT(*) FROM students WHERE parent_id = ? AND approval_status = 'Approved'");
+$stmt = $pdo->prepare("SELECT COUNT(*) FROM students WHERE {$studentParentColumn} = ? AND approval_status = 'Approved'");
 $stmt->execute([$parentId]);
 $stats['approved'] = (int)$stmt->fetchColumn();
 
