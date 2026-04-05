@@ -121,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             error_log("Patron signup activation email failed for {$email}");
             $message = "Patron account created, but activation email could not be sent. Please contact admin.";
         } else {
-            $message = "Patron account created successfully. Please check your email to activate your account.";
+            $message = "Patron account created successfully. Please check your inbox for the activation email. If you do not see it, check Spam/Junk and mark it as Not Spam, then open the activation link.";
         }
         $isSuccess = true;
         $old = ['full_name' => '', 'email' => '', 'phone' => '', 'address' => ''];

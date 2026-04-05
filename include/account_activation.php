@@ -83,7 +83,8 @@ function bbcc_send_activation_email(string $toEmail, string $toName, string $act
             </p>
             <p style='margin:0 0 8px;'>If the button does not work, copy this URL into your browser:</p>
             <p style='margin:0;word-break:break-all;'><a href='{$safeLink}'>{$safeLink}</a></p>
-            <p style='margin:14px 0 0;font-size:13px;color:#666;'>This link expires in 48 hours.</p>
+            <p style='margin:14px 0 0;font-size:13px;color:#666;'>If this email landed in Spam/Junk, please mark it as Not Spam so future emails arrive in your inbox.</p>
+            <p style='margin:8px 0 0;font-size:13px;color:#666;'>This link expires in 48 hours.</p>
         ");
     } else {
         $body = "

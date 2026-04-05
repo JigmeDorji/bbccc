@@ -79,7 +79,7 @@ if (!empty($userName) && !empty($password)) {
             if ($password_ok) {
                 if ((int)($row['is_active'] ?? 1) !== 1) {
                     $login_error = true;
-                    $login_error_message = 'Please activate your account from the email link before logging in.';
+                    $login_error_message = 'Please activate your account from the email link before logging in. If you cannot find it, check Spam/Junk and mark it as Not Spam.';
                 } else {
                     // Upgrade plain password to hashed
                     if (!$is_hashed) {

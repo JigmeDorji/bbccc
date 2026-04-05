@@ -106,7 +106,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             error_log("Parent signup activation email failed for {$email}");
             $message = "Account created, but activation email could not be sent. Please contact admin.";
         } else {
-            $message = "Account created successfully! Please check your email to activate your account.";
+            $message = "Account created successfully! Please check your inbox for the activation email. If you do not see it, check Spam/Junk and mark it as Not Spam, then open the activation link.";
         }
         $signupSuccess = true;
     } catch (Exception $e) {
