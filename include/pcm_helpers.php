@@ -19,7 +19,15 @@ function pcm_admin_notify_email(): string {
 }
 
 function pcm_send_notification_mail(string $toEmail, string $toName, string $subject, string $html, int $timeoutSeconds = 4): bool {
-    // Queue-first for faster user-facing actions.
+    $isLocal = function_exists('bbcc_is_local_env') ? bbcc_is_local_env() : false;
+    $queueEnabled = in_array(strtolower(trim(pcm_env('MAIL_QUEUE_ENABLED', '1'))), ['1', 'true', 'on', 'yes'], true);
+
+    // Local/dev: send directly for immediate feedback during testing.
+    if ($isLocal || !$queueEnabled) {
+        return @send_mail($toEmail, $toName, $subject, $html, $timeoutSeconds);
+    }
+
+    // Hosted/prod: queue-first for faster user-facing actions.
     $queued = bbcc_queue_mail($toEmail, $toName, $subject, $html);
     if ($queued) return true;
     // Fallback to direct send if queue insert fails.
@@ -453,6 +461,7 @@ function pcm_email_wrap(string $title, string $body): string {
 function pcm_notify_admin_enrolment(string $childName, string $parentName): void {
     $adminEmail = pcm_admin_notify_email();
     if ($adminEmail === '') {
+        bbcc_mail_log('ADMIN MAIL SKIP: empty ADMIN_NOTIFY_EMAIL for enrolment ' . $childName);
         return;
     }
     $portalUrl = htmlspecialchars(pcm_admin_portal_url(), ENT_QUOTES, 'UTF-8');
@@ -465,12 +474,18 @@ function pcm_notify_admin_enrolment(string $childName, string $parentName): void
             </a>
         </p>
     ");
-    pcm_send_notification_mail($adminEmail, 'Admin', 'Parent Finalized Enrollment for ' . $childName, $html, 4);
+    $ok = pcm_send_notification_mail($adminEmail, 'Admin', 'Parent Finalized Enrollment for ' . $childName, $html, 4);
+    if (!$ok) {
+        bbcc_mail_log('ADMIN MAIL FAIL: enrolment notify to ' . $adminEmail . ' for child ' . $childName);
+    } else {
+        bbcc_mail_log('ADMIN MAIL OK: enrolment notify to ' . $adminEmail . ' for child ' . $childName);
+    }
 }
 
 function pcm_notify_admin_student_registration(string $childName, string $parentName, string $parentEmail, string $studentCode = ''): void {
     $adminEmail = pcm_admin_notify_email();
     if ($adminEmail === '') {
+        bbcc_mail_log('ADMIN MAIL SKIP: empty ADMIN_NOTIFY_EMAIL for student registration ' . $childName);
         return;
     }
 
@@ -489,7 +504,12 @@ function pcm_notify_admin_student_registration(string $childName, string $parent
             </a>
         </p>
     ");
-    pcm_send_notification_mail($adminEmail, 'Admin', 'New Student Registration for ' . $childName, $html, 4);
+    $ok = pcm_send_notification_mail($adminEmail, 'Admin', 'New Student Registration for ' . $childName, $html, 4);
+    if (!$ok) {
+        bbcc_mail_log('ADMIN MAIL FAIL: student registration notify to ' . $adminEmail . ' for child ' . $childName);
+    } else {
+        bbcc_mail_log('ADMIN MAIL OK: student registration notify to ' . $adminEmail . ' for child ' . $childName);
+    }
 }
 
 function pcm_notify_parent_enrolment(string $toEmail, string $parentName, string $childName, string $status, string $note): void {
@@ -592,10 +612,16 @@ function pcm_notify_parent_payment_required(PDO $pdo, string $toEmail, string $p
 function pcm_notify_admin_absence(string $childName, string $parentName, string $date): void {
     $adminEmail = pcm_admin_notify_email();
     if ($adminEmail === '') {
+        bbcc_mail_log('ADMIN MAIL SKIP: empty ADMIN_NOTIFY_EMAIL for absence ' . $childName);
         return;
     }
     $html = pcm_email_wrap('Absence Request', "
         <p style='margin:0 0 14px;'><strong>" . htmlspecialchars($parentName) . "</strong> submitted an absence request for <strong>" . htmlspecialchars($childName) . "</strong> on <strong>" . htmlspecialchars($date) . "</strong>.</p>
     ");
-    pcm_send_notification_mail($adminEmail, 'Admin', 'Absence Request for ' . $childName, $html, 4);
+    $ok = pcm_send_notification_mail($adminEmail, 'Admin', 'Absence Request for ' . $childName, $html, 4);
+    if (!$ok) {
+        bbcc_mail_log('ADMIN MAIL FAIL: absence notify to ' . $adminEmail . ' for child ' . $childName);
+    } else {
+        bbcc_mail_log('ADMIN MAIL OK: absence notify to ' . $adminEmail . ' for child ' . $childName);
+    }
 }
