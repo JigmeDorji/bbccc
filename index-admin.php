@@ -62,6 +62,7 @@ try {
             $parentDbId = (int)$parentProfile['id'];
             $stmtKids = $pdo->prepare("
                 SELECT s.id, s.student_id, s.student_name, s.dob, s.gender, s.registration_date, s.approval_status,
+                       e.status AS enrolment_status,
                        COALESCE(c.class_name, s.class_option) AS class_option,
                        COALESCE(e.fee_plan, s.payment_plan) AS payment_plan,
                        COALESCE(e.fee_amount, s.payment_amount) AS payment_amount,
@@ -587,15 +588,26 @@ function badge_class($st) {
                                         <th>Proof</th>
                                         <th>Reg Date</th>
                                         <th>Status</th>
-                                        <th>Action</th>
                                     </tr>
                                     </thead>
                                     <tbody>
                                     <?php foreach ($myChildren as $c): ?>
                                         <?php
-                                            $st = strtolower($c['approval_status'] ?? '');
-                                            $isApproved = ($st === 'approved');
-                                            $isPending = ($st === 'pending');
+                                            $regStatus = strtolower((string)($c['approval_status'] ?? 'pending'));
+                                            $enrolStatusRaw = trim((string)($c['enrolment_status'] ?? ''));
+                                            if ($enrolStatusRaw !== '') {
+                                                $statusLabel = $enrolStatusRaw;
+                                                $statusClass = badge_class($enrolStatusRaw);
+                                            } elseif ($regStatus === 'approved') {
+                                                $statusLabel = 'Enrollment Not Submitted';
+                                                $statusClass = 'warning';
+                                            } elseif ($regStatus === 'rejected') {
+                                                $statusLabel = 'Child Registration Rejected';
+                                                $statusClass = 'danger';
+                                            } else {
+                                                $statusLabel = 'Child Registration Pending';
+                                                $statusClass = 'warning';
+                                            }
                                         ?>
                                         <tr>
                                             <td><?php echo htmlspecialchars($c['student_id'] ?? ''); ?></td>
@@ -610,19 +622,7 @@ function badge_class($st) {
                                                 <?php else: ?>-<?php endif; ?>
                                             </td>
                                             <td><?php echo htmlspecialchars($c['registration_date'] ?? ''); ?></td>
-                                            <td><span class="badge badge-<?php echo badge_class($c['approval_status']); ?>"><?php echo htmlspecialchars($c['approval_status'] ?? ''); ?></span></td>
-                                            <td>
-                                                <?php if ($isApproved): ?>
-                                                    <span class="badge badge-success">Approved</span>
-                                                <?php else: ?>
-                                                    <a class="btn btn-info btn-sm" style="border-radius:6px;font-size:0.75rem;" href="children-enrollment?edit=<?php echo (int)$c['id']; ?>">Edit</a>
-                                                    <?php if ($isPending): ?>
-                                                        <a class="btn btn-danger btn-sm" style="border-radius:6px;font-size:0.75rem;"
-                                                           href="children-enrollment?delete=<?php echo (int)$c['id']; ?>"
-                                                           onclick="return confirm('Delete this enrollment?');">Delete</a>
-                                                    <?php endif; ?>
-                                                <?php endif; ?>
-                                            </td>
+                                            <td><span class="badge badge-<?php echo $statusClass; ?>"><?php echo htmlspecialchars($statusLabel); ?></span></td>
                                         </tr>
                                     <?php endforeach; ?>
                                     </tbody>
