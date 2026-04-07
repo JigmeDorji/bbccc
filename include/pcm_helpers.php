@@ -456,7 +456,7 @@ function pcm_notify_admin_enrolment(string $childName, string $parentName): void
             </a>
         </p>
     ");
-    @send_mail($adminEmail, 'Admin', 'Parent Finalized Enrollment — ' . $childName, $html, 4);
+    @send_mail($adminEmail, 'Admin', 'Parent Finalized Enrollment for ' . $childName, $html, 4);
 }
 
 function pcm_notify_admin_student_registration(string $childName, string $parentName, string $parentEmail, string $studentCode = ''): void {
@@ -480,7 +480,7 @@ function pcm_notify_admin_student_registration(string $childName, string $parent
             </a>
         </p>
     ");
-    @send_mail($adminEmail, 'Admin', 'New Student Registration — ' . $childName, $html, 4);
+    @send_mail($adminEmail, 'Admin', 'New Student Registration for ' . $childName, $html, 4);
 }
 
 function pcm_notify_parent_enrolment(string $toEmail, string $parentName, string $childName, string $status, string $note): void {
@@ -491,7 +491,7 @@ function pcm_notify_parent_enrolment(string $toEmail, string $parentName, string
            <span style='color:{$colour};font-weight:700;'>{$status}</span>.</p>
         " . ($note ? "<p style='margin:0 0 14px;background:#fef3f2;padding:12px 16px;border-radius:6px;border-left:4px solid #881b12;'><em>" . htmlspecialchars($note) . "</em></p>" : "") . "
     ");
-    @send_mail($toEmail, $parentName, "Enrolment {$status} — {$childName}", $html);
+    @send_mail($toEmail, $parentName, "Enrolment {$status} for {$childName}", $html);
 }
 
 function pcm_notify_parent_fee(string $toEmail, string $parentName, string $childName, string $label, string $status): void {
@@ -501,7 +501,7 @@ function pcm_notify_parent_fee(string $toEmail, string $parentName, string $chil
         <p style='margin:0 0 14px;'>Payment for <strong>" . htmlspecialchars($childName) . "</strong> — " . htmlspecialchars($label) . " has been
            <span style='color:{$colour};font-weight:700;'>{$status}</span>.</p>
     ");
-    @send_mail($toEmail, $parentName, "Fee {$status} — {$childName}", $html);
+    @send_mail($toEmail, $parentName, "Fee {$status} for {$childName}", $html);
 }
 
 function pcm_notify_parent_enrolment_confirmed(string $toEmail, string $parentName, string $childName): void {
@@ -514,8 +514,9 @@ function pcm_notify_parent_enrolment_confirmed(string $toEmail, string $parentNa
 
     $html = pcm_email_wrap('Enrollment Confirmed', "
         <p style='margin:0 0 14px;'>Hi " . htmlspecialchars($parentName) . ",</p>
-        <p style='margin:0 0 10px;'>Congratulations. Your child's enrollment has been approved.</p>
-        <p style='margin:0 0 10px;'>Thank you for paying the fees. <strong>" . htmlspecialchars($childName) . "</strong> is now enrolled in Dzongkha class.</p>
+        <p style='margin:0 0 10px;'>Enrollment has now been approved by the admin team for <strong>" . htmlspecialchars($childName) . "</strong>.</p>
+        <p style='margin:0 0 10px;'><strong>Congratulations.</strong> May your child enjoy a happy and meaningful journey learning Dzongkha and Bhutanese culture.</p>
+        <p style='margin:0 0 10px;'>Thank you for your support in your child's learning.</p>
         <p style='margin:16px 0 0;'>
             <a href='{$safeLoginUrl}' style='background:#1f3b73;color:#ffffff;padding:10px 16px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;font-size:14px;margin-right:8px;'>
                 Login to Portal
@@ -558,20 +559,6 @@ function pcm_notify_parent_payment_required(PDO $pdo, string $toEmail, string $p
         return;
     }
 
-    $bank = $pdo->query("SELECT bank_name, account_name, bsb, account_number, bank_notes FROM fees_settings WHERE id = 1 LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: [];
-    $bankBlock = '';
-    if (!empty($bank)) {
-        $bankBlock = "
-            <div style='margin:14px 0;padding:12px 14px;background:#f8f9fc;border-radius:8px;border:1px solid #e3e6f0;'>
-                <p style='margin:0 0 6px;'><strong>Bank:</strong> " . htmlspecialchars((string)($bank['bank_name'] ?? '')) . "</p>
-                <p style='margin:0 0 6px;'><strong>Account Name:</strong> " . htmlspecialchars((string)($bank['account_name'] ?? '')) . "</p>
-                <p style='margin:0 0 6px;'><strong>BSB:</strong> " . htmlspecialchars((string)($bank['bsb'] ?? '')) . "</p>
-                <p style='margin:0 0 6px;'><strong>Account Number:</strong> " . htmlspecialchars((string)($bank['account_number'] ?? '')) . "</p>
-                " . (!empty($bank['bank_notes']) ? "<p style='margin:8px 0 0;'><strong>Reference:</strong> " . htmlspecialchars((string)$bank['bank_notes']) . "</p>" : "") . "
-            </div>
-        ";
-    }
-
     [$campus1, $campus2] = pcm_campus_names();
     $baseUrl = defined('BASE_URL') ? rtrim((string)BASE_URL, '/') : '';
     $loginUrl = $baseUrl !== '' ? $baseUrl . '/login' : 'login';
@@ -579,10 +566,9 @@ function pcm_notify_parent_payment_required(PDO $pdo, string $toEmail, string $p
 
     $html = pcm_email_wrap('Finalized Enrollment', "
         <p style='margin:0 0 14px;'>Hi " . htmlspecialchars($parentName) . ",</p>
-        <p style='margin:0 0 10px;'>Congratulations. Your registration for child <strong>" . htmlspecialchars($childName) . "</strong> is successful.</p>
+        <p style='margin:0 0 10px;'>The registration for child <strong>" . htmlspecialchars($childName) . "</strong> is successful.</p>
         <p style='margin:0 0 10px;'>To finalize enrolment, please log in to the parent portal, select your campus preference, and complete fee payment.</p>
         <p style='margin:0 0 10px;'><strong>Campus options:</strong> " . htmlspecialchars($campus1) . ", " . htmlspecialchars($campus2) . ", or both campuses.</p>
-        {$bankBlock}
         <p style='margin:16px 0 0;'>
             <a href='{$safeLoginUrl}' style='background:#1f3b73;color:#ffffff;padding:10px 16px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;font-size:14px;margin-right:8px;'>
                 Login to Portal
@@ -602,5 +588,5 @@ function pcm_notify_admin_absence(string $childName, string $parentName, string 
     $html = pcm_email_wrap('Absence Request', "
         <p style='margin:0 0 14px;'><strong>" . htmlspecialchars($parentName) . "</strong> submitted an absence request for <strong>" . htmlspecialchars($childName) . "</strong> on <strong>" . htmlspecialchars($date) . "</strong>.</p>
     ");
-    @send_mail($adminEmail, 'Admin', 'Absence Request — ' . $childName, $html, 4);
+    @send_mail($adminEmail, 'Admin', 'Absence Request for ' . $childName, $html, 4);
 }

@@ -130,7 +130,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
                 } else {
                     $result = pcm_process_enrolment_decision($pdo, (int)$en['student_id'], $action, $reviewer, $note);
 
-                    // Email parent (single mail on approval for faster response)
                     if ($result['new_status'] === 'Approved') {
                         pcm_notify_parent_enrolment_confirmed(
                             (string)$result['parent_email'],

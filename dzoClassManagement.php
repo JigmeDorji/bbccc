@@ -61,12 +61,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Email parent if we have their email
                 if (!empty($result['parent_email'])) {
-                    // Send one email on approval for faster response.
+                    // On child-registration approval, ask parent to complete enrollment.
                     if ($result['new_status'] === 'Approved') {
-                        pcm_notify_parent_enrolment_confirmed(
-                            $result['parent_email'],
-                            $result['parent_name'],
-                            $result['student_name']
+                        pcm_notify_parent_payment_required(
+                            $pdo,
+                            (string)$result['parent_email'],
+                            (string)$result['parent_name'],
+                            (string)$result['student_name'],
+                            (string)$result['fee_plan'],
+                            (float)$result['fee_amount']
                         );
                     } else {
                         pcm_notify_parent_enrolment(
