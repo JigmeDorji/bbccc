@@ -354,9 +354,13 @@ document.addEventListener('DOMContentLoaded',()=>{
             <label>Search Column</label>
             <select class="form-control" id="colSelect">
                 <option value="-1">All Columns</option>
-                <option value="1">Child</option>
-                <option value="2">Student ID</option>
-                <option value="3">Parent</option>
+                <option value="1">Student ID</option>
+                <option value="2">Child Name</option>
+                <option value="3">Campus</option>
+                <option value="4">Class</option>
+                <option value="5">Phone</option>
+                <option value="6">Plan</option>
+                <option value="10">Parent</option>
                 <option value="11">Status</option>
             </select>
         </div>
@@ -380,19 +384,19 @@ document.addEventListener('DOMContentLoaded',()=>{
             <table id="enrolTable" class="table table-bordered table-hover" style="width:100%">
                 <thead class="thead-light">
                     <tr>
-                        <th>#</th><th>Child</th><th>Student ID</th><th>Parent</th><th>Phone</th>
-                        <th>Campus</th><th>Plan</th><th>Amount</th><th>Ref</th><th>Proof</th><th>Class</th><th>Status</th><th>Submitted</th><th style="width:300px">Actions</th><th>History</th>
+                        <th>#</th><th>Student ID</th><th>Child Name</th><th>Campus</th><th>Class</th><th>Phone</th>
+                        <th>Plan</th><th>Amount</th><th>Ref</th><th>Proof</th><th>Parent</th><th>Status</th><th>Submitted</th><th style="width:300px">Actions</th><th>History</th>
                     </tr>
                 </thead>
                 <tbody>
                 <?php foreach ($all as $i => $e): ?>
                 <tr data-status="<?= $e['status'] ?>">
                     <td><?= $i+1 ?></td>
-                    <td><?= h($e['student_name']) ?></td>
                     <td><code><?= h($e['stu_code']) ?></code></td>
-                    <td><?= h($e['parent_name']) ?><br><small class="text-muted"><?= h($e['parent_email']) ?></small></td>
-                    <td><?= h($e['parent_phone'] ?? '-') ?></td>
+                    <td><?= h($e['student_name']) ?></td>
                     <td><?= h(pcm_campus_selection_label((string)($e['campus_preference'] ?? ''))) ?></td>
+                    <td><?= h($e['assigned_class_name'] ?? 'Not assigned') ?></td>
+                    <td><?= h($e['parent_phone'] ?? '-') ?></td>
                     <td><?= h($e['fee_plan']) ?></td>
                     <td>$<?= number_format($e['fee_amount'],2) ?></td>
                     <td><?= h($e['payment_ref'] ?? '—') ?></td>
@@ -405,7 +409,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                             —
                         <?php endif; ?>
                     </td>
-                    <td><?= h($e['assigned_class_name'] ?? 'Not assigned') ?></td>
+                    <td><?= h($e['parent_name']) ?><br><small class="text-muted"><?= h($e['parent_email']) ?></small></td>
                     <td><span class="badge badge-<?= pcm_badge($e['status']) ?>"><?= h($e['status']) ?></span>
                         <?php if ($e['admin_note']): ?><br><small><?= h($e['admin_note']) ?></small><?php endif; ?>
                     </td>

@@ -704,7 +704,8 @@ document.addEventListener('DOMContentLoaded',()=>{
                         $hasAssignedClass = !empty($e['assigned_class_name']);
                         $step2 = in_array($statusLower, ['pending','approved','needs update','rejected'], true);
                         $step3 = in_array($statusLower, ['pending','approved','needs update'], true);
-                        $step4 = ($statusLower === 'approved' && $hasAssignedClass);
+                        $step4 = ($statusLower === 'approved');
+                        $step5 = ($statusLower === 'approved' && $hasAssignedClass);
                     ?>
                     <div class="mt-3 p-2 bg-light rounded">
                         <div class="mini-label mb-1">Enrollment Timeline</div>
@@ -715,7 +716,9 @@ document.addEventListener('DOMContentLoaded',()=>{
                             <span class="text-muted"> -> </span>
                             <span class="<?= $step3 ? 'text-success' : 'text-muted' ?>">3. Under Review</span>
                             <span class="text-muted"> -> </span>
-                            <span class="<?= $step4 ? 'text-success' : 'text-muted' ?>">4. Approved + Class Assigned</span>
+                            <span class="<?= $step4 ? 'text-success' : 'text-muted' ?>">4. Approved</span>
+                            <span class="text-muted"> -> </span>
+                            <span class="<?= $step5 ? 'text-success' : 'text-muted' ?>">5. Class Assigned (Later)</span>
                         </div>
                     </div>
                 </div>
