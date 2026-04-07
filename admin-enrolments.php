@@ -245,6 +245,26 @@ $pageScripts = [
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
     <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap4.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        :root { --brand:#881b12; --brand-light:#a82218; --brand-bg:#fef3f2; }
+        .stat-card { border-radius:14px; overflow:hidden; border:none; transition:transform .15s; }
+        .stat-card:hover { transform:translateY(-3px); }
+        .stat-card.status-clickable { cursor:pointer; }
+        .stat-icon { width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem; }
+        .stat-number { font-size:1.8rem;font-weight:800;line-height:1; }
+        .stat-label  { font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6e7687; }
+        .filter-pill { border-radius:20px !important; font-weight:600; font-size:.8rem; padding:6px 18px; border:2px solid transparent; margin-right:6px; }
+        .filter-pill.active-all { background:var(--brand);color:#fff;border-color:var(--brand); }
+        .filter-pill.active-pending { background:#f6c23e;color:#000;border-color:#f6c23e; }
+        .filter-pill.active-needs-update { background:#36b9cc;color:#fff;border-color:#36b9cc; }
+        .filter-pill.active-approved { background:#1cc88a;color:#fff;border-color:#1cc88a; }
+        .filter-pill.active-rejected { background:#e74a3b;color:#fff;border-color:#e74a3b; }
+        .search-row { background:#f8f9fc; border:1px solid #e3e6f0; border-radius:12px; padding:16px 20px; }
+        .search-row label { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#5a5c69; margin-bottom:4px; }
+        .search-row .form-control { border-radius:8px; height:40px; font-size:.88rem; }
+        #enrolTable thead th { font-size:.75rem; text-transform:uppercase; letter-spacing:.5px; background:#f8f9fc; border-bottom:2px solid #e3e6f0; white-space:nowrap; }
+        #enrolTable td { vertical-align:middle; font-size:.88rem; }
+    </style>
 </head>
 <body id="page-top">
 <div id="wrapper">
@@ -264,38 +284,93 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 <?php endif; ?>
 
-<div class="d-flex justify-content-end mb-3">
-    <a href="dzoClassManagement" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;">
-        <i class="fas fa-user-plus mr-1"></i> Child Registration
-    </a>
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div>
+        <h1 class="h3 mb-0 text-gray-800 font-weight-bold">Enrollment Management</h1>
+        <p class="text-muted mb-0" style="font-size:.88rem;">Review, approve, reject, or request updates on parent enrollment submissions.</p>
+    </div>
+    <div>
+        <a href="dzoClassManagement" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;">
+            <i class="fas fa-user-plus mr-1"></i> Child Registration
+        </a>
+    </div>
 </div>
 
 <!-- Summary Cards -->
-<div class="row mb-3">
+<div class="row mb-4">
     <div class="col-xl-3 col-md-6 mb-3">
-        <div class="card border-left-primary shadow h-100 py-2"><div class="card-body"><div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total</div><div class="h5 mb-0 font-weight-bold text-gray-800"><?= $total ?></div></div></div>
+        <div class="card stat-card shadow-sm status-clickable js-status-card" data-status="all">
+            <div class="card-body d-flex align-items-center py-3">
+                <div class="stat-icon mr-3" style="background:rgba(136,27,18,.1);color:var(--brand);"><i class="fas fa-users"></i></div>
+                <div><div class="stat-number text-gray-800"><?= $total ?></div><div class="stat-label">Total</div></div>
+            </div>
+        </div>
     </div>
     <div class="col-xl-3 col-md-6 mb-3">
-        <div class="card border-left-warning shadow h-100 py-2"><div class="card-body"><div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Pending</div><div class="h5 mb-0 font-weight-bold text-gray-800"><?= $pending ?></div></div></div>
+        <div class="card stat-card shadow-sm status-clickable js-status-card" data-status="Pending">
+            <div class="card-body d-flex align-items-center py-3">
+                <div class="stat-icon mr-3" style="background:rgba(246,194,62,.15);color:#f6c23e;"><i class="fas fa-clock"></i></div>
+                <div><div class="stat-number text-gray-800"><?= $pending ?></div><div class="stat-label">Pending Review</div></div>
+            </div>
+        </div>
     </div>
     <div class="col-xl-3 col-md-6 mb-3">
-        <div class="card border-left-success shadow h-100 py-2"><div class="card-body"><div class="text-xs font-weight-bold text-success text-uppercase mb-1">Approved</div><div class="h5 mb-0 font-weight-bold text-gray-800"><?= $approved ?></div></div></div>
+        <div class="card stat-card shadow-sm status-clickable js-status-card" data-status="Needs Update">
+            <div class="card-body d-flex align-items-center py-3">
+                <div class="stat-icon mr-3" style="background:rgba(54,185,204,.15);color:#36b9cc;"><i class="fas fa-edit"></i></div>
+                <div><div class="stat-number text-gray-800"><?= $needsUpdate ?></div><div class="stat-label">Needs Update</div></div>
+            </div>
+        </div>
     </div>
     <div class="col-xl-3 col-md-6 mb-3">
-        <div class="card border-left-danger shadow h-100 py-2"><div class="card-body"><div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Rejected</div><div class="h5 mb-0 font-weight-bold text-gray-800"><?= $rejected ?></div></div></div>
+        <div class="card stat-card shadow-sm status-clickable js-status-card" data-status="Approved">
+            <div class="card-body d-flex align-items-center py-3">
+                <div class="stat-icon mr-3" style="background:rgba(28,200,138,.12);color:#1cc88a;"><i class="fas fa-check-circle"></i></div>
+                <div><div class="stat-number text-gray-800"><?= $approved ?></div><div class="stat-label">Approved</div></div>
+            </div>
+        </div>
     </div>
     <div class="col-xl-3 col-md-6 mb-3">
-        <div class="card border-left-info shadow h-100 py-2"><div class="card-body"><div class="text-xs font-weight-bold text-info text-uppercase mb-1">Needs Update</div><div class="h5 mb-0 font-weight-bold text-gray-800"><?= $needsUpdate ?></div></div></div>
+        <div class="card stat-card shadow-sm status-clickable js-status-card" data-status="Rejected">
+            <div class="card-body d-flex align-items-center py-3">
+                <div class="stat-icon mr-3" style="background:rgba(231,74,59,.1);color:#e74a3b;"><i class="fas fa-times-circle"></i></div>
+                <div><div class="stat-number text-gray-800"><?= $rejected ?></div><div class="stat-label">Rejected</div></div>
+            </div>
+        </div>
     </div>
 </div>
 
-<!-- Status Filter Buttons -->
-<div class="mb-3">
-    <button class="btn btn-sm btn-primary filter-btn active" data-filter="all">All</button>
-    <button class="btn btn-sm btn-warning filter-btn" data-filter="Pending">Pending</button>
-    <button class="btn btn-sm btn-info filter-btn" data-filter="Needs Update">Needs Update</button>
-    <button class="btn btn-sm btn-success filter-btn" data-filter="Approved">Approved</button>
-    <button class="btn btn-sm btn-danger filter-btn"  data-filter="Rejected">Rejected</button>
+<!-- Filter + Search -->
+<div class="search-row mb-4">
+    <div class="d-flex flex-wrap align-items-center mb-3">
+        <button class="btn filter-pill active-all" data-filter="all">All</button>
+        <button class="btn filter-pill btn-outline-warning" data-filter="Pending"><i class="fas fa-clock mr-1"></i> Pending</button>
+        <button class="btn filter-pill btn-outline-info" data-filter="Needs Update"><i class="fas fa-edit mr-1"></i> Needs Update</button>
+        <button class="btn filter-pill btn-outline-success" data-filter="Approved"><i class="fas fa-check mr-1"></i> Approved</button>
+        <button class="btn filter-pill btn-outline-danger" data-filter="Rejected"><i class="fas fa-times mr-1"></i> Rejected</button>
+    </div>
+    <div class="row">
+        <div class="col-md-3">
+            <label>Search Column</label>
+            <select class="form-control" id="colSelect">
+                <option value="-1">All Columns</option>
+                <option value="1">Child</option>
+                <option value="2">Student ID</option>
+                <option value="3">Parent</option>
+                <option value="11">Status</option>
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label>Quick Search</label>
+            <input type="text" class="form-control" id="searchBox" placeholder="Type to search instantly...">
+        </div>
+        <div class="col-md-3">
+            <label>&nbsp;</label>
+            <button class="btn btn-outline-secondary btn-block" id="resetBtn" style="border-radius:8px;height:40px;">
+                <i class="fas fa-undo mr-1"></i> Reset
+            </button>
+        </div>
+    </div>
 </div>
 
 <!-- Enrolments Table -->
@@ -506,18 +581,66 @@ document.addEventListener('DOMContentLoaded',()=>{
 <script>
 $(function(){
     var dt = $('#enrolTable').DataTable({pageLength:25, order:[[12,'desc']]});
+    var activeStatus = 'all';
 
-    // Status filter buttons
-    $('.filter-btn').on('click', function(){
-        $('.filter-btn').removeClass('active');
-        $(this).addClass('active');
-        var f = $(this).data('filter');
-        if(f === 'all') {
+    function statusClassKey(status) {
+        var s = String(status || '').toLowerCase();
+        if (s === 'needs update') return 'needs-update';
+        return s || 'all';
+    }
+
+    function setPillActive(status) {
+        $('.filter-pill').removeClass('active-all active-pending active-needs-update active-approved active-rejected');
+        $('.filter-pill').each(function(){
+            if ($(this).data('filter') === status) {
+                $(this).addClass('active-' + statusClassKey(status));
+            }
+        });
+    }
+
+    function applyStatusFilter(status) {
+        activeStatus = status;
+        if(status === 'all') {
             dt.column(11).search('').draw();
         } else {
-            dt.column(11).search('^'+f+'$', true, false).draw();
+            dt.column(11).search('^' + status + '$', true, false).draw();
+        }
+        setPillActive(status);
+    }
+
+    $('.filter-pill').on('click', function(){
+        applyStatusFilter($(this).data('filter'));
+    });
+
+    $('.js-status-card').on('click', function(){
+        applyStatusFilter($(this).data('status'));
+    });
+
+    $('#searchBox').on('keyup', function(){
+        var term = this.value;
+        var col = parseInt($('#colSelect').val(), 10);
+        if (col === -1) {
+            dt.search(term).draw();
+        } else {
+            dt.search('');
+            dt.columns().search('');
+            dt.column(col).search(term).draw();
         }
     });
+
+    $('#colSelect').on('change', function(){
+        $('#searchBox').trigger('keyup');
+    });
+
+    $('#resetBtn').on('click', function(){
+        $('#searchBox').val('');
+        $('#colSelect').val('-1');
+        dt.search('');
+        dt.columns().search('');
+        applyStatusFilter('all');
+    });
+
+    applyStatusFilter('all');
 
     // Close approve/reject modal immediately on submit so UI does not appear stuck
     $(document).on('submit', 'form.js-enrol-action-form', function(){

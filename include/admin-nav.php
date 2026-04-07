@@ -326,17 +326,17 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
 
             <div id="collapseOrders" class="collapse <?= in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','admin-fee-verification.php','attendanceManagement.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php']) ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
-                    <h6 class="collapse-header">Setup</h6>
-                    <a class="collapse-item <?= ($currentPage === 'admin-class-setup.php') ? 'active' : '' ?>" href="admin-class-setup"><i class="fas fa-chalkboard fa-sm mr-1 text-muted"></i> Classes & Teachers</a>
-                    <a class="collapse-item <?= ($currentPage == 'admin-assign-class.php') ? 'active' : '' ?>" href="admin-assign-class"><i class="fas fa-user-plus fa-sm mr-1 text-muted"></i> Assign Students</a>
-                    <a class="collapse-item <?= ($currentPage == 'feesSetting.php') ? 'active' : '' ?>" href="feesSetting"><i class="fas fa-dollar-sign fa-sm mr-1 text-muted"></i> Fees Settings</a>
-                    <a class="collapse-item <?= ($currentPage == 'admin-parent-pins.php') ? 'active' : '' ?>" href="admin-parent-pins"><i class="fas fa-key fa-sm mr-1 text-muted"></i> Parent Kiosk PINs</a>
                     <h6 class="collapse-header">Operations</h6>
                     <a class="collapse-item <?= ($currentPage === 'dzoClassManagement.php') ? 'active' : '' ?>" href="dzoClassManagement"><i class="fas fa-user-plus fa-sm mr-1 text-muted"></i> Child Registration</a>
                     <a class="collapse-item <?= ($currentPage === 'admin-enrolments.php') ? 'active' : '' ?>" href="admin-enrolments"><i class="fas fa-file-signature fa-sm mr-1 text-muted"></i> Enrollment</a>
                     <a class="collapse-item <?= in_array($currentPage, ['feesManagement.php','admin-fee-verification.php']) ? 'active' : '' ?>" href="feesManagement"><i class="fas fa-money-check-alt fa-sm mr-1 text-muted"></i> Fees</a>
                     <a class="collapse-item <?= ($currentPage == 'attendanceManagement.php') ? 'active' : '' ?>" href="attendanceManagement"><i class="fas fa-clipboard-check fa-sm mr-1 text-muted"></i> Attendance</a>
                     <a class="collapse-item <?= ($currentPage == 'admin-attendance.php') ? 'active' : '' ?>" href="admin-attendance"><i class="fas fa-door-open fa-sm mr-1 text-muted"></i> Kiosk Sign In/Out</a>
+                    <h6 class="collapse-header">Setup</h6>
+                    <a class="collapse-item <?= ($currentPage === 'admin-class-setup.php') ? 'active' : '' ?>" href="admin-class-setup"><i class="fas fa-chalkboard fa-sm mr-1 text-muted"></i> Classes & Teachers</a>
+                    <a class="collapse-item <?= ($currentPage == 'admin-assign-class.php') ? 'active' : '' ?>" href="admin-assign-class"><i class="fas fa-user-plus fa-sm mr-1 text-muted"></i> Assign Students</a>
+                    <a class="collapse-item <?= ($currentPage == 'feesSetting.php') ? 'active' : '' ?>" href="feesSetting"><i class="fas fa-dollar-sign fa-sm mr-1 text-muted"></i> Fees Settings</a>
+                    <a class="collapse-item <?= ($currentPage == 'admin-parent-pins.php') ? 'active' : '' ?>" href="admin-parent-pins"><i class="fas fa-key fa-sm mr-1 text-muted"></i> Parent Kiosk PINs</a>
                 </div>
             </div>
         </li>

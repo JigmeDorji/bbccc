@@ -184,6 +184,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
 }
 
 // ---------------- LOAD ALL FEE DATA ----------------
+// Parent column can be either parentId (legacy) or parent_id (newer)
+$studentParentColumn = 'parentId';
+$colStmt = $pdo->query("SHOW COLUMNS FROM students LIKE 'parent_id'");
+if ($colStmt && $colStmt->fetch(PDO::FETCH_ASSOC)) {
+    $studentParentColumn = 'parent_id';
+}
+
+// 1) Enrollment base rows: ensures student details appear under each payment method
+$stmtEnroll = $pdo->prepare("
+    SELECT
+        e.id AS enrolment_id,
+        e.student_id,
+        e.fee_plan AS plan_type,
+        e.status AS enrolment_status,
+        e.fee_amount AS enrollment_amount,
+        e.payment_ref AS enrollment_reference,
+        e.proof_path AS enrollment_proof,
+        s.student_id AS public_student_id,
+        s.student_name,
+        p.full_name AS parent_name,
+        p.email AS parent_email,
+        p.phone AS parent_phone,
+        p.address AS parent_address
+    FROM pcm_enrolments e
+    JOIN students s ON s.id = e.student_id
+    LEFT JOIN parents p ON p.id = s.`{$studentParentColumn}`
+    WHERE e.fee_plan IN ('Term-wise','Half-yearly','Yearly')
+    ORDER BY s.id DESC, e.id DESC
+");
+$stmtEnroll->execute();
+$enrollmentRows = $stmtEnroll->fetchAll();
+
+// 2) Installment rows: keep payment-status details/actions from existing fees_payments table
 $stmt = $pdo->prepare("
     SELECT
         fp.*,
@@ -199,7 +232,7 @@ $stmt = $pdo->prepare("
         p.address AS parent_address
     FROM fees_payments fp
     JOIN students s ON s.id = fp.student_id
-    LEFT JOIN parents p ON p.id = s.parentId
+    LEFT JOIN parents p ON p.id = s.`{$studentParentColumn}`
     ORDER BY s.id DESC, fp.id ASC
 ");
 $stmt->execute();
@@ -211,6 +244,32 @@ $group = [
     'Half-yearly' => [],
     'Yearly' => [],
 ];
+
+// Seed group from enrollments first (so students always appear per payment method)
+foreach ($enrollmentRows as $r) {
+    $plan = (string)$r['plan_type'];
+    if (!isset($group[$plan])) $group[$plan] = [];
+
+    $sid = (string)$r['student_id'];
+    if ($sid === '') continue;
+
+    if (!isset($group[$plan][$sid])) {
+        $group[$plan][$sid] = [
+            'student_db_id' => $sid,
+            'public_student_id' => $r['public_student_id'] ?? '',
+            'student_name' => $r['student_name'] ?? '',
+            'payment_plan' => $r['plan_type'] ?? $plan,
+            'enrollment_status' => $r['enrolment_status'] ?? 'Pending',
+            'enrollment_reference' => $r['enrollment_reference'] ?? '',
+            'enrollment_proof' => $r['enrollment_proof'] ?? '',
+            'parent_name' => $r['parent_name'] ?? '',
+            'parent_email' => $r['parent_email'] ?? '',
+            'parent_phone' => $r['parent_phone'] ?? '',
+            'parent_address' => $r['parent_address'] ?? '',
+            'installments' => []
+        ];
+    }
+}
 
 foreach ($rows as $r) {
     $plan = (string)$r['plan_type'];
@@ -246,13 +305,14 @@ $plans = [
 ];
 
 // ---------------- GLOBAL SUMMARY (students/enrollments/paid counts) ----------------
-// count unique students in fees table
+// count unique students shown in grouped plan tables
 $seenStudents = [];
-foreach ($rows as $r) {
-    $sid = (string)($r['student_id'] ?? '');
-    if ($sid !== '') $seenStudents[$sid] = true;
+foreach ($group as $planRows) {
+    foreach ($planRows as $sid => $_v) {
+        $seenStudents[(string)$sid] = true;
+    }
 }
-$totalStudents = count($seenStudents); // enrollments in fees system
+$totalStudents = count($seenStudents);
 
 // Paid counts by installment code (unique students who have that installment Approved)
 $paidCounts = [
@@ -278,6 +338,45 @@ foreach ($rows as $r) {
 foreach ($paidSeen as $code => $set) {
     $paidCounts[$code] = count($set);
 }
+
+// ---------------- New collection summary requested ----------------
+// Source of truth: confirmed enrollments (pcm_enrolments.status = 'Approved')
+$totalFeesCollected = 0.0;
+$paidStudentsAll = [];
+$paidStudentsByPlan = [
+    'Term-wise' => [],
+    'Half-yearly' => [],
+    'Yearly' => [],
+];
+
+try {
+    $stmtConfirmed = $pdo->query("
+        SELECT student_id, fee_plan, fee_amount
+        FROM pcm_enrolments
+        WHERE status = 'Approved'
+    ");
+    $confirmedRows = $stmtConfirmed->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    $confirmedRows = [];
+}
+
+foreach ($confirmedRows as $r) {
+    $sid = (string)($r['student_id'] ?? '');
+    if ($sid === '') continue;
+
+    $totalFeesCollected += (float)($r['fee_amount'] ?? 0);
+    $paidStudentsAll[$sid] = true;
+
+    $plan = (string)($r['fee_plan'] ?? '');
+    if (isset($paidStudentsByPlan[$plan])) {
+        $paidStudentsByPlan[$plan][$sid] = true;
+    }
+}
+
+$totalStudentsPaid = count($paidStudentsAll);
+$paidTermWise = count($paidStudentsByPlan['Term-wise']);
+$paidHalfYearly = count($paidStudentsByPlan['Half-yearly']);
+$paidYearly = count($paidStudentsByPlan['Yearly']);
 
 // ---------------- Summary values (bank + due) ----------------
 $bankName = $feesSettings['bank_name'] ?? '';
@@ -381,6 +480,22 @@ $due4 = $feesSettings['due_term4'] ?? null;
         thead .mini { font-size:11px; font-weight:700; }
 
         .ref-col { max-width: 220px; }
+
+        /* Payment method tabs (dzoClass-style filter pills) */
+        .method-tabs-wrap { background:#f8f9fc; border:1px solid #e3e6f0; border-radius:12px; padding:14px 16px; margin-bottom:16px; }
+        .method-pill {
+            border-radius:20px !important;
+            font-weight:600;
+            font-size:.82rem;
+            padding:6px 16px;
+            border:2px solid transparent;
+            margin-right:6px;
+            margin-bottom:6px;
+        }
+        .method-pill.is-active-all { background:#881b12; color:#fff; border-color:#881b12; }
+        .method-pill.is-active-term-wise { background:#4e73df; color:#fff; border-color:#4e73df; }
+        .method-pill.is-active-half-yearly { background:#36b9cc; color:#fff; border-color:#36b9cc; }
+        .method-pill.is-active-yearly { background:#1cc88a; color:#fff; border-color:#1cc88a; }
     </style>
 </head>
 <body id="page-top">
@@ -416,6 +531,45 @@ $due4 = $feesSettings['due_term4'] ?? null;
                         }
                     });
                 </script>
+
+                <!-- ✅ SUMMARY: COLLECTED FEES + PAID STUDENTS -->
+                <div class="row mb-3">
+                    <div class="col-xl-3 col-md-6 mb-3">
+                        <div class="stat-card shadow-sm">
+                            <div class="stat-label text-success">Total Fees Collected</div>
+                            <div class="stat-value">$<?php echo number_format($totalFeesCollected, 2); ?></div>
+                            <div class="stat-sub">Based on confirmed enrollments</div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 mb-3">
+                        <div class="stat-card shadow-sm">
+                            <div class="stat-label text-primary">Students Paid</div>
+                            <div class="stat-value"><?php echo (int)$totalStudentsPaid; ?></div>
+                            <div class="stat-sub">Unique confirmed enrollments</div>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-4 mb-3">
+                        <div class="stat-card shadow-sm">
+                            <div class="stat-label text-info">Term-wise</div>
+                            <div class="stat-value"><?php echo (int)$paidTermWise; ?></div>
+                            <div class="stat-sub">Students paid</div>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-4 mb-3">
+                        <div class="stat-card shadow-sm">
+                            <div class="stat-label text-info">Half-yearly</div>
+                            <div class="stat-value"><?php echo (int)$paidHalfYearly; ?></div>
+                            <div class="stat-sub">Students paid</div>
+                        </div>
+                    </div>
+                    <div class="col-xl-2 col-md-4 mb-3">
+                        <div class="stat-card shadow-sm">
+                            <div class="stat-label text-info">Yearly</div>
+                            <div class="stat-value"><?php echo (int)$paidYearly; ?></div>
+                            <div class="stat-sub">Students paid</div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- ✅ SUMMARY: ENROLLMENTS + PAID COUNTS -->
                 <div class="row mb-3">
@@ -485,8 +639,16 @@ $due4 = $feesSettings['due_term4'] ?? null;
                     </div>
                 </div>
 
+                <div class="method-tabs-wrap">
+                    <div class="mini font-weight-bold text-uppercase mb-2" style="letter-spacing:.4px;">Payment Method</div>
+                    <button type="button" class="btn method-pill is-active-all js-method-pill" data-plan="all">All</button>
+                    <button type="button" class="btn btn-outline-primary method-pill js-method-pill" data-plan="term-wise">Term-wise</button>
+                    <button type="button" class="btn btn-outline-info method-pill js-method-pill" data-plan="half-yearly">Half-yearly</button>
+                    <button type="button" class="btn btn-outline-success method-pill js-method-pill" data-plan="yearly">Yearly</button>
+                </div>
+
                 <?php foreach ($plans as $planName => $codes): ?>
-                    <div class="card shadow mb-4">
+                    <div class="card shadow mb-4 fee-plan-section" data-plan="<?php echo strtolower($planName); ?>">
                         <div class="card-header py-3 d-flex justify-content-between align-items-center">
                             <h6 class="m-0 font-weight-bold text-primary">
                                 <?php echo htmlspecialchars($planName); ?> Fees
@@ -655,6 +817,39 @@ $due4 = $feesSettings['due_term4'] ?? null;
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // ---------- Payment method tabs ----------
+    const methodPills = document.querySelectorAll('.js-method-pill');
+    const planSections = document.querySelectorAll('.fee-plan-section');
+
+    function slugToActiveClass(slug) {
+        if (slug === 'term-wise') return 'is-active-term-wise';
+        if (slug === 'half-yearly') return 'is-active-half-yearly';
+        if (slug === 'yearly') return 'is-active-yearly';
+        return 'is-active-all';
+    }
+
+    function applyMethodFilter(planSlug) {
+        const slug = (planSlug || 'all').toLowerCase();
+        planSections.forEach(section => {
+            const current = (section.getAttribute('data-plan') || '').toLowerCase();
+            section.style.display = (slug === 'all' || current === slug) ? '' : 'none';
+        });
+
+        methodPills.forEach(btn => {
+            btn.classList.remove('is-active-all', 'is-active-term-wise', 'is-active-half-yearly', 'is-active-yearly');
+            const thisSlug = (btn.getAttribute('data-plan') || 'all').toLowerCase();
+            if (thisSlug === slug) {
+                btn.classList.add(slugToActiveClass(thisSlug));
+            }
+        });
+    }
+
+    methodPills.forEach(btn => {
+        btn.addEventListener('click', function() {
+            applyMethodFilter((this.getAttribute('data-plan') || 'all'));
+        });
+    });
+    applyMethodFilter('all');
 
     // ---------- Proof Modal ----------
     function openProofModal(path, type, filename) {
