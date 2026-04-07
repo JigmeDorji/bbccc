@@ -29,6 +29,7 @@ function bbcc_mail_config(): array {
         'encryption' => bbcc_env('MAIL_ENCRYPTION', 'tls'),
         'username'   => bbcc_env('MAIL_USERNAME', ''),
         'password'   => bbcc_env('MAIL_PASSWORD', ''),
+        'timeout'    => (int)bbcc_env('MAIL_TIMEOUT', '12'),
         'from_email' => MAIL_FROM_EMAIL,
         'from_name'  => MAIL_FROM_NAME,
         'debug'      => in_array(strtolower(bbcc_env('MAIL_DEBUG', '0')), ['1', 'true', 'on', 'yes'], true),
@@ -41,7 +42,7 @@ function bbcc_mail_log(string $message): void {
     @file_put_contents($cfg['log_file'], date('c') . ' ' . $message . PHP_EOL, FILE_APPEND);
 }
 
-function send_mail(string $toEmail, string $toName, string $subject, string $htmlBody): bool
+function send_mail(string $toEmail, string $toName, string $subject, string $htmlBody, ?int $timeoutSeconds = null): bool
 {
     $cfg = bbcc_mail_config();
 
@@ -66,6 +67,13 @@ function send_mail(string $toEmail, string $toName, string $subject, string $htm
         $mail->Password   = $cfg['password'];
         $mail->SMTPSecure = $cfg['encryption'];
         $mail->Port       = $cfg['port'];
+        $effectiveTimeout = $timeoutSeconds;
+        if ($effectiveTimeout === null) {
+            $effectiveTimeout = (int)($cfg['timeout'] ?? 0);
+        }
+        if (!empty($effectiveTimeout) && (int)$effectiveTimeout > 0) {
+            $mail->Timeout = (int)$effectiveTimeout;
+        }
 
         $mail->setFrom($cfg['from_email'], $cfg['from_name']);
         $mail->addAddress($toEmail, $toName ?: $toEmail);

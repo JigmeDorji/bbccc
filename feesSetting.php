@@ -1,6 +1,7 @@
 <?php
 require_once "include/config.php";
 require_once "include/auth.php";
+require_once "include/pcm_helpers.php";
 require_login();
 
 /**
@@ -34,6 +35,7 @@ try {
 }
 
 // Load settings
+pcm_ensure_fees_campus_columns($pdo);
 $stmt = $pdo->query("SELECT * FROM fees_settings WHERE id = 1 LIMIT 1");
 $settings = $stmt->fetch();
 
@@ -68,9 +70,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $amount_termwise   = (float)($_POST['amount_termwise'] ?? 0);
         $amount_halfyearly = (float)($_POST['amount_halfyearly'] ?? 0);
         $amount_yearly     = (float)($_POST['amount_yearly'] ?? 0);
+        $campus_one_name   = trim($_POST['campus_one_name'] ?? '');
+        $campus_two_name   = trim($_POST['campus_two_name'] ?? '');
 
         if ($amount_termwise < 0 || $amount_halfyearly < 0 || $amount_yearly < 0) {
             throw new Exception("Amounts cannot be negative.");
+        }
+        if ($campus_one_name === '' || $campus_two_name === '') {
+            throw new Exception("Both campus names are required.");
         }
 
         $upd = $pdo->prepare("
@@ -86,7 +93,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 due_term4 = :due_term4,
                 amount_termwise = :amount_termwise,
                 amount_halfyearly = :amount_halfyearly,
-                amount_yearly = :amount_yearly
+                amount_yearly = :amount_yearly,
+                campus_one_name = :campus_one_name,
+                campus_two_name = :campus_two_name
             WHERE id = 1
         ");
         $upd->execute([
@@ -102,6 +111,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ':amount_termwise' => $amount_termwise,
             ':amount_halfyearly' => $amount_halfyearly,
             ':amount_yearly' => $amount_yearly,
+            ':campus_one_name' => $campus_one_name,
+            ':campus_two_name' => $campus_two_name,
         ]);
 
         $message = "Fees settings updated successfully.";
@@ -119,7 +130,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-function h($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+if (!function_exists('h')) {
+    function h($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -195,6 +208,18 @@ function h($v){ return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
                                                 <label>Account Number</label>
                                                 <input type="text" class="form-control" name="account_number" value="<?php echo h($settings['account_number'] ?? ''); ?>">
                                             </div>
+                                        </div>
+
+                                        <hr>
+
+                                        <div class="form-group">
+                                            <label>Campus 1 Name</label>
+                                            <input type="text" class="form-control" name="campus_one_name" value="<?php echo h($settings['campus_one_name'] ?? 'Afred Deakin HS Campus'); ?>" required>
+                                        </div>
+
+                                        <div class="form-group">
+                                            <label>Campus 2 Name</label>
+                                            <input type="text" class="form-control" name="campus_two_name" value="<?php echo h($settings['campus_two_name'] ?? 'Hawker College Campus'); ?>" required>
                                         </div>
 
                                         <div class="form-group">

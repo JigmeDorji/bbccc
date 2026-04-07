@@ -500,7 +500,7 @@ function badge_class($st) {
                     <h2><i class="fas fa-namaste"></i> Welcome, <?php echo htmlspecialchars($parentProfile['full_name'] ?? $_SESSION['username'] ?? 'Parent'); ?>!</h2>
                     <p>Manage your children's enrollments, track attendance, and make fee payments from your dashboard.</p>
                     <div class="quick-actions">
-                        <a href="parent-enrolment"><i class="fas fa-plus"></i> Add Student</a>
+                        <a href="children-enrollment"><i class="fas fa-plus"></i> Add Student</a>
                         <a href="parentFeesPayment"><i class="fas fa-money-check-alt"></i> Pay Fees</a>
                         <a href="attendanceParent"><i class="fas fa-clipboard-check"></i> Attendance</a>
                     </div>
@@ -541,7 +541,7 @@ function badge_class($st) {
                     <div class="card-body p-0">
                         <div class="p-3 d-flex justify-content-between align-items-center" style="border-bottom: 1px solid #f0f0f0;">
                             <div class="section-title mb-0">My Children Enrollments</div>
-                            <a href="parent-enrolment" class="btn btn-primary btn-sm" style="border-radius:8px;">
+                            <a href="children-enrollment" class="btn btn-primary btn-sm" style="border-radius:8px;">
                                 <i class="fas fa-plus"></i> Add New Student
                             </a>
                         </div>
@@ -600,10 +600,10 @@ function badge_class($st) {
                                                 <?php if ($isApproved): ?>
                                                     <span class="badge badge-success">Approved</span>
                                                 <?php else: ?>
-                                                    <a class="btn btn-info btn-sm" style="border-radius:6px;font-size:0.75rem;" href="parent-enrolment?edit=<?php echo (int)$c['id']; ?>">Edit</a>
+                                                    <a class="btn btn-info btn-sm" style="border-radius:6px;font-size:0.75rem;" href="children-enrollment?edit=<?php echo (int)$c['id']; ?>">Edit</a>
                                                     <?php if ($isPending): ?>
                                                         <a class="btn btn-danger btn-sm" style="border-radius:6px;font-size:0.75rem;"
-                                                           href="parent-enrolment?delete=<?php echo (int)$c['id']; ?>"
+                                                           href="children-enrollment?delete=<?php echo (int)$c['id']; ?>"
                                                            onclick="return confirm('Delete this enrollment?');">Delete</a>
                                                     <?php endif; ?>
                                                 <?php endif; ?>

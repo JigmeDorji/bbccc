@@ -36,6 +36,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 VALUES (:sid, :name, :dob, :g, :med, CURDATE(), 'Pending', :pid)
             ");
             $stmt->execute([':sid'=>$sid, ':name'=>$name, ':dob'=>$dob?:null, ':g'=>$gender?:null, ':med'=>$med?:null, ':pid'=>$parentId]);
+
+            pcm_notify_admin_student_registration(
+                $name,
+                (string)($parent['full_name'] ?? 'Parent'),
+                (string)($parent['email'] ?? ''),
+                $sid
+            );
+
             $flash = "Child <strong>{$name}</strong> added (ID: {$sid}).";
             $ok = true;
         }

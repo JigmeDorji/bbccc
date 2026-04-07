@@ -1,15 +1,19 @@
 <?php
-// dzoClassManagement.php — Unified Enrolment & Student Management
+// dzoClassManagement.php — Child Registration Management
 require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/csrf.php";
+require_once "include/role_helpers.php";
 require_once "include/pcm_helpers.php";
 require_login();
 
-$role = strtolower($_SESSION['role'] ?? '');
-if ($role === 'parent') { header("Location: index-admin"); exit; }
+if (!is_admin_role()) {
+    header("Location: unauthorized");
+    exit;
+}
 
 $pdo   = pcm_pdo();
+$studentParentColumn = pcm_students_parent_column($pdo);
 $flash = '';
 $ok    = false;
 
@@ -21,21 +25,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($studentDbId > 0 && in_array($action, ['approve','reject','delete'])) {
         try {
-            // Load student
-            $stu = $pdo->prepare("
-                SELECT s.*, p.full_name AS parent_name, p.email AS parent_email
-                FROM students s
-                LEFT JOIN parents p ON p.id = s.parentId
-                WHERE s.id = :id LIMIT 1
-            ");
-            $stu->execute([':id' => $studentDbId]);
-            $student = $stu->fetch();
-
-            if (!$student) throw new Exception("Student not found.");
-
             $reviewer = $_SESSION['username'] ?? 'admin';
 
             if ($action === 'delete') {
+                $stu = $pdo->prepare("SELECT student_name FROM students WHERE id = :id LIMIT 1");
+                $stu->execute([':id' => $studentDbId]);
+                $student = $stu->fetch(PDO::FETCH_ASSOC);
+                if (!$student) {
+                    throw new Exception("Student not found.");
+                }
+
                 $pdo->beginTransaction();
                 // Delete fees (both old + PCM)
                 $pdo->prepare("DELETE FROM fees_payments WHERE student_id = :sid")->execute([':sid' => (string)$studentDbId]);
@@ -49,70 +48,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ok = true;
 
             } else {
-                $newStatus = ($action === 'approve') ? 'Approved' : 'Rejected';
                 $note = trim($_POST['admin_note'] ?? '');
-                $planType = $student['payment_plan'] ?? '';
-                $proof = $student['payment_proof'] ?? null;
-
-                $pdo->beginTransaction();
-
-                // Update student approval status
-                $pdo->prepare("UPDATE students SET approval_status = :st WHERE id = :id")
-                     ->execute([':st' => $newStatus, ':id' => $studentDbId]);
-
-                // Update PCM enrolment if exists
-                $pcm = $pdo->prepare("SELECT id FROM pcm_enrolments WHERE student_id = :sid LIMIT 1");
-                $pcm->execute([':sid' => $studentDbId]);
-                $pcmRow = $pcm->fetch();
-
-                if ($pcmRow) {
-                    $pdo->prepare("
-                        UPDATE pcm_enrolments SET status=:st, admin_note=:n, reviewed_by=:rb, reviewed_at=NOW()
-                        WHERE student_id=:sid
-                    ")->execute([':st'=>$newStatus, ':n'=>$note?:null, ':rb'=>$reviewer, ':sid'=>$studentDbId]);
-
-                    if ($newStatus === 'Approved') {
-                        pcm_create_fee_rows($pdo, (int)$pcmRow['id'], $studentDbId,
-                            (int)($student['parentId'] ?? 0), $planType, $proof);
-                    }
-                }
-
-                // Handle old-style fee rows too
-                $oldFees = $pdo->prepare("SELECT COUNT(*) FROM fees_payments WHERE student_id = :sid");
-                $oldFees->execute([':sid' => (string)$studentDbId]);
-                if ((int)$oldFees->fetchColumn() > 0) {
-                    if ($newStatus === 'Approved') {
-                        // Approve first instalment
-                        $firstCode = ($planType === 'Term-wise') ? 'TERM1' : (($planType === 'Half-yearly') ? 'HALF1' : 'YEARLY');
-                        $pdo->prepare("
-                            UPDATE fees_payments SET status='Approved', verified_by=:vb, verified_at=NOW()
-                            WHERE student_id=:sid AND installment_code=:code
-                        ")->execute([':vb'=>$reviewer, ':sid'=>(string)$studentDbId, ':code'=>$firstCode]);
-                    } else {
-                        $pdo->prepare("
-                            UPDATE fees_payments SET status='Rejected', verified_by=:vb, verified_at=NOW()
-                            WHERE student_id=:sid
-                        ")->execute([':vb'=>$reviewer, ':sid'=>(string)$studentDbId]);
-                    }
-                }
-
-                $pdo->commit();
+                $result = pcm_process_enrolment_decision($pdo, $studentDbId, $action, $reviewer, $note);
+                pcm_log_enrolment_event(
+                    $pdo,
+                    $studentDbId,
+                    (int)($result['enrolment_id'] ?? 0),
+                    $result['new_status'] === 'Approved' ? 'child_registration_approved' : 'child_registration_rejected',
+                    (string)($_SESSION['username'] ?? 'admin'),
+                    $note
+                );
 
                 // Email parent if we have their email
-                if (!empty($student['parent_email'])) {
-                    pcm_notify_parent_enrolment(
-                        $student['parent_email'],
-                        $student['parent_name'] ?? 'Parent',
-                        $student['student_name'] ?? 'Student',
-                        $newStatus, $note
-                    );
+                if (!empty($result['parent_email'])) {
+                    // Send one email on approval for faster response.
+                    if ($result['new_status'] === 'Approved') {
+                        pcm_notify_parent_enrolment_confirmed(
+                            $result['parent_email'],
+                            $result['parent_name'],
+                            $result['student_name']
+                        );
+                    } else {
+                        pcm_notify_parent_enrolment(
+                            $result['parent_email'],
+                            $result['parent_name'],
+                            $result['student_name'],
+                            $result['new_status'],
+                            $note
+                        );
+                    }
                 }
 
-                $flash = "Enrolment <strong>{$newStatus}</strong> for " . h($student['student_name'] ?? '') . ".";
+                $flash = "Enrolment <strong>{$result['new_status']}</strong> for " . h($result['student_name']) . ".";
                 $ok = true;
             }
         } catch (Exception $ex) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
             $flash = 'Error: ' . $ex->getMessage();
         }
     }
@@ -123,23 +93,9 @@ $students = $pdo->query("
     SELECT s.*,
            p.full_name  AS parent_name,
            p.email       AS parent_email,
-           p.phone       AS parent_phone,
-           e.id          AS pcm_enrolment_id,
-           ca.class_id   AS pcm_class_id,
-           e.fee_plan    AS pcm_fee_plan,
-           e.fee_amount  AS pcm_fee_amount,
-           e.payment_ref AS pcm_payment_ref,
-           e.proof_path  AS pcm_proof_path,
-           e.status      AS pcm_status,
-           e.admin_note  AS pcm_admin_note,
-           e.reviewed_by AS pcm_reviewed_by,
-           e.submitted_at AS pcm_submitted_at,
-           cl.class_name AS pcm_class_name
+           p.phone       AS parent_phone
     FROM students s
-    LEFT JOIN parents p ON p.id = s.parentId
-    LEFT JOIN pcm_enrolments e ON e.student_id = s.id
-    LEFT JOIN class_assignments ca ON ca.student_id = s.id
-    LEFT JOIN classes cl ON cl.id = ca.class_id
+    LEFT JOIN parents p ON p.id = s.`{$studentParentColumn}`
     ORDER BY s.id DESC
 ")->fetchAll();
 
@@ -164,7 +120,7 @@ $pageScripts = [
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,shrink-to-fit=no">
-    <title>Enrolment Management</title>
+    <title>Child Registration Management</title>
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
     <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap4.min.css" rel="stylesheet">
@@ -176,6 +132,7 @@ $pageScripts = [
         /* Summary cards */
         .stat-card { border-radius:14px; overflow:hidden; border:none; transition:transform .15s; }
         .stat-card:hover { transform:translateY(-3px); }
+        .stat-card.status-clickable { cursor:pointer; }
         .stat-icon { width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem; }
         .stat-number { font-size:1.8rem;font-weight:800;line-height:1; }
         .stat-label  { font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#6e7687; }
@@ -270,10 +227,13 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- ─── Page Header ─── -->
 <div class="d-flex align-items-center justify-content-between mb-4">
     <div>
-        <h1 class="h3 mb-0 text-gray-800 font-weight-bold">Enrolment Management</h1>
-        <p class="text-muted mb-0" style="font-size:.88rem;">Review, approve and manage all student enrolments in one place.</p>
+        <h1 class="h3 mb-0 text-gray-800 font-weight-bold">Child Registration</h1>
+        <p class="text-muted mb-0" style="font-size:.88rem;">Review and approve newly added children before parents can proceed to enrollment.</p>
     </div>
     <div>
+        <a href="admin-enrolments" class="btn btn-sm btn-outline-primary mr-1" style="border-radius:8px;">
+            <i class="fas fa-file-signature mr-1"></i> Enrollment
+        </a>
         <a href="attendanceManagement" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;">
             <i class="fas fa-clipboard-check mr-1"></i> Attendance
         </a>
@@ -283,7 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- ─── Summary Cards ─── -->
 <div class="row mb-4">
     <div class="col-xl-3 col-md-6 mb-3">
-        <div class="card stat-card shadow-sm">
+        <div class="card stat-card shadow-sm status-clickable js-status-card" data-status="all">
             <div class="card-body d-flex align-items-center py-3">
                 <div class="stat-icon mr-3" style="background:rgba(136,27,18,.1);color:var(--brand);"><i class="fas fa-users"></i></div>
                 <div>
@@ -294,7 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     </div>
     <div class="col-xl-3 col-md-6 mb-3">
-        <div class="card stat-card shadow-sm">
+        <div class="card stat-card shadow-sm status-clickable js-status-card" data-status="Pending">
             <div class="card-body d-flex align-items-center py-3">
                 <div class="stat-icon mr-3" style="background:rgba(246,194,62,.15);color:#f6c23e;"><i class="fas fa-clock"></i></div>
                 <div>
@@ -305,7 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     </div>
     <div class="col-xl-3 col-md-6 mb-3">
-        <div class="card stat-card shadow-sm">
+        <div class="card stat-card shadow-sm status-clickable js-status-card" data-status="Approved">
             <div class="card-body d-flex align-items-center py-3">
                 <div class="stat-icon mr-3" style="background:rgba(28,200,138,.12);color:#1cc88a;"><i class="fas fa-check-circle"></i></div>
                 <div>
@@ -316,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     </div>
     <div class="col-xl-3 col-md-6 mb-3">
-        <div class="card stat-card shadow-sm">
+        <div class="card stat-card shadow-sm status-clickable js-status-card" data-status="Rejected">
             <div class="card-body d-flex align-items-center py-3">
                 <div class="stat-icon mr-3" style="background:rgba(231,74,59,.1);color:#e74a3b;"><i class="fas fa-times-circle"></i></div>
                 <div>
@@ -343,8 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <option value="-1">All Columns</option>
                 <option value="1">Student ID</option>
                 <option value="2">Name</option>
-                <option value="8">Parent</option>
-                <option value="5">Reference</option>
+                <option value="6">Parent</option>
             </select>
         </div>
         <div class="col-md-6">
@@ -370,56 +329,37 @@ document.addEventListener('DOMContentLoaded', () => {
                         <th>#</th>
                         <th>Student ID</th>
                         <th>Student Name</th>
-                        <th>Class / Venue</th>
-                        <th>Plan</th>
-                        <th>Reference</th>
-                        <th>Proof</th>
+                        <th>DOB</th>
+                        <th>Gender</th>
+                        <th>Medical</th>
                         <th>Status</th>
                         <th>Parent</th>
-                        <th>Submitted</th>
+                        <th>Registered</th>
                         <th style="width:130px">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                 <?php foreach ($students as $i => $s):
                     $st = strtolower($s['approval_status'] ?? '');
-                    $plan   = $s['pcm_fee_plan']   ?? $s['payment_plan']      ?? null;
-                    $amount = $s['pcm_fee_amount']  ?? $s['payment_amount']    ?? 0;
-                    $ref    = $s['pcm_payment_ref'] ?? $s['payment_reference'] ?? null;
-                    $proof  = $s['pcm_proof_path']  ?? $s['payment_proof']     ?? null;
-                    $submitted = $s['pcm_submitted_at'] ?? $s['registration_date'] ?? '';
-                    $note = $s['pcm_admin_note'] ?? '';
+                    $registered = $s['registration_date'] ?? '';
                 ?>
-                <tr>
+                <tr data-status="<?= strtolower($st) ?>">
                     <td><?= $i + 1 ?></td>
                     <td><code style="font-size:.82rem;background:#f0f0f0;padding:3px 8px;border-radius:4px;"><?= h($s['student_id'] ?? '') ?></code></td>
                     <td class="font-weight-bold"><?= h($s['student_name'] ?? '') ?></td>
-                    <td><span class="text-muted" style="font-size:.82rem;"><?= h($s['pcm_class_name'] ?? $s['class_option'] ?? '—') ?></span></td>
-                    <td>
-                        <?= h($plan ?? '—') ?>
-                        <?php if ($amount): ?><br><small class="text-muted">$<?= number_format((float)$amount, 2) ?></small><?php endif; ?>
-                    </td>
-                    <td style="max-width:150px;white-space:normal;font-size:.84rem;"><?= h($ref ?? '—') ?></td>
-                    <td>
-                        <?php if ($proof): ?>
-                            <a href="<?= h($proof) ?>" target="_blank" class="btn btn-sm btn-outline-info" style="border-radius:6px;font-size:.75rem;">
-                                <i class="fas fa-file-image mr-1"></i> View
-                            </a>
-                        <?php else: ?>
-                            <span class="text-muted">—</span>
-                        <?php endif; ?>
-                    </td>
+                    <td><?= !empty($s['dob']) ? date('d M Y', strtotime($s['dob'])) : '—' ?></td>
+                    <td><?= h($s['gender'] ?? '—') ?></td>
+                    <td style="max-width:160px;white-space:normal;font-size:.84rem;"><?= h($s['medical_issue'] ?? 'None') ?></td>
                     <td>
                         <span class="badge badge-pill-custom badge-<?= pcm_badge($s['approval_status'] ?? 'Pending') ?>">
                             <?= h($s['approval_status'] ?? 'Pending') ?>
                         </span>
-                        <?php if ($note): ?><br><small class="text-muted" title="<?= h($note) ?>"><i class="fas fa-comment-alt"></i> <?= h(mb_strimwidth($note, 0, 30, '…')) ?></small><?php endif; ?>
                     </td>
                     <td>
                         <div style="font-size:.86rem;"><?= h($s['parent_name'] ?? '—') ?></div>
                         <small class="text-muted"><?= h($s['parent_email'] ?? '') ?></small>
                     </td>
-                    <td style="font-size:.82rem;"><?= $submitted ? date('d M Y', strtotime($submitted)) : '—' ?></td>
+                    <td style="font-size:.82rem;"><?= $registered ? date('d M Y', strtotime($registered)) : '—' ?></td>
                     <td>
                         <div class="act-group">
                             <button class="btn-act act-view toggle-detail" data-id="<?= (int)$s['id'] ?>" title="View details"><i class="fas fa-eye"></i></button>
@@ -442,43 +382,25 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- ─── Detail Panels (hidden, injected via JS child rows) ─── -->
 <?php foreach ($students as $i => $s):
     $st = strtolower($s['approval_status'] ?? '');
-    $plan   = $s['pcm_fee_plan']   ?? $s['payment_plan']      ?? null;
-    $amount = $s['pcm_fee_amount']  ?? $s['payment_amount']    ?? 0;
-    $ref    = $s['pcm_payment_ref'] ?? $s['payment_reference'] ?? null;
-    $proof  = $s['pcm_proof_path']  ?? $s['payment_proof']     ?? null;
-    $note = $s['pcm_admin_note'] ?? '';
 ?>
 <div id="detailHtml-<?= (int)$s['id'] ?>" style="display:none;">
     <div class="detail-panel" style="display:block;">
         <div class="row">
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <h6 class="font-weight-bold mb-3" style="color:var(--brand);"><i class="fas fa-user-graduate mr-1"></i> Student Info</h6>
                 <div class="dl-row"><div class="dl-label">Student ID</div><div class="dl-value"><?= h($s['student_id'] ?? '—') ?></div></div>
                 <div class="dl-row"><div class="dl-label">Full Name</div><div class="dl-value"><?= h($s['student_name'] ?? '—') ?></div></div>
                 <div class="dl-row"><div class="dl-label">Date of Birth</div><div class="dl-value"><?= h($s['dob'] ?? '—') ?></div></div>
                 <div class="dl-row"><div class="dl-label">Gender</div><div class="dl-value"><?= h($s['gender'] ?? '—') ?></div></div>
                 <div class="dl-row"><div class="dl-label">Medical</div><div class="dl-value"><?= h($s['medical_issue'] ?? 'None') ?></div></div>
-            </div>
-            <div class="col-md-4">
-                <h6 class="font-weight-bold mb-3" style="color:var(--brand);"><i class="fas fa-university mr-1"></i> Enrolment</h6>
-                <div class="dl-row"><div class="dl-label">Venue / Class</div><div class="dl-value"><?= h($s['pcm_class_name'] ?? $s['class_option'] ?? '—') ?></div></div>
-                <div class="dl-row"><div class="dl-label">Payment Plan</div><div class="dl-value"><?= h($plan ?? '—') ?></div></div>
-                <div class="dl-row"><div class="dl-label">Amount</div><div class="dl-value">$<?= number_format((float)$amount, 2) ?></div></div>
-                <div class="dl-row"><div class="dl-label">Reference</div><div class="dl-value"><?= h($ref ?? '—') ?></div></div>
-                <div class="dl-row"><div class="dl-label">Proof</div><div class="dl-value"><?= $proof ? '<a href="'.h($proof).'" target="_blank">View file</a>' : '—' ?></div></div>
+                <div class="dl-row"><div class="dl-label">Registered</div><div class="dl-value"><?= !empty($s['registration_date']) ? date('d M Y', strtotime($s['registration_date'])) : '—' ?></div></div>
                 <div class="dl-row"><div class="dl-label">Status</div><div class="dl-value"><span class="badge badge-<?= pcm_badge($s['approval_status'] ?? '') ?>"><?= h($s['approval_status'] ?? '—') ?></span></div></div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <h6 class="font-weight-bold mb-3" style="color:var(--brand);"><i class="fas fa-user-friends mr-1"></i> Parent Info</h6>
                 <div class="dl-row"><div class="dl-label">Name</div><div class="dl-value"><?= h($s['parent_name'] ?? '—') ?></div></div>
                 <div class="dl-row"><div class="dl-label">Email</div><div class="dl-value"><?= h($s['parent_email'] ?? '—') ?></div></div>
                 <div class="dl-row"><div class="dl-label">Phone</div><div class="dl-value"><?= h($s['parent_phone'] ?? '—') ?></div></div>
-                <?php if ($note): ?>
-                <div class="dl-row"><div class="dl-label">Admin Note</div><div class="dl-value"><em><?= h($note) ?></em></div></div>
-                <?php endif; ?>
-                <?php if ($s['pcm_reviewed_by'] ?? ''): ?>
-                <div class="dl-row"><div class="dl-label">Reviewed By</div><div class="dl-value"><?= h($s['pcm_reviewed_by']) ?></div></div>
-                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -489,14 +411,14 @@ document.addEventListener('DOMContentLoaded', () => {
 <div class="modal fade" id="approveModal<?= $s['id'] ?>" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="POST">
+            <form method="POST" class="js-enrol-action-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="approve">
                 <input type="hidden" name="student_id" value="<?= $s['id'] ?>">
                 <div class="modal-header">
                     <div>
-                        <h5 class="modal-title font-weight-bold"><i class="fas fa-check-circle text-success mr-2"></i>Approve Enrolment</h5>
-                        <small class="text-muted">This will activate the student and create fee records.</small>
+                        <h5 class="modal-title font-weight-bold"><i class="fas fa-check-circle text-success mr-2"></i>Approve Child Registration</h5>
+                        <small class="text-muted">This will activate the child so parent can complete enrollment.</small>
                     </div>
                     <button type="button" class="close" data-dismiss="modal">&times;</button>
                 </div>
@@ -505,7 +427,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <i class="fas fa-user-graduate text-success mr-3" style="font-size:1.4rem;"></i>
                         <div>
                             <strong><?= h($s['student_name'] ?? '') ?></strong><br>
-                            <small class="text-muted"><?= h($s['payment_plan'] ?? '') ?> — $<?= number_format((float)$amount, 2) ?></small>
+                            <small class="text-muted">Student ID: <?= h($s['student_id'] ?? '') ?></small>
                         </div>
                     </div>
                     <div class="form-group">
@@ -517,7 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-success"><i class="fas fa-check mr-1"></i> Approve</button>
+                    <button type="submit" class="btn btn-success js-submit-action-btn"><i class="fas fa-check mr-1"></i> Approve</button>
                 </div>
             </form>
         </div>
@@ -528,13 +450,13 @@ document.addEventListener('DOMContentLoaded', () => {
 <div class="modal fade" id="rejectModal<?= $s['id'] ?>" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="POST">
+            <form method="POST" class="js-enrol-action-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="reject">
                 <input type="hidden" name="student_id" value="<?= $s['id'] ?>">
                 <div class="modal-header">
                     <div>
-                        <h5 class="modal-title font-weight-bold"><i class="fas fa-times-circle text-danger mr-2"></i>Reject Enrolment</h5>
+                        <h5 class="modal-title font-weight-bold"><i class="fas fa-times-circle text-danger mr-2"></i>Reject Child Registration</h5>
                         <small class="text-muted">The parent will be notified by email.</small>
                     </div>
                     <button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -544,7 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <i class="fas fa-user-graduate text-danger mr-3" style="font-size:1.4rem;"></i>
                         <div>
                             <strong><?= h($s['student_name'] ?? '') ?></strong><br>
-                            <small class="text-muted"><?= h($s['payment_plan'] ?? '') ?> — $<?= number_format((float)$amount, 2) ?></small>
+                            <small class="text-muted">Student ID: <?= h($s['student_id'] ?? '') ?></small>
                         </div>
                     </div>
                     <div class="form-group">
@@ -556,7 +478,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-danger"><i class="fas fa-times mr-1"></i> Reject</button>
+                    <button type="submit" class="btn btn-danger js-submit-action-btn"><i class="fas fa-times mr-1"></i> Reject</button>
                 </div>
             </form>
         </div>
@@ -587,7 +509,7 @@ $(function(){
         lengthMenu: [[15, 25, 50, -1], [15, 25, 50, "All"]],
         order: [[0, 'asc']],
         columnDefs: [
-            { targets: [10], orderable: false },
+            { targets: [9], orderable: false },
             { targets: '_all', className: 'align-middle' }
         ],
         dom: "<'row mb-2'<'col-md-6'B><'col-md-6 text-md-right'l>>" +
@@ -601,6 +523,17 @@ $(function(){
         ]
     });
 
+    // Robust row-level status filtering (independent of badge HTML content)
+    var activeStatusFilter = 'all';
+    $.fn.dataTable.ext.search.push(function(settings, data, dataIndex){
+        if (settings.nTable !== dt.table().node()) return true;
+        if (activeStatusFilter === 'all') return true;
+        var rowNode = dt.row(dataIndex).node();
+        if (!rowNode) return true;
+        var rowStatus = String($(rowNode).attr('data-status') || '').toLowerCase();
+        return rowStatus === String(activeStatusFilter).toLowerCase();
+    });
+
     // Filter pills
     $('.filter-pill').on('click', function(){
         $('.filter-pill').removeClass('active-all active-pending active-approved active-rejected')
@@ -608,9 +541,8 @@ $(function(){
         var s = $(this).data('status');
         $(this).removeClass('btn-outline-warning btn-outline-success btn-outline-danger btn-outline-secondary');
         $(this).addClass('active-' + s.toLowerCase());
-
-        if (s === 'all') dt.column(7).search('').draw();
-        else dt.column(7).search('^'+s+'$', true, false).draw();
+        activeStatusFilter = s;
+        dt.draw();
     });
 
     // Column search
@@ -630,6 +562,7 @@ $(function(){
         $('.filter-pill[data-status="all"]').removeClass('btn-outline-secondary').addClass('active-all');
         $('#colSelect').val('-1');
         $('#searchBox').val('');
+        activeStatusFilter = 'all';
         dt.search('').columns().search('').draw();
     });
 
@@ -668,6 +601,31 @@ $(function(){
                 $('#deleteForm').submit();
             }
         });
+    });
+
+    // Close approve/reject modal immediately on submit so UI does not appear stuck
+    $(document).on('submit', 'form.js-enrol-action-form', function(){
+        var $form = $(this);
+        var $btn = $form.find('.js-submit-action-btn');
+        $btn.prop('disabled', true);
+        var originalText = $btn.text();
+        $btn.text('Processing...');
+        $form.closest('.modal').modal('hide');
+        $('.modal-backdrop').remove();
+        $('body').removeClass('modal-open').css('padding-right', '');
+        // keep original text only if browser prevented submission for any reason
+        setTimeout(function(){
+            if (!$form[0].checkValidity || $form[0].checkValidity()) return;
+            $btn.prop('disabled', false).text(originalText);
+        }, 300);
+    });
+
+    // Click summary card to jump-filter list
+    $('.js-status-card').on('click', function(){
+        var status = $(this).data('status');
+        $('.filter-pill[data-status="' + status + '"]').trigger('click');
+        var top = $('#enrolTable').closest('.card').offset().top - 90;
+        window.scrollTo({ top: top, behavior: 'smooth' });
     });
 });
 </script>

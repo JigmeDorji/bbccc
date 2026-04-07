@@ -10,6 +10,9 @@ require_login();
 if (!is_parent_role()) { header("Location: unauthorized"); exit; }
 
 $pdo      = pcm_pdo();
+$campusChoices = pcm_campus_choice_labels();
+[$campusOneName, $campusTwoName] = pcm_campus_names();
+pcm_ensure_enrolment_campus_preference($pdo);
 $parent   = pcm_current_parent($pdo);
 if (!$parent) die("Parent account not found.");
 $parentId = (int)$parent['id'];
@@ -31,6 +34,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     verify_csrf();
     $feeId = (int)($_POST['fee_id'] ?? 0);
     $ref   = trim($_POST['payment_ref'] ?? '');
+    $confirmPaid = (int)($_POST['confirm_paid'] ?? 0);
+    $campusSelection = $_POST['campus_choice'] ?? [];
+    if (!is_array($campusSelection)) {
+        $campusSelection = [];
+    }
+    $campusSelection = array_values(array_unique(array_filter(array_map('strval', $campusSelection))));
+    $allowedCampusChoices = array_keys($campusChoices);
 
     // Verify ownership
     $row = $pdo->prepare("SELECT * FROM pcm_fee_payments WHERE id=:id AND parent_id=:pid LIMIT 1");
@@ -39,6 +49,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 
     if (!$fee) {
         $flash = 'Payment record not found.';
+    } elseif (empty($campusSelection)) {
+        $flash = 'Please select at least one campus.';
+    } elseif (array_diff($campusSelection, $allowedCampusChoices)) {
+        $flash = 'Please select valid campus choices.';
+    } elseif ($confirmPaid !== 1) {
+        $flash = 'Please confirm that you paid the amount based on your selected payment plan.';
     } elseif (!in_array($fee['status'], ['Unpaid','Rejected'])) {
         $flash = 'This instalment is already submitted or verified.';
     } elseif (empty($_FILES['proof']['name']) || $_FILES['proof']['error'] !== UPLOAD_ERR_OK) {
@@ -56,6 +72,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
             $filename = 'fee_' . $feeId . '_' . time() . '.' . $ext;
             $path = $dir . '/' . $filename;
             if (move_uploaded_file($_FILES['proof']['tmp_name'], $path)) {
+                $campusStored = implode(',', $campusSelection);
+                $updCampus = $pdo->prepare("
+                    UPDATE pcm_enrolments
+                    SET campus_preference = :campus
+                    WHERE id = :eid AND parent_id = :pid
+                    LIMIT 1
+                ");
+                $updCampus->execute([
+                    ':campus' => $campusStored,
+                    ':eid' => (int)($fee['enrolment_id'] ?? 0),
+                    ':pid' => $parentId
+                ]);
+
                 $upd = $pdo->prepare("
                     UPDATE pcm_fee_payments
                     SET proof_path=:p, payment_ref=:ref, paid_amount=due_amount,
@@ -74,9 +103,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 
 // ── Fetch approved enrolments with fee rows ──
 $enrolments = $pdo->prepare("
-    SELECT e.id AS eid, e.fee_plan, s.student_name, s.student_id AS stu_code
+    SELECT e.id AS eid, e.fee_plan, e.campus_preference, s.student_name, s.student_id AS stu_code,
+           c.class_name AS campus_name
     FROM pcm_enrolments e
     JOIN students s ON s.id = e.student_id
+    LEFT JOIN class_assignments ca ON ca.student_id = e.student_id
+    LEFT JOIN classes c ON c.id = ca.class_id
     WHERE e.parent_id = :pid AND e.status = 'Approved'
     ORDER BY s.student_name
 ");
@@ -180,11 +212,14 @@ document.addEventListener('DOMContentLoaded',()=>{
         <div class="table-responsive">
             <table class="table table-bordered table-sm">
                 <thead class="thead-light">
-                    <tr><th>Instalment</th><th>Due</th><th>Paid</th><th>Reference</th><th>Proof</th><th>Status</th><th>Action</th></tr>
+                    <tr><th>Campus</th><th>Plan</th><th>Preference</th><th>Instalment</th><th>Due</th><th>Paid</th><th>Reference</th><th>Proof</th><th>Status</th><th>Action</th></tr>
                 </thead>
                 <tbody>
                 <?php foreach ($fees as $f): ?>
                 <tr>
+                    <td><?= h($en['campus_name'] ?? 'Main Campus') ?></td>
+                    <td><?= h($en['fee_plan']) ?></td>
+                    <td><?= h(pcm_campus_selection_label((string)($en['campus_preference'] ?? ''))) ?></td>
                     <td class="font-weight-bold"><?= h($f['instalment_label']) ?></td>
                     <td>$<?= number_format($f['due_amount'],2) ?></td>
                     <td>$<?= number_format($f['paid_amount'],2) ?></td>
@@ -197,7 +232,18 @@ document.addEventListener('DOMContentLoaded',()=>{
                     </td>
                     <td>
                         <?php if (in_array($f['status'], ['Unpaid','Rejected'])): ?>
-                        <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#uploadModal<?= $f['id'] ?>">
+                        <?php
+                            $planShort = strtolower(trim((string)$en['fee_plan'])) === 'half-yearly' ? 'hy' : (strtolower(trim((string)$en['fee_plan'])) === 'yearly' ? 'y' : 'tw');
+                            $nameCompact = preg_replace('/[^A-Za-z0-9]/', '', (string)$en['student_name']);
+                            $suggestRef = $nameCompact . '_' . $planShort;
+                        ?>
+                        <button class="btn btn-primary btn-sm"
+                                data-toggle="modal"
+                                data-target="#uploadModal<?= $f['id'] ?>"
+                                data-ref="<?= h($suggestRef) ?>"
+                                data-due="<?= number_format((float)$f['due_amount'], 2, '.', '') ?>"
+                                data-plan="<?= h($en['fee_plan']) ?>"
+                                data-campus="<?= h($en['campus_name'] ?? 'Main Campus') ?>">
                             <i class="fas fa-upload mr-1"></i>Pay
                         </button>
 
@@ -218,13 +264,48 @@ document.addEventListener('DOMContentLoaded',()=>{
                                             Amount due: <strong>$<?= number_format($f['due_amount'],2) ?></strong>
                                         </div>
                                         <div class="form-group">
+                                            <label><i class="fas fa-map-marker-alt mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Campus</label>
+                                            <input type="text" class="form-control" value="<?= h($en['campus_name'] ?? 'Main Campus') ?>" readonly>
+                                        </div>
+                                        <div class="form-group">
+                                            <label><i class="fas fa-school mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Campus Preference (select one or both)</label>
+                                            <?php $selectedCampus = pcm_normalize_campus_selection((string)($en['campus_preference'] ?? '')); ?>
+                                            <div class="custom-control custom-checkbox mb-1">
+                                                <input type="checkbox" class="custom-control-input" id="campusC1<?= $f['id'] ?>" name="campus_choice[]" value="c1" <?= in_array('c1', $selectedCampus, true) ? 'checked' : '' ?>>
+                                                <label class="custom-control-label" for="campusC1<?= $f['id'] ?>"><?= h($campusOneName) ?></label>
+                                            </div>
+                                            <div class="custom-control custom-checkbox">
+                                                <input type="checkbox" class="custom-control-input" id="campusC2<?= $f['id'] ?>" name="campus_choice[]" value="c2" <?= in_array('c2', $selectedCampus, true) ? 'checked' : '' ?>>
+                                                <label class="custom-control-label" for="campusC2<?= $f['id'] ?>"><?= h($campusTwoName) ?></label>
+                                            </div>
+                                            <small class="text-muted">You can choose one campus or both campuses.</small>
+                                        </div>
+                                        <div class="form-group">
+                                            <label><i class="fas fa-tags mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Fee Plan</label>
+                                            <input type="text" class="form-control" value="<?= h($en['fee_plan']) ?>" readonly>
+                                        </div>
+                                        <div class="form-group">
                                             <label><i class="fas fa-hashtag mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Payment Reference</label>
-                                            <input type="text" name="payment_ref" class="form-control" maxlength="150" placeholder="Bank transfer reference number">
+                                            <div class="input-group">
+                                                <input type="text" name="payment_ref" class="form-control ref-auto-field" maxlength="150" value="<?= h($suggestRef) ?>" placeholder="Bank transfer reference number">
+                                                <div class="input-group-append">
+                                                    <button type="button" class="btn btn-outline-secondary btn-copy-ref">Copy</button>
+                                                </div>
+                                            </div>
+                                            <small class="text-muted">Suggested format: ChildName + plan code (e.g. TenzinWangmo_hy or TenzinWangmo_y)</small>
                                         </div>
                                         <div class="form-group">
                                             <label><i class="fas fa-file-upload mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Proof File <span class="text-danger">*</span></label>
                                             <input type="file" name="proof" class="form-control-file" accept=".jpg,.jpeg,.png,.pdf" required>
                                             <small class="text-muted">JPG / PNG / PDF — max 5 MB</small>
+                                        </div>
+                                        <div class="form-group mb-0">
+                                            <div class="custom-control custom-checkbox">
+                                                <input type="checkbox" class="custom-control-input" id="confirmPaid<?= $f['id'] ?>" name="confirm_paid" value="1" required>
+                                                <label class="custom-control-label" for="confirmPaid<?= $f['id'] ?>">
+                                                    I confirm I have paid <strong>$<?= number_format($f['due_amount'],2) ?></strong> based on this payment plan.
+                                                </label>
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="modal-footer">
@@ -255,5 +336,17 @@ document.addEventListener('DOMContentLoaded',()=>{
 <?php include 'include/admin-footer.php'; ?>
 </div>
 </div>
+<script>
+document.addEventListener('click', function(e){
+    if (e.target.classList.contains('btn-copy-ref')) {
+        const modal = e.target.closest('.modal-content');
+        const input = modal ? modal.querySelector('.ref-auto-field') : null;
+        if (!input) return;
+        navigator.clipboard.writeText(input.value || '').then(() => {
+            Swal.fire({icon:'success', title:'Reference copied', timer:900, showConfirmButton:false});
+        });
+    }
+});
+</script>
 </body>
 </html>
