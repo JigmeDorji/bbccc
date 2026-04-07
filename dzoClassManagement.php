@@ -5,6 +5,7 @@ require_once "include/auth.php";
 require_once "include/csrf.php";
 require_once "include/role_helpers.php";
 require_once "include/pcm_helpers.php";
+require_once "include/notifications.php";
 require_login();
 
 if (!is_admin_role()) {
@@ -71,6 +72,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             (string)$result['fee_plan'],
                             (float)$result['fee_amount']
                         );
+                        bbcc_notify_username(
+                            $pdo,
+                            (string)$result['parent_email'],
+                            'Child Registration Approved for ' . (string)$result['student_name'],
+                            'Your child registration is approved. Please complete enrollment by selecting campus and payment plan.',
+                            'children-enrollment'
+                        );
                     } else {
                         pcm_notify_parent_enrolment(
                             $result['parent_email'],
@@ -78,6 +86,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $result['student_name'],
                             $result['new_status'],
                             $note
+                        );
+                        bbcc_notify_username(
+                            $pdo,
+                            (string)$result['parent_email'],
+                            'Child Registration Rejected for ' . (string)$result['student_name'],
+                            'Your child registration was not approved. Please review admin notes and contact admin if needed.',
+                            'parent-children'
                         );
                     }
                 }

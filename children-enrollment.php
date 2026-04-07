@@ -6,6 +6,7 @@ require_once "include/auth.php";
 require_once "include/role_helpers.php";
 require_once "include/csrf.php";
 require_once "include/pcm_helpers.php";
+require_once "include/notifications.php";
 require_login();
 
 if (!is_parent_role()) { header("Location: unauthorized"); exit; }
@@ -133,6 +134,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     }
 
                     pcm_notify_admin_enrolment($child['student_name'], $parent['full_name']);
+                    bbcc_notify_admins(
+                        $pdo,
+                        'Enrollment Submitted',
+                        (string)$child['student_name'] . ' enrollment was submitted by ' . (string)$parent['full_name'] . '.',
+                        'admin-enrolments'
+                    );
                     $flash = "Enrollment submitted for <strong>{$child['student_name']}</strong>. You will be notified once reviewed.";
                     $ok = true;
                 }

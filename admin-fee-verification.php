@@ -5,6 +5,7 @@ require_once "include/auth.php";
 require_once "include/role_helpers.php";
 require_once "include/csrf.php";
 require_once "include/pcm_helpers.php";
+require_once "include/notifications.php";
 require_login();
 
 if (!is_admin_role()) { header("Location: unauthorized"); exit; }
@@ -48,6 +49,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
         $upd->execute([':st'=>$newStatus, ':vb'=>$reviewer, ':st2'=>$newStatus, ':rr'=>$reason?:null, ':st3'=>$newStatus, ':id'=>$fid]);
 
         pcm_notify_parent_fee($fee['parent_email'], $fee['parent_name'], $fee['student_name'], $fee['instalment_label'], $newStatus);
+        bbcc_notify_username(
+            $pdo,
+            (string)$fee['parent_email'],
+            'Fee Payment ' . $newStatus . ' for ' . (string)$fee['student_name'],
+            'Your payment proof for ' . (string)$fee['instalment_label'] . ' is now marked as ' . $newStatus . '.',
+            'parent-payments'
+        );
         $flash = "Payment <strong>{$newStatus}</strong> — {$fee['student_name']} ({$fee['instalment_label']}).";
         $ok = true;
     }

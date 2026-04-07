@@ -5,6 +5,7 @@ require_once "include/auth.php";
 require_once "include/role_helpers.php";
 require_once "include/csrf.php";
 require_once "include/pcm_helpers.php";
+require_once "include/notifications.php";
 require_login();
 
 if (!is_parent_role()) { header("Location: unauthorized"); exit; }
@@ -42,6 +43,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 (string)($parent['full_name'] ?? 'Parent'),
                 (string)($parent['email'] ?? ''),
                 $sid
+            );
+            bbcc_notify_admins(
+                $pdo,
+                'New Child Registration',
+                $name . ' was registered by ' . (string)($parent['full_name'] ?? 'Parent'),
+                'dzoClassManagement'
             );
 
             $flash = "Child <strong>{$name}</strong> added (ID: {$sid}).";

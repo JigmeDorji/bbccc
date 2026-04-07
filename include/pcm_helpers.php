@@ -593,7 +593,7 @@ function pcm_notify_parent_payment_required(PDO $pdo, string $toEmail, string $p
     $loginUrl = $baseUrl !== '' ? $baseUrl . '/login' : 'login';
     $safeLoginUrl = htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8');
 
-    $html = pcm_email_wrap('Finalized Enrollment', "
+    $html = pcm_email_wrap('Complete Enrollment Process', "
         <p style='margin:0 0 14px;'>Hi " . htmlspecialchars($parentName) . ",</p>
         <p style='margin:0 0 10px;'>The registration for child <strong>" . htmlspecialchars($childName) . "</strong> is successful.</p>
         <p style='margin:0 0 10px;'>To finalize enrolment, please log in to the parent portal, select your campus preference, and complete fee payment.</p>

@@ -1,6 +1,7 @@
 <?php
 require_once "include/config.php";
 require_once "include/auth.php";
+require_once "include/notifications.php";
 require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
@@ -21,6 +22,21 @@ try {
 }
 
 $sessionUsername = logged_in_username();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'mark_notification_read') {
+    $nid = (int)($_POST['notification_id'] ?? 0);
+    if ($nid > 0) {
+        bbcc_mark_notification_read($pdo, $nid, $sessionUsername, (string)($_SESSION['role'] ?? ''));
+    }
+    header("Location: adminProfile");
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'mark_all_notifications_read') {
+    bbcc_mark_all_notifications_read($pdo, $sessionUsername, (string)($_SESSION['role'] ?? ''));
+    header("Location: adminProfile");
+    exit;
+}
 
 // ── Fetch current user ──────────────────────────────────────────
 $userStmt = $pdo->prepare("SELECT userid, username, role, createdDate FROM user WHERE username = :u LIMIT 1");
@@ -53,6 +69,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $pdo->prepare("UPDATE user SET password = :pw WHERE username = :u")
             ->execute([':pw' => password_hash($newPwd, PASSWORD_DEFAULT), ':u' => $sessionUsername]);
+        bbcc_notify_username(
+            $pdo,
+            $sessionUsername,
+            'Password Changed',
+            'Your account password was updated successfully.',
+            'adminProfile'
+        );
         $status = 'success';
         $msg    = 'Password changed successfully.';
     } catch (Exception $e) {
@@ -66,6 +89,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $flash = $_SESSION['profile_flash'] ?? null;
 unset($_SESSION['profile_flash']);
+$notifications = bbcc_fetch_notifications_for_user($pdo, $sessionUsername, (string)($_SESSION['role'] ?? ''), 20);
+$unreadCount = 0;
+foreach ($notifications as $n) {
+    if ((int)($n['is_read'] ?? 0) === 0) {
+        $unreadCount++;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -209,6 +239,52 @@ unset($_SESSION['profile_flash']);
                                         <i class="fas fa-save mr-1"></i> Update Password
                                     </button>
                                 </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 mb-4">
+                        <div class="card shadow">
+                            <div class="card-body p-4">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <h5 class="font-weight-bold mb-0" style="color:var(--brand);">
+                                        <i class="fas fa-bell mr-2"></i>Notifications
+                                        <?php if ($unreadCount > 0): ?>
+                                            <span class="badge badge-danger ml-2"><?= (int)$unreadCount ?> new</span>
+                                        <?php endif; ?>
+                                    </h5>
+                                    <form method="POST" class="mb-0">
+                                        <input type="hidden" name="action" value="mark_all_notifications_read">
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">Mark All Read</button>
+                                    </form>
+                                </div>
+                                <?php if (empty($notifications)): ?>
+                                    <p class="text-muted mb-0">No notifications yet.</p>
+                                <?php else: ?>
+                                    <?php foreach ($notifications as $n): ?>
+                                        <div class="border rounded p-3 mb-2 <?= ((int)($n['is_read'] ?? 0) === 0) ? 'bg-light' : '' ?>">
+                                            <div class="d-flex justify-content-between align-items-start">
+                                                <div>
+                                                    <div class="font-weight-bold"><?= htmlspecialchars((string)($n['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                                                    <?php if (!empty($n['body'])): ?>
+                                                        <div class="text-muted small mt-1"><?= htmlspecialchars((string)$n['body'], ENT_QUOTES, 'UTF-8') ?></div>
+                                                    <?php endif; ?>
+                                                    <div class="small text-muted mt-1"><?= htmlspecialchars((string)($n['created_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                                                    <?php if (!empty($n['link_url'])): ?>
+                                                        <a href="<?= htmlspecialchars((string)$n['link_url'], ENT_QUOTES, 'UTF-8') ?>" class="small">Open</a>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <?php if ((int)($n['is_read'] ?? 0) === 0): ?>
+                                                    <form method="POST" class="ml-2">
+                                                        <input type="hidden" name="action" value="mark_notification_read">
+                                                        <input type="hidden" name="notification_id" value="<?= (int)($n['id'] ?? 0) ?>">
+                                                        <button type="submit" class="btn btn-sm btn-outline-primary">Mark Read</button>
+                                                    </form>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>

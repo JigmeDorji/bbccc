@@ -5,6 +5,7 @@ require_once "include/auth.php";
 require_once "include/role_helpers.php";
 require_once "include/csrf.php";
 require_once "include/pcm_helpers.php";
+require_once "include/notifications.php";
 require_login();
 
 if (!is_admin_role()) { header("Location: unauthorized"); exit; }
@@ -54,10 +55,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
         if ($eid <= 0 || $classId <= 0) {
             $flash = 'Please select a valid class.';
         } else {
-            $row = $pdo->prepare("
-                SELECT e.id, e.student_id, e.status, s.student_name
+                $row = $pdo->prepare("
+                SELECT e.id, e.student_id, e.status, s.student_name, p.email AS parent_email
                 FROM pcm_enrolments e
                 JOIN students s ON s.id = e.student_id
+                LEFT JOIN parents p ON p.id = e.parent_id
                 WHERE e.id = :id LIMIT 1
             ");
             $row->execute([':id' => $eid]);
@@ -80,6 +82,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
                 $classNameStmt->execute([':id' => $classId]);
                 $className = (string)($classNameStmt->fetchColumn() ?: '');
                 pcm_log_enrolment_event($pdo, (int)$en['student_id'], $eid, 'class_assigned', $currentActor, 'Class assigned: ' . $className);
+                if (!empty($en['parent_email'])) {
+                    bbcc_notify_username(
+                        $pdo,
+                        (string)$en['parent_email'],
+                        'Class Assigned for ' . (string)$en['student_name'],
+                        'A class has been assigned for your child. Please check your enrollment details.',
+                        'children-enrollment'
+                    );
+                }
                 $flash = 'Class assigned for <strong>' . h((string)$en['student_name']) . '</strong>.';
                 $ok = true;
             }
@@ -124,6 +135,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
                         (string)$en['student_name'],
                         $note
                     );
+                    bbcc_notify_username(
+                        $pdo,
+                        (string)$en['parent_email'],
+                        'Enrollment Update Needed for ' . (string)$en['student_name'],
+                        'Admin requested updates on your enrollment submission. Please review the note and resubmit.',
+                        'children-enrollment'
+                    );
                     pcm_log_enrolment_event($pdo, (int)$en['student_id'], (int)$en['id'], 'changes_requested', $currentActor, $note);
                     $flash = "Changes requested for <strong>{$en['student_name']}</strong>.";
                     $ok = true;
@@ -136,6 +154,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
                             (string)$result['parent_name'],
                             (string)$result['student_name']
                         );
+                        bbcc_notify_username(
+                            $pdo,
+                            (string)$result['parent_email'],
+                            'Enrollment Approved for ' . (string)$result['student_name'],
+                            'Your child enrollment has been approved. Thank you for completing the enrollment process.',
+                            'children-enrollment'
+                        );
                         pcm_log_enrolment_event($pdo, (int)$en['student_id'], (int)$en['id'], 'enrolment_approved', $currentActor, $note);
                     } else {
                         pcm_notify_parent_enrolment(
@@ -144,6 +169,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
                             $result['student_name'],
                             $result['new_status'],
                             $note
+                        );
+                        bbcc_notify_username(
+                            $pdo,
+                            (string)$result['parent_email'],
+                            'Enrollment Rejected for ' . (string)$result['student_name'],
+                            'Your enrollment submission was not approved. Please review admin notes and submit again.',
+                            'children-enrollment'
                         );
                         pcm_log_enrolment_event($pdo, (int)$en['student_id'], (int)$en['id'], 'enrolment_rejected', $currentActor, $note);
                     }

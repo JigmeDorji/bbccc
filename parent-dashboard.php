@@ -3,6 +3,7 @@ require_once "include/config.php";
 require_once "include/auth.php";
 require_once "access_control.php";
 require_once "include/parent_helpers.php";
+require_once "include/notifications.php";
 require_login();
 allowRoles(['parent']);
 
@@ -31,7 +32,8 @@ $stats = [
     'students' => 0,
     'pending' => 0,
     'approved' => 0,
-    'payments_pending' => 0
+    'payments_pending' => 0,
+    'notifications_unread' => 0
 ];
 
 $stmt = $pdo->prepare("SELECT COUNT(*) FROM students WHERE {$studentParentColumn} = ?");
@@ -49,6 +51,12 @@ $stats['approved'] = (int)$stmt->fetchColumn();
 $stmt = $pdo->prepare("SELECT COUNT(*) FROM payments WHERE parent_id = ? AND status = 'Pending'");
 $stmt->execute([$parentId]);
 $stats['payments_pending'] = (int)$stmt->fetchColumn();
+
+$stats['notifications_unread'] = bbcc_unread_notifications_count(
+    $pdo,
+    (string)($_SESSION['username'] ?? ''),
+    (string)($_SESSION['role'] ?? 'parent')
+);
 ?>
 
 <!DOCTYPE html>
@@ -105,6 +113,18 @@ $stats['payments_pending'] = (int)$stmt->fetchColumn();
                             <div class="card-body">
                                 <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Pending Payments</div>
                                 <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo $stats['payments_pending']; ?></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-3 mb-4">
+                        <div class="card shadow h-100 py-2">
+                            <div class="card-body">
+                                <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Unread Notifications</div>
+                                <div class="h5 mb-0 font-weight-bold text-gray-800"><?php echo $stats['notifications_unread']; ?></div>
+                                <div class="mt-2">
+                                    <a href="notifications" class="small">Open notifications</a>
+                                </div>
                             </div>
                         </div>
                     </div>

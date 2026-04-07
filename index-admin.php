@@ -2,6 +2,7 @@
 
 require_once "include/config.php";
 require_once "include/auth.php";
+require_once "include/notifications.php";
 require_login();
 
 $filterCompanyID = $_SESSION['companyID'] ?? null;
@@ -32,12 +33,19 @@ $totalBookings    = 0;
 $recentStudents   = [];
 $recentBookings   = [];
 $contactMessages  = 0;
+$unreadNotifications = 0;
 
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
+
+    $unreadNotifications = bbcc_unread_notifications_count(
+        $pdo,
+        (string)($_SESSION['username'] ?? ''),
+        (string)($_SESSION['role'] ?? '')
+    );
 
     /* ═══ PARENT DASHBOARD ═══ */
     if ($role === 'parent') {
@@ -513,25 +521,32 @@ function badge_class($st) {
                     $pendingKids  = count(array_filter($myChildren, fn($c) => strtolower($c['approval_status'] ?? '') === 'pending'));
                 ?>
                 <div class="row mb-4">
-                    <div class="col-md-4 col-6 mb-3">
+                    <div class="col-md-3 col-6 mb-3">
                         <div class="parent-stat-card">
                             <div class="icon" style="background: linear-gradient(135deg, #4e73df, #224abe);"><i class="fas fa-user-graduate"></i></div>
                             <div class="number"><?php echo $totalKids; ?></div>
                             <div class="label">Total Enrolled</div>
                         </div>
                     </div>
-                    <div class="col-md-4 col-6 mb-3">
+                    <div class="col-md-3 col-6 mb-3">
                         <div class="parent-stat-card">
                             <div class="icon" style="background: linear-gradient(135deg, #1cc88a, #13855c);"><i class="fas fa-check-circle"></i></div>
                             <div class="number"><?php echo $approvedKids; ?></div>
                             <div class="label">Approved</div>
                         </div>
                     </div>
-                    <div class="col-md-4 col-6 mb-3">
+                    <div class="col-md-3 col-6 mb-3">
                         <div class="parent-stat-card">
                             <div class="icon" style="background: linear-gradient(135deg, #f6c23e, #dda20a);"><i class="fas fa-clock"></i></div>
                             <div class="number"><?php echo $pendingKids; ?></div>
                             <div class="label">Pending</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 col-6 mb-3">
+                        <div class="parent-stat-card">
+                            <div class="icon" style="background: linear-gradient(135deg, #e74a3b, #be2617);"><i class="fas fa-bell"></i></div>
+                            <div class="number"><?php echo (int)$unreadNotifications; ?></div>
+                            <div class="label">Unread Notifications</div>
                         </div>
                     </div>
                 </div>
@@ -696,6 +711,18 @@ function badge_class($st) {
                                     <?php else: ?>
                                         <span style="color:#1cc88a;"><i class="fas fa-check-circle"></i> All handled</span>
                                     <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="card dash-card shadow">
+                            <div class="dash-stat-card">
+                                <div class="stat-icon bg-messages"><i class="fas fa-bell"></i></div>
+                                <div class="stat-label">Unread Notifications</div>
+                                <div class="stat-value"><?php echo (int)$unreadNotifications; ?></div>
+                                <div class="stat-footer">
+                                    <a href="notifications">Open notification center <i class="fas fa-arrow-right"></i></a>
                                 </div>
                             </div>
                         </div>

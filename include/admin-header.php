@@ -2,10 +2,29 @@
 // include/admin-header.php
 require_once "include/config.php";
 require_once "include/auth.php";
+require_once "include/notifications.php";
 require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
 $profileUrl = ($role === 'parent') ? 'parentProfile.php' : 'adminProfile.php';
+$notificationsUrl = 'notifications.php';
+$unreadNotifications = 0;
+try {
+    global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
+    $hdrPdo = new PDO(
+        "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
+        $DB_USER,
+        $DB_PASSWORD,
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+    );
+    $unreadNotifications = bbcc_unread_notifications_count(
+        $hdrPdo,
+        (string)($_SESSION['username'] ?? ''),
+        (string)($_SESSION['role'] ?? '')
+    );
+} catch (Throwable $e) {
+    $unreadNotifications = 0;
+}
 
 // ── Derive display name & initials ──
 $_displayName  = htmlspecialchars(logged_in_username() ?? 'User', ENT_QUOTES, 'UTF-8');
@@ -45,6 +64,7 @@ $_pageTitles = [
     'parent-children'      => 'My Children',
     'parent-enrolment'     => 'Enrolment',
     'children-enrollment'  => 'Enrolment',
+    'notifications'        => 'Notifications',
     'parent-fees'          => 'Fees & Payments',
     'parent-attendance'    => 'Attendance',
     'admin-enrolments'     => 'Enrollment',
@@ -462,6 +482,14 @@ h1, h6 { font-size: 1rem !important; }
             <i class="fas fa-calendar-day" aria-hidden="true"></i>
             <span><?php echo date('D, d M Y'); ?></span>
         </div>
+
+        <!-- Notifications -->
+        <a href="<?php echo htmlspecialchars($notificationsUrl, ENT_QUOTES, 'UTF-8'); ?>" class="topbar-icon-btn" title="Notifications" aria-label="Open notifications">
+            <i class="fas fa-bell" aria-hidden="true"></i>
+            <?php if ($unreadNotifications > 0): ?>
+                <span class="badge-count"><?php echo (int)min(99, $unreadNotifications); ?></span>
+            <?php endif; ?>
+        </a>
 
         <!-- Visit Website -->
         <a href="index" target="_blank" class="topbar-icon-btn" title="View Website" aria-label="Open public website in new tab">

@@ -288,6 +288,13 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
         </a>
     </li>
 
+    <li class="nav-item <?= ($currentPage == 'notifications.php') ? 'active' : '' ?>">
+        <a class="nav-link" href="notifications">
+            <i class="fas fa-bell"></i>
+            <span>Notifications</span>
+        </a>
+    </li>
+
     <?php if (!isParent() && !isTeacher() && !isPatron()) { ?>
 
         <hr class="sidebar-divider">
