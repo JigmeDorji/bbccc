@@ -3,6 +3,7 @@
 // All functions are pure — they receive $pdo where needed.
 
 require_once __DIR__ . '/mailer.php';
+require_once __DIR__ . '/mail_queue.php';
 
 function pcm_env(string $key, string $default = ''): string {
     $value = getenv($key);
@@ -15,6 +16,14 @@ function pcm_env(string $key, string $default = ''): string {
 function pcm_admin_notify_email(): string {
     $fallback = defined('MAIL_FROM_EMAIL') ? MAIL_FROM_EMAIL : '';
     return pcm_env('ADMIN_NOTIFY_EMAIL', $fallback);
+}
+
+function pcm_send_notification_mail(string $toEmail, string $toName, string $subject, string $html, int $timeoutSeconds = 4): bool {
+    // Queue-first for faster user-facing actions.
+    $queued = bbcc_queue_mail($toEmail, $toName, $subject, $html);
+    if ($queued) return true;
+    // Fallback to direct send if queue insert fails.
+    return @send_mail($toEmail, $toName, $subject, $html, $timeoutSeconds);
 }
 
 function pcm_ensure_fees_campus_columns(PDO $pdo): void {
@@ -456,7 +465,7 @@ function pcm_notify_admin_enrolment(string $childName, string $parentName): void
             </a>
         </p>
     ");
-    @send_mail($adminEmail, 'Admin', 'Parent Finalized Enrollment for ' . $childName, $html, 4);
+    pcm_send_notification_mail($adminEmail, 'Admin', 'Parent Finalized Enrollment for ' . $childName, $html, 4);
 }
 
 function pcm_notify_admin_student_registration(string $childName, string $parentName, string $parentEmail, string $studentCode = ''): void {
@@ -480,7 +489,7 @@ function pcm_notify_admin_student_registration(string $childName, string $parent
             </a>
         </p>
     ");
-    @send_mail($adminEmail, 'Admin', 'New Student Registration for ' . $childName, $html, 4);
+    pcm_send_notification_mail($adminEmail, 'Admin', 'New Student Registration for ' . $childName, $html, 4);
 }
 
 function pcm_notify_parent_enrolment(string $toEmail, string $parentName, string $childName, string $status, string $note): void {
@@ -491,7 +500,7 @@ function pcm_notify_parent_enrolment(string $toEmail, string $parentName, string
            <span style='color:{$colour};font-weight:700;'>{$status}</span>.</p>
         " . ($note ? "<p style='margin:0 0 14px;background:#fef3f2;padding:12px 16px;border-radius:6px;border-left:4px solid #881b12;'><em>" . htmlspecialchars($note) . "</em></p>" : "") . "
     ");
-    @send_mail($toEmail, $parentName, "Enrolment {$status} for {$childName}", $html);
+    pcm_send_notification_mail($toEmail, $parentName, "Enrolment {$status} for {$childName}", $html, 4);
 }
 
 function pcm_notify_parent_fee(string $toEmail, string $parentName, string $childName, string $label, string $status): void {
@@ -501,7 +510,7 @@ function pcm_notify_parent_fee(string $toEmail, string $parentName, string $chil
         <p style='margin:0 0 14px;'>Payment for <strong>" . htmlspecialchars($childName) . "</strong> — " . htmlspecialchars($label) . " has been
            <span style='color:{$colour};font-weight:700;'>{$status}</span>.</p>
     ");
-    @send_mail($toEmail, $parentName, "Fee {$status} for {$childName}", $html);
+    pcm_send_notification_mail($toEmail, $parentName, "Fee {$status} for {$childName}", $html, 4);
 }
 
 function pcm_notify_parent_enrolment_confirmed(string $toEmail, string $parentName, string $childName): void {
@@ -525,7 +534,7 @@ function pcm_notify_parent_enrolment_confirmed(string $toEmail, string $parentNa
         <p style='margin:10px 0 0;'>You can log in anytime to track attendance and updates.</p>
     ");
 
-    @send_mail($toEmail, $parentName, "Enrollment Confirmed for {$childName}", $html);
+    pcm_send_notification_mail($toEmail, $parentName, "Enrollment Confirmed for {$childName}", $html, 4);
 }
 
 function pcm_notify_parent_enrolment_changes_requested(string $toEmail, string $parentName, string $childName, string $note): void {
@@ -551,7 +560,7 @@ function pcm_notify_parent_enrolment_changes_requested(string $toEmail, string $
         </p>
     ");
 
-    @send_mail($toEmail, $parentName, "Enrollment Update Required for {$childName}", $html);
+    pcm_send_notification_mail($toEmail, $parentName, "Enrollment Update Required for {$childName}", $html, 4);
 }
 
 function pcm_notify_parent_payment_required(PDO $pdo, string $toEmail, string $parentName, string $childName, string $feePlan, float $feeAmount): void {
@@ -577,7 +586,7 @@ function pcm_notify_parent_payment_required(PDO $pdo, string $toEmail, string $p
         <p style='margin:10px 0 0;'>After payment, upload screenshot proof and confirm payment amount in the portal.</p>
     ");
 
-    @send_mail($toEmail, $parentName, "Finalized Enrollment for {$childName}", $html);
+    pcm_send_notification_mail($toEmail, $parentName, "Complete Enrollment process for {$childName}", $html, 4);
 }
 
 function pcm_notify_admin_absence(string $childName, string $parentName, string $date): void {
@@ -588,5 +597,5 @@ function pcm_notify_admin_absence(string $childName, string $parentName, string 
     $html = pcm_email_wrap('Absence Request', "
         <p style='margin:0 0 14px;'><strong>" . htmlspecialchars($parentName) . "</strong> submitted an absence request for <strong>" . htmlspecialchars($childName) . "</strong> on <strong>" . htmlspecialchars($date) . "</strong>.</p>
     ");
-    @send_mail($adminEmail, 'Admin', 'Absence Request for ' . $childName, $html, 4);
+    pcm_send_notification_mail($adminEmail, 'Admin', 'Absence Request for ' . $childName, $html, 4);
 }
