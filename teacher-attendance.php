@@ -106,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
         }
 
         $stmt = $pdo->prepare(
-            "SELECT s.id, s.student_name
+            "SELECT DISTINCT s.id, s.student_name
              FROM class_assignments ca
              INNER JOIN students s ON s.id = ca.student_id
              WHERE ca.class_id = :class_id AND s.approval_status = 'Approved'
@@ -171,7 +171,7 @@ if ($selectedClassId > 0) {
     $selectedClassMeta = $metaStmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
     $stmt = $pdo->prepare(
-        "SELECT s.id, s.student_name,
+        "SELECT DISTINCT s.id, s.student_name,
                 CASE WHEN ar.child_id IS NOT NULL THEN 'Absent' ELSE '' END AS attendance_status,
                 CASE WHEN ar.child_id IS NOT NULL THEN 1 ELSE 0 END AS has_absence_request
          FROM class_assignments ca
@@ -277,9 +277,6 @@ if ($selectedClassId > 0) {
                         <strong>Class:</strong> <?php echo htmlspecialchars((string)($selectedClassMeta['class_name'] ?? 'Selected Class')); ?>
                         &nbsp;|&nbsp;
                         <strong>Assigned Teacher:</strong> <?php echo htmlspecialchars((string)($selectedClassMeta['teacher_name'] ?? 'Not Assigned')); ?>
-                        <a class="btn btn-sm btn-outline-primary float-right" href="attendance-records?as=teacher&class_id=<?= (int)$selectedClassId ?>&from_date=<?= htmlspecialchars($selectedDate) ?>&to_date=<?= htmlspecialchars($selectedDate) ?>">
-                            <i class="fas fa-edit mr-1"></i> Edit Attendance Records
-                        </a>
                     </div>
                     <div class="card shadow mb-4">
                         <div class="card-header py-3">

@@ -37,6 +37,9 @@ $unreadNotifications = 0;
 $dashboardAttendance = [];
 $attendanceTitle = 'Attendance Records';
 $attendanceViewLink = 'attendanceManagement';
+$parentClassesAttended = 0;
+$parentChildTermProgress = [];
+$parentTermTotals = [1 => 0, 2 => 0, 3 => 0, 4 => 0];
 
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
@@ -49,6 +52,7 @@ try {
         (string)($_SESSION['username'] ?? ''),
         (string)($_SESSION['role'] ?? '')
     );
+    bbcc_ensure_term_class_total_columns($pdo);
 
     /* ═══ PARENT DASHBOARD ═══ */
     if ($role === 'parent') {
@@ -80,19 +84,50 @@ try {
             $stmtKids->execute([':pid' => $parentDbId]);
             $myChildren = $stmtKids->fetchAll(PDO::FETCH_ASSOC);
 
-            $stmtParentAttendance = $pdo->prepare("
-                SELECT a.attendance_date, s.student_name, s.student_id, c.class_name, a.status
+            $stmtParentAttended = $pdo->prepare("
+                SELECT COUNT(*) 
                 FROM attendance a
                 INNER JOIN students s ON s.id = a.student_id
-                LEFT JOIN classes c ON c.id = a.class_id
-                WHERE s.parentId = :pid
-                ORDER BY a.attendance_date DESC, a.id DESC
-                LIMIT 12
+                WHERE s.parentId = :pid AND LOWER(COALESCE(a.status,'')) = 'present'
             ");
-            $stmtParentAttendance->execute([':pid' => $parentDbId]);
-            $dashboardAttendance = $stmtParentAttendance->fetchAll(PDO::FETCH_ASSOC);
-            $attendanceTitle = 'My Children Attendance Records';
-            $attendanceViewLink = 'parent-attendance';
+            $stmtParentAttended->execute([':pid' => $parentDbId]);
+            $parentClassesAttended = (int)$stmtParentAttended->fetchColumn();
+
+            $stmtParentTerms = $pdo->prepare("
+                SELECT
+                    s.id AS student_pk,
+                    s.student_name,
+                    s.student_id,
+                    SUM(CASE WHEN LOWER(COALESCE(a.status,''))='present' AND MONTH(a.attendance_date) BETWEEN 1 AND 3 THEN 1 ELSE 0 END) AS t1,
+                    SUM(CASE WHEN LOWER(COALESCE(a.status,''))='present' AND MONTH(a.attendance_date) BETWEEN 4 AND 6 THEN 1 ELSE 0 END) AS t2,
+                    SUM(CASE WHEN LOWER(COALESCE(a.status,''))='present' AND MONTH(a.attendance_date) BETWEEN 7 AND 9 THEN 1 ELSE 0 END) AS t3,
+                    SUM(CASE WHEN LOWER(COALESCE(a.status,''))='present' AND MONTH(a.attendance_date) BETWEEN 10 AND 12 THEN 1 ELSE 0 END) AS t4
+                FROM students s
+                LEFT JOIN attendance a ON a.student_id = s.id
+                WHERE s.parentId = :pid
+                GROUP BY s.id, s.student_name, s.student_id
+                ORDER BY s.student_name ASC
+            ");
+            $stmtParentTerms->execute([':pid' => $parentDbId]);
+            $parentChildTermProgress = $stmtParentTerms->fetchAll(PDO::FETCH_ASSOC);
+
+            $stmtTermTotals = $pdo->query("
+                SELECT
+                    COALESCE(term1_total_classes, 0) AS term1_total_classes,
+                    COALESCE(term2_total_classes, 0) AS term2_total_classes,
+                    COALESCE(term3_total_classes, 0) AS term3_total_classes,
+                    COALESCE(term4_total_classes, 0) AS term4_total_classes
+                FROM fees_settings
+                WHERE id = 1
+                LIMIT 1
+            ");
+            $totalRow = $stmtTermTotals->fetch(PDO::FETCH_ASSOC) ?: [];
+            $parentTermTotals = [
+                1 => (int)($totalRow['term1_total_classes'] ?? 0),
+                2 => (int)($totalRow['term2_total_classes'] ?? 0),
+                3 => (int)($totalRow['term3_total_classes'] ?? 0),
+                4 => (int)($totalRow['term4_total_classes'] ?? 0),
+            ];
         }
     }
 
@@ -230,6 +265,19 @@ function badge_class($st) {
     if ($st === 'approved') return 'success';
     if ($st === 'rejected') return 'danger';
     return 'secondary';
+}
+
+function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
+    static $done = false;
+    if ($done) return;
+    $cols = ['term1_total_classes','term2_total_classes','term3_total_classes','term4_total_classes'];
+    foreach ($cols as $col) {
+        $stmt = $pdo->query("SHOW COLUMNS FROM fees_settings LIKE " . $pdo->quote($col));
+        if (!$stmt || !$stmt->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec("ALTER TABLE fees_settings ADD COLUMN {$col} INT NULL");
+        }
+    }
+    $done = true;
 }
 ?>
 <!DOCTYPE html>
@@ -608,8 +656,8 @@ function badge_class($st) {
                     <div class="col-md-3 col-6 mb-3">
                         <div class="parent-stat-card">
                             <div class="icon" style="background: linear-gradient(135deg, #e74a3b, #be2617);"><i class="fas fa-bell"></i></div>
-                            <div class="number"><?php echo (int)$unreadNotifications; ?></div>
-                            <div class="label">Unread Notifications</div>
+                            <div class="number"><?php echo (int)$parentClassesAttended; ?></div>
+                            <div class="label">Classes Attended</div>
                         </div>
                     </div>
                 </div>
@@ -695,49 +743,48 @@ function badge_class($st) {
                 </div>
 
                 <div class="card dash-card shadow mb-4">
-                    <div class="card-body p-0">
-                        <div class="p-3">
-                            <div class="section-title mb-0">
-                                <span><i class="fas fa-clipboard-check mr-2" style="color:#36b9cc;"></i><?php echo htmlspecialchars($attendanceTitle); ?></span>
-                                <a href="<?php echo htmlspecialchars($attendanceViewLink); ?>">View All</a>
-                            </div>
+                    <div class="card-body" style="padding:22px 24px;">
+                        <div class="section-title mb-2" style="font-size:.95rem;">
+                            <span><i class="fas fa-clipboard-check mr-2" style="color:#36b9cc;"></i>Term Attendance Progress</span>
+                            <a href="parent-attendance">View Attendance</a>
                         </div>
-                        <?php if (empty($dashboardAttendance)): ?>
-                            <div class="p-4 text-center" style="color:#ccc;">
-                                <i class="fas fa-inbox fa-2x mb-2"></i>
-                                <p class="mb-0" style="font-size:0.85rem;">No attendance records yet</p>
-                            </div>
-                        <?php else: ?>
-                            <div class="table-responsive">
-                                <table class="dash-table">
-                                    <thead>
-                                    <tr><th>Date</th><th>Student</th><th>Class</th><th>Status</th></tr>
-                                    </thead>
-                                    <tbody>
-                                    <?php foreach ($dashboardAttendance as $ar): ?>
-                                        <?php
-                                            $attStatus = strtolower((string)($ar['status'] ?? ''));
-                                            $attBadge = 'secondary';
-                                            if ($attStatus === 'present') $attBadge = 'success';
-                                            elseif ($attStatus === 'absent') $attBadge = 'danger';
-                                            elseif ($attStatus === 'late') $attBadge = 'warning';
-                                        ?>
+                        <div class="table-responsive">
+                            <table class="dash-table">
+                                <thead>
+                                <tr><th>Child</th><th>Term 1</th><th>Term 2</th><th>Term 3</th><th>Term 4</th></tr>
+                                </thead>
+                                <tbody>
+                                <?php if (empty($parentChildTermProgress)): ?>
+                                    <tr>
+                                        <td colspan="5" class="text-muted">No child records found.</td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($parentChildTermProgress as $row): ?>
                                         <tr>
-                                            <td><?php echo !empty($ar['attendance_date']) ? date('d M Y', strtotime($ar['attendance_date'])) : '-'; ?></td>
                                             <td>
-                                                <strong><?php echo htmlspecialchars($ar['student_name'] ?? '-'); ?></strong>
-                                                <?php if (!empty($ar['student_id'])): ?>
-                                                    <div style="font-size:.75rem;color:#8c8c9e;"><?php echo htmlspecialchars($ar['student_id']); ?></div>
+                                                <strong><?php echo htmlspecialchars($row['student_name'] ?? ''); ?></strong>
+                                                <?php if (!empty($row['student_id'])): ?>
+                                                    <div style="font-size:.75rem;color:#8c8c9e;"><?php echo htmlspecialchars($row['student_id']); ?></div>
                                                 <?php endif; ?>
                                             </td>
-                                            <td><?php echo htmlspecialchars($ar['class_name'] ?? '-'); ?></td>
-                                            <td><span class="badge badge-<?php echo $attBadge; ?>"><?php echo htmlspecialchars($ar['status'] ?? 'Unknown'); ?></span></td>
+                                            <?php for ($term = 1; $term <= 4; $term++): ?>
+                                                <?php
+                                                    $key = 't' . $term;
+                                                    $att = (int)($row[$key] ?? 0);
+                                                    $tot = (int)($parentTermTotals[$term] ?? 0);
+                                                    $label = $att . ($tot > 0 ? (' / ' . $tot) : '') . ' classes';
+                                                ?>
+                                                <td><?php echo htmlspecialchars($label); ?></td>
+                                            <?php endfor; ?>
                                         </tr>
                                     <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        <?php endif; ?>
+                                <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div style="font-size:.75rem;color:#8c8c9e;margin-top:8px;">
+                            Terms are calculated by months: Term 1 (Jan-Mar), Term 2 (Apr-Jun), Term 3 (Jul-Sep), Term 4 (Oct-Dec).
+                        </div>
                     </div>
                 </div>
 

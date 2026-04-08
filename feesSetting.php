@@ -34,8 +34,27 @@ try {
     bbcc_fail_db($e);
 }
 
+function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
+    static $done = false;
+    if ($done) return;
+    $cols = [
+        'term1_total_classes',
+        'term2_total_classes',
+        'term3_total_classes',
+        'term4_total_classes',
+    ];
+    foreach ($cols as $col) {
+        $stmt = $pdo->query("SHOW COLUMNS FROM fees_settings LIKE " . $pdo->quote($col));
+        if (!$stmt || !$stmt->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec("ALTER TABLE fees_settings ADD COLUMN {$col} INT NULL");
+        }
+    }
+    $done = true;
+}
+
 // Load settings
 pcm_ensure_fees_campus_columns($pdo);
+bbcc_ensure_term_class_total_columns($pdo);
 $stmt = $pdo->query("SELECT * FROM fees_settings WHERE id = 1 LIMIT 1");
 $settings = $stmt->fetch();
 
@@ -70,11 +89,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $amount_termwise   = (float)($_POST['amount_termwise'] ?? 0);
         $amount_halfyearly = (float)($_POST['amount_halfyearly'] ?? 0);
         $amount_yearly     = (float)($_POST['amount_yearly'] ?? 0);
+        $term1_total_classes = (int)($_POST['term1_total_classes'] ?? 0);
+        $term2_total_classes = (int)($_POST['term2_total_classes'] ?? 0);
+        $term3_total_classes = (int)($_POST['term3_total_classes'] ?? 0);
+        $term4_total_classes = (int)($_POST['term4_total_classes'] ?? 0);
         $campus_one_name   = trim($_POST['campus_one_name'] ?? '');
         $campus_two_name   = trim($_POST['campus_two_name'] ?? '');
 
         if ($amount_termwise < 0 || $amount_halfyearly < 0 || $amount_yearly < 0) {
             throw new Exception("Amounts cannot be negative.");
+        }
+        if ($term1_total_classes < 0 || $term2_total_classes < 0 || $term3_total_classes < 0 || $term4_total_classes < 0) {
+            throw new Exception("Term total classes cannot be negative.");
         }
         if ($campus_one_name === '' || $campus_two_name === '') {
             throw new Exception("Both campus names are required.");
@@ -94,6 +120,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 amount_termwise = :amount_termwise,
                 amount_halfyearly = :amount_halfyearly,
                 amount_yearly = :amount_yearly,
+                term1_total_classes = :term1_total_classes,
+                term2_total_classes = :term2_total_classes,
+                term3_total_classes = :term3_total_classes,
+                term4_total_classes = :term4_total_classes,
                 campus_one_name = :campus_one_name,
                 campus_two_name = :campus_two_name
             WHERE id = 1
@@ -111,6 +141,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ':amount_termwise' => $amount_termwise,
             ':amount_halfyearly' => $amount_halfyearly,
             ':amount_yearly' => $amount_yearly,
+            ':term1_total_classes' => $term1_total_classes,
+            ':term2_total_classes' => $term2_total_classes,
+            ':term3_total_classes' => $term3_total_classes,
+            ':term4_total_classes' => $term4_total_classes,
             ':campus_one_name' => $campus_one_name,
             ':campus_two_name' => $campus_two_name,
         ]);
@@ -269,6 +303,30 @@ if (!function_exists('h')) {
                                                 <input type="number" step="0.01" min="0" class="form-control"
                                                        name="amount_yearly"
                                                        value="<?php echo h($settings['amount_yearly'] ?? '250.00'); ?>">
+                                            </div>
+                                        </div>
+
+                                        <hr>
+
+                                        <h6 class="font-weight-bold text-primary mb-3">Term Class Targets (for Parent Dashboard)</h6>
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <label>Total Classes — Term 1</label>
+                                                <input type="number" min="0" step="1" class="form-control" name="term1_total_classes" value="<?php echo h($settings['term1_total_classes'] ?? '0'); ?>">
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                <label>Total Classes — Term 2</label>
+                                                <input type="number" min="0" step="1" class="form-control" name="term2_total_classes" value="<?php echo h($settings['term2_total_classes'] ?? '0'); ?>">
+                                            </div>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group col-md-6">
+                                                <label>Total Classes — Term 3</label>
+                                                <input type="number" min="0" step="1" class="form-control" name="term3_total_classes" value="<?php echo h($settings['term3_total_classes'] ?? '0'); ?>">
+                                            </div>
+                                            <div class="form-group col-md-6">
+                                                <label>Total Classes — Term 4</label>
+                                                <input type="number" min="0" step="1" class="form-control" name="term4_total_classes" value="<?php echo h($settings['term4_total_classes'] ?? '0'); ?>">
                                             </div>
                                         </div>
 

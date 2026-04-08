@@ -16,6 +16,21 @@ $parentId = (int)$parent['id'];
 $flash    = '';
 $ok       = false;
 
+function bbcc_ensure_absence_unique_daily(PDO $pdo): void {
+    static $done = false;
+    if ($done) return;
+    try {
+        $idx = $pdo->query("SHOW INDEX FROM pcm_absence_requests WHERE Key_name = 'uniq_absence_child_day'");
+        if (!$idx || !$idx->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec("ALTER TABLE pcm_absence_requests ADD UNIQUE KEY uniq_absence_child_day (child_id, absence_date)");
+        }
+    } catch (Throwable $e) {
+        error_log('[BBCC] absence unique index check skipped: ' . $e->getMessage());
+    }
+    $done = true;
+}
+bbcc_ensure_absence_unique_daily($pdo);
+
 // ── POST: absence request ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'absence') {
     verify_csrf();
@@ -32,14 +47,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'absen
     elseif (!$date)       { $flash = 'Date is required.'; }
     elseif (!$reason)     { $flash = 'Reason is required.'; }
     else {
-        $ins = $pdo->prepare("
-            INSERT INTO pcm_absence_requests (child_id, parent_id, absence_date, reason)
-            VALUES (:cid, :pid, :d, :r)
+        $dup = $pdo->prepare("
+            SELECT id
+            FROM pcm_absence_requests
+            WHERE child_id = :cid AND absence_date = :d
+            LIMIT 1
         ");
-        $ins->execute([':cid'=>$childId, ':pid'=>$parentId, ':d'=>$date, ':r'=>$reason]);
-        pcm_notify_admin_absence($child['student_name'], $parent['full_name'], $date);
-        $flash = 'Absence request submitted.';
-        $ok = true;
+        $dup->execute([':cid'=>$childId, ':d'=>$date]);
+        if ($dup->fetch(PDO::FETCH_ASSOC)) {
+            $flash = 'Absence already marked for this child on this date.';
+        } else {
+            $ins = $pdo->prepare("
+                INSERT INTO pcm_absence_requests (child_id, parent_id, absence_date, reason)
+                VALUES (:cid, :pid, :d, :r)
+            ");
+            $ins->execute([':cid'=>$childId, ':pid'=>$parentId, ':d'=>$date, ':r'=>$reason]);
+            pcm_notify_admin_absence($child['student_name'], $parent['full_name'], $date);
+            $flash = 'Absence request submitted.';
+            $ok = true;
+        }
     }
 }
 
