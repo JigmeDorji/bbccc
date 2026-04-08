@@ -47,6 +47,7 @@ $_pageTitles = [
     'feesManagement'       => 'Fees Management',
     'feesSetting'          => 'Fees Settings',
     'attendanceManagement' => 'Attendance',
+    'attendance-records'  => 'Attendance Records',
     'eventManagement'      => 'Manage Events',
     'bookingManagement'    => 'Booking Requests',
     'companySetup'         => 'Company Setup',

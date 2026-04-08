@@ -21,6 +21,25 @@ try {
     bbcc_fail_db($e);
 }
 
+function bbcc_ensure_attendance_batch_column(PDO $pdo): void {
+    static $done = false;
+    if ($done) return;
+    $stmt = $pdo->query("SHOW COLUMNS FROM attendance LIKE 'batch_id'");
+    if (!$stmt || !$stmt->fetch(PDO::FETCH_ASSOC)) {
+        $pdo->exec("ALTER TABLE attendance ADD COLUMN batch_id VARCHAR(48) NULL AFTER marked_at");
+    }
+    try {
+        $idx = $pdo->query("SHOW INDEX FROM attendance WHERE Key_name = 'uniq_attendance_day'");
+        if ($idx && $idx->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec("ALTER TABLE attendance DROP INDEX uniq_attendance_day");
+        }
+    } catch (Throwable $e) {
+        error_log('[BBCC] attendance index migration skipped: ' . $e->getMessage());
+    }
+    $done = true;
+}
+bbcc_ensure_attendance_batch_column($pdo);
+
 // Load classes for selector
 $classesList = $pdo->query("SELECT id, class_name FROM classes WHERE active=1 ORDER BY class_name")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -56,6 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $teacherId = (int)$pdo->query("SELECT id FROM teachers LIMIT 1")->fetchColumn();
         }
         if (!$teacherId) throw new Exception("No teacher found. Please set up a teacher first.");
+        $recordedAt = date('Y-m-d H:i:s');
+        $batchId = uniqid('att_', true);
 
         foreach ($rows as $studentId => $status) {
             $studentId = (int)$studentId;
@@ -65,18 +86,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $note = isset($notes[$studentId]) ? trim($notes[$studentId]) : null;
             $note = ($note === '') ? null : $note;
 
-            // Check if record exists
-            $chk = $pdo->prepare("SELECT id FROM attendance WHERE class_id=:cid AND student_id=:sid AND attendance_date=:d");
-            $chk->execute([':cid'=>$classId, ':sid'=>$studentId, ':d'=>$date]);
-            $existId = $chk->fetchColumn();
-
-            if ($existId) {
-                $upd = $pdo->prepare("UPDATE attendance SET status=:st, notes=:n, marked_at=NOW() WHERE id=:id");
-                $upd->execute([':st'=>$status, ':n'=>$note, ':id'=>$existId]);
-            } else {
-                $ins = $pdo->prepare("INSERT INTO attendance (class_id, student_id, teacher_id, attendance_date, status, notes) VALUES (:cid,:sid,:tid,:d,:st,:n)");
-                $ins->execute([':cid'=>$classId, ':sid'=>$studentId, ':tid'=>$teacherId, ':d'=>$date, ':st'=>$status, ':n'=>$note]);
-            }
+            $ins = $pdo->prepare("INSERT INTO attendance (class_id, student_id, teacher_id, attendance_date, status, notes, marked_at, batch_id) VALUES (:cid,:sid,:tid,:d,:st,:n,:m,:b)");
+            $ins->execute([':cid'=>$classId, ':sid'=>$studentId, ':tid'=>$teacherId, ':d'=>$date, ':st'=>$status, ':n'=>$note, ':m'=>$recordedAt, ':b'=>$batchId]);
         }
 
         $message = "Attendance saved successfully.";
@@ -103,9 +114,14 @@ if ($classId) {
     $students = $stmtStudents->fetchAll(PDO::FETCH_ASSOC);
 
     $stmtExisting = $pdo->prepare("
-        SELECT student_id, status, notes
-        FROM attendance
-        WHERE class_id = :cid AND attendance_date = :d
+        SELECT a.student_id, a.status, a.notes
+        FROM attendance a
+        INNER JOIN (
+            SELECT class_id, student_id, attendance_date, MAX(id) AS max_id
+            FROM attendance
+            GROUP BY class_id, student_id, attendance_date
+        ) latest ON latest.max_id = a.id
+        WHERE a.class_id = :cid AND a.attendance_date = :d
     ");
     $stmtExisting->execute([':cid' => $classId, ':d' => $date]);
     foreach ($stmtExisting->fetchAll(PDO::FETCH_ASSOC) as $r) {

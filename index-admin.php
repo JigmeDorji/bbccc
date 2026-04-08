@@ -34,6 +34,9 @@ $recentStudents   = [];
 $recentBookings   = [];
 $contactMessages  = 0;
 $unreadNotifications = 0;
+$dashboardAttendance = [];
+$attendanceTitle = 'Attendance Records';
+$attendanceViewLink = 'attendanceManagement';
 
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
@@ -76,6 +79,20 @@ try {
             ");
             $stmtKids->execute([':pid' => $parentDbId]);
             $myChildren = $stmtKids->fetchAll(PDO::FETCH_ASSOC);
+
+            $stmtParentAttendance = $pdo->prepare("
+                SELECT a.attendance_date, s.student_name, s.student_id, c.class_name, a.status
+                FROM attendance a
+                INNER JOIN students s ON s.id = a.student_id
+                LEFT JOIN classes c ON c.id = a.class_id
+                WHERE s.parentId = :pid
+                ORDER BY a.attendance_date DESC, a.id DESC
+                LIMIT 12
+            ");
+            $stmtParentAttendance->execute([':pid' => $parentDbId]);
+            $dashboardAttendance = $stmtParentAttendance->fetchAll(PDO::FETCH_ASSOC);
+            $attendanceTitle = 'My Children Attendance Records';
+            $attendanceViewLink = 'parent-attendance';
         }
     }
 
@@ -114,6 +131,51 @@ try {
 
         // Contact messages
         $contactMessages = (int)$pdo->query("SELECT COUNT(*) FROM contact")->fetchColumn();
+
+        if ($role === 'teacher') {
+            $sessionUserId = (string)($_SESSION['userid'] ?? '');
+            $sessionUsername = (string)($_SESSION['username'] ?? '');
+
+            $stmtTeacher = $pdo->prepare("
+                SELECT id
+                FROM teachers
+                WHERE (user_id = :uid AND :uid <> '')
+                   OR LOWER(email) = LOWER(:em)
+                ORDER BY id ASC
+                LIMIT 1
+            ");
+            $stmtTeacher->execute([':uid' => $sessionUserId, ':em' => $sessionUsername]);
+            $teacherRow = $stmtTeacher->fetch(PDO::FETCH_ASSOC);
+            $teacherId = (int)($teacherRow['id'] ?? 0);
+
+            if ($teacherId > 0) {
+                $stmtTeacherAttendance = $pdo->prepare("
+                    SELECT a.attendance_date, s.student_name, s.student_id, c.class_name, a.status
+                    FROM attendance a
+                    INNER JOIN classes c ON c.id = a.class_id
+                    INNER JOIN students s ON s.id = a.student_id
+                    WHERE c.teacher_id = :teacher_id
+                    ORDER BY a.attendance_date DESC, a.id DESC
+                    LIMIT 15
+                ");
+                $stmtTeacherAttendance->execute([':teacher_id' => $teacherId]);
+                $dashboardAttendance = $stmtTeacherAttendance->fetchAll(PDO::FETCH_ASSOC);
+            }
+            $attendanceTitle = 'My Class Attendance Records';
+            $attendanceViewLink = 'teacher-attendance';
+        } else {
+            $stmtAdminAttendance = $pdo->query("
+                SELECT a.attendance_date, s.student_name, s.student_id, c.class_name, a.status
+                FROM attendance a
+                INNER JOIN students s ON s.id = a.student_id
+                LEFT JOIN classes c ON c.id = a.class_id
+                ORDER BY a.attendance_date DESC, a.id DESC
+                LIMIT 15
+            ");
+            $dashboardAttendance = $stmtAdminAttendance->fetchAll(PDO::FETCH_ASSOC);
+            $attendanceTitle = 'Recent Attendance Records';
+            $attendanceViewLink = 'attendanceManagement';
+        }
     }
 
     /* ═══ FEE COLLECTION DATA ═══ */
@@ -632,6 +694,53 @@ function badge_class($st) {
                     </div>
                 </div>
 
+                <div class="card dash-card shadow mb-4">
+                    <div class="card-body p-0">
+                        <div class="p-3">
+                            <div class="section-title mb-0">
+                                <span><i class="fas fa-clipboard-check mr-2" style="color:#36b9cc;"></i><?php echo htmlspecialchars($attendanceTitle); ?></span>
+                                <a href="<?php echo htmlspecialchars($attendanceViewLink); ?>">View All</a>
+                            </div>
+                        </div>
+                        <?php if (empty($dashboardAttendance)): ?>
+                            <div class="p-4 text-center" style="color:#ccc;">
+                                <i class="fas fa-inbox fa-2x mb-2"></i>
+                                <p class="mb-0" style="font-size:0.85rem;">No attendance records yet</p>
+                            </div>
+                        <?php else: ?>
+                            <div class="table-responsive">
+                                <table class="dash-table">
+                                    <thead>
+                                    <tr><th>Date</th><th>Student</th><th>Class</th><th>Status</th></tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($dashboardAttendance as $ar): ?>
+                                        <?php
+                                            $attStatus = strtolower((string)($ar['status'] ?? ''));
+                                            $attBadge = 'secondary';
+                                            if ($attStatus === 'present') $attBadge = 'success';
+                                            elseif ($attStatus === 'absent') $attBadge = 'danger';
+                                            elseif ($attStatus === 'late') $attBadge = 'warning';
+                                        ?>
+                                        <tr>
+                                            <td><?php echo !empty($ar['attendance_date']) ? date('d M Y', strtotime($ar['attendance_date'])) : '-'; ?></td>
+                                            <td>
+                                                <strong><?php echo htmlspecialchars($ar['student_name'] ?? '-'); ?></strong>
+                                                <?php if (!empty($ar['student_id'])): ?>
+                                                    <div style="font-size:.75rem;color:#8c8c9e;"><?php echo htmlspecialchars($ar['student_id']); ?></div>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($ar['class_name'] ?? '-'); ?></td>
+                                            <td><span class="badge badge-<?php echo $attBadge; ?>"><?php echo htmlspecialchars($ar['status'] ?? 'Unknown'); ?></span></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
 
             <?php else: ?>
                 <!-- ═══════════════════════════════════════════ -->
@@ -902,6 +1011,53 @@ function badge_class($st) {
                                 <?php endif; ?>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <div class="card dash-card shadow mb-4">
+                    <div class="card-body p-0">
+                        <div class="p-3">
+                            <div class="section-title mb-0">
+                                <span><i class="fas fa-clipboard-check mr-2" style="color:#36b9cc;"></i><?php echo htmlspecialchars($attendanceTitle); ?></span>
+                                <a href="<?php echo htmlspecialchars($attendanceViewLink); ?>">View All</a>
+                            </div>
+                        </div>
+                        <?php if (empty($dashboardAttendance)): ?>
+                            <div class="p-4 text-center" style="color:#ccc;">
+                                <i class="fas fa-inbox fa-2x mb-2"></i>
+                                <p class="mb-0" style="font-size:0.85rem;">No attendance records yet</p>
+                            </div>
+                        <?php else: ?>
+                            <div class="table-responsive">
+                                <table class="dash-table">
+                                    <thead>
+                                    <tr><th>Date</th><th>Student</th><th>Class</th><th>Status</th></tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($dashboardAttendance as $ar): ?>
+                                        <?php
+                                            $attStatus = strtolower((string)($ar['status'] ?? ''));
+                                            $attBadge = 'secondary';
+                                            if ($attStatus === 'present') $attBadge = 'success';
+                                            elseif ($attStatus === 'absent') $attBadge = 'danger';
+                                            elseif ($attStatus === 'late') $attBadge = 'warning';
+                                        ?>
+                                        <tr>
+                                            <td><?php echo !empty($ar['attendance_date']) ? date('d M Y', strtotime($ar['attendance_date'])) : '-'; ?></td>
+                                            <td>
+                                                <strong><?php echo htmlspecialchars($ar['student_name'] ?? '-'); ?></strong>
+                                                <?php if (!empty($ar['student_id'])): ?>
+                                                    <div style="font-size:.75rem;color:#8c8c9e;"><?php echo htmlspecialchars($ar['student_id']); ?></div>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td><?php echo htmlspecialchars($ar['class_name'] ?? '-'); ?></td>
+                                            <td><span class="badge badge-<?php echo $attBadge; ?>"><?php echo htmlspecialchars($ar['status'] ?? 'Unknown'); ?></span></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
 

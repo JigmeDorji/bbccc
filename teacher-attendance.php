@@ -17,6 +17,25 @@ try {
     bbcc_fail_db($e);
 }
 
+function bbcc_ensure_attendance_batch_column(PDO $pdo): void {
+    static $done = false;
+    if ($done) return;
+    $stmt = $pdo->query("SHOW COLUMNS FROM attendance LIKE 'batch_id'");
+    if (!$stmt || !$stmt->fetch(PDO::FETCH_ASSOC)) {
+        $pdo->exec("ALTER TABLE attendance ADD COLUMN batch_id VARCHAR(48) NULL AFTER marked_at");
+    }
+    try {
+        $idx = $pdo->query("SHOW INDEX FROM attendance WHERE Key_name = 'uniq_attendance_day'");
+        if ($idx && $idx->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec("ALTER TABLE attendance DROP INDEX uniq_attendance_day");
+        }
+    } catch (Throwable $e) {
+        error_log('[BBCC] attendance index migration skipped: ' . $e->getMessage());
+    }
+    $done = true;
+}
+bbcc_ensure_attendance_batch_column($pdo);
+
 $teacherId = null;
 $classes = [];
 $sessionUserId = (string)($_SESSION['userid'] ?? '');
@@ -95,44 +114,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
         );
         $stmt->execute([':class_id' => $classId]);
         $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $recordedAt = date('Y-m-d H:i:s');
+        $batchId = uniqid('att_', true);
 
         foreach ($students as $student) {
             $studentId = (int)$student['id'];
-            $status = $statuses[$studentId] ?? 'Absent';
-
-            $stmtCheck = $pdo->prepare(
-                "SELECT id FROM attendance WHERE class_id = :class_id AND student_id = :student_id AND attendance_date = :attendance_date"
+            $status = trim((string)($statuses[$studentId] ?? ''));
+            if (!in_array($status, ['Present', 'Absent', 'Late'], true)) {
+                throw new Exception("Please select Present, Absent, or Late for each student before saving.");
+            }
+            $stmtInsert = $pdo->prepare(
+                "INSERT INTO attendance (class_id, student_id, teacher_id, attendance_date, status, marked_at, batch_id)
+                 VALUES (:class_id, :student_id, :teacher_id, :attendance_date, :status, :marked_at, :batch_id)"
             );
-            $stmtCheck->execute([
+            $stmtInsert->execute([
                 ':class_id' => $classId,
                 ':student_id' => $studentId,
-                ':attendance_date' => $attendanceDate
+                ':teacher_id' => $teacherId,
+                ':attendance_date' => $attendanceDate,
+                ':status' => $status,
+                ':marked_at' => $recordedAt,
+                ':batch_id' => $batchId
             ]);
-            $existing = $stmtCheck->fetch(PDO::FETCH_ASSOC);
-
-            if ($existing) {
-                $stmtUpdate = $pdo->prepare(
-                    "UPDATE attendance
-                     SET status = :status, marked_at = NOW()
-                     WHERE id = :id"
-                );
-                $stmtUpdate->execute([
-                    ':status' => $status,
-                    ':id' => $existing['id']
-                ]);
-            } else {
-                $stmtInsert = $pdo->prepare(
-                    "INSERT INTO attendance (class_id, student_id, teacher_id, attendance_date, status)
-                     VALUES (:class_id, :student_id, :teacher_id, :attendance_date, :status)"
-                );
-                $stmtInsert->execute([
-                    ':class_id' => $classId,
-                    ':student_id' => $studentId,
-                    ':teacher_id' => $teacherId,
-                    ':attendance_date' => $attendanceDate,
-                    ':status' => $status
-                ]);
-            }
         }
 
         $message = "Attendance saved.";
@@ -169,11 +172,15 @@ if ($selectedClassId > 0) {
 
     $stmt = $pdo->prepare(
         "SELECT s.id, s.student_name,
-                COALESCE(a.status, 'Absent') AS attendance_status
+                CASE WHEN ar.child_id IS NOT NULL THEN 'Absent' ELSE '' END AS attendance_status,
+                CASE WHEN ar.child_id IS NOT NULL THEN 1 ELSE 0 END AS has_absence_request
          FROM class_assignments ca
          INNER JOIN students s ON s.id = ca.student_id
-         LEFT JOIN attendance a
-            ON a.class_id = ca.class_id AND a.student_id = s.id AND a.attendance_date = :attendance_date
+         LEFT JOIN (
+            SELECT child_id, absence_date, status
+            FROM pcm_absence_requests
+            WHERE status <> 'Rejected'
+         ) ar ON ar.child_id = s.id AND ar.absence_date = :attendance_date
          WHERE ca.class_id = :class_id AND s.approval_status = 'Approved'
          ORDER BY s.student_name"
     );
@@ -194,6 +201,20 @@ if ($selectedClassId > 0) {
     <title>Attendance</title>
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
+    <style>
+    .att-choice-cell { min-width: 96px; text-align: center; vertical-align: middle !important; }
+    .att-choice-cell .choice-wrap { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+    .att-choice-cell .att-check { transform: scale(1.45); cursor: pointer; }
+    .att-choice-cell .att-check.present-check { accent-color: #28a745; }
+    .att-choice-cell .att-check.absent-check { accent-color: #dc3545; }
+    .att-choice-cell .att-check.late-check { accent-color: #f0ad4e; }
+    .att-choice-cell.present { background: #f0fff4; }
+    .att-choice-cell.absent { background: #fff5f5; }
+    .att-choice-cell.late { background: #fffaf0; }
+    .att-choice-cell.active.present { background: #d4edda; }
+    .att-choice-cell.active.absent { background: #f8d7da; }
+    .att-choice-cell.active.late { background: #fff3cd; }
+    </style>
 </head>
 <body id="page-top">
 <div id="wrapper">
@@ -241,6 +262,13 @@ if ($selectedClassId > 0) {
                                 </div>
                             </div>
                         </form>
+                        <?php if ($selectedClassId > 0): ?>
+                            <div class="mt-2">
+                                <a class="btn btn-outline-primary btn-sm" href="attendance-records?as=teacher&class_id=<?= (int)$selectedClassId ?>&from_date=<?= htmlspecialchars($selectedDate) ?>&to_date=<?= htmlspecialchars($selectedDate) ?>">
+                                    <i class="fas fa-edit mr-1"></i> Edit Attendance History
+                                </a>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -249,13 +277,16 @@ if ($selectedClassId > 0) {
                         <strong>Class:</strong> <?php echo htmlspecialchars((string)($selectedClassMeta['class_name'] ?? 'Selected Class')); ?>
                         &nbsp;|&nbsp;
                         <strong>Assigned Teacher:</strong> <?php echo htmlspecialchars((string)($selectedClassMeta['teacher_name'] ?? 'Not Assigned')); ?>
+                        <a class="btn btn-sm btn-outline-primary float-right" href="attendance-records?as=teacher&class_id=<?= (int)$selectedClassId ?>&from_date=<?= htmlspecialchars($selectedDate) ?>&to_date=<?= htmlspecialchars($selectedDate) ?>">
+                            <i class="fas fa-edit mr-1"></i> Edit Attendance Records
+                        </a>
                     </div>
                     <div class="card shadow mb-4">
                         <div class="card-header py-3">
                             <h6 class="m-0 font-weight-bold text-primary">Mark Attendance</h6>
                         </div>
                         <div class="card-body">
-                            <form method="POST">
+                            <form method="POST" id="teacherAttendanceForm">
                                 <input type="hidden" name="action" value="save_attendance">
                                 <input type="hidden" name="class_id" value="<?php echo $selectedClassId; ?>">
                                 <input type="hidden" name="attendance_date" value="<?php echo htmlspecialchars($selectedDate); ?>">
@@ -265,24 +296,51 @@ if ($selectedClassId > 0) {
                                         <thead>
                                         <tr>
                                             <th>Student</th>
-                                            <th>Status</th>
+                                            <th class="text-center text-success">Present</th>
+                                            <th class="text-center text-danger">Absent</th>
+                                            <th class="text-center text-warning">Late</th>
+                                            <th style="width:220px;">Absence Request</th>
                                         </tr>
                                         </thead>
                                         <tbody>
                                         <?php foreach ($studentList as $student): ?>
-                                            <tr>
+                                            <?php
+                                                $hasAbsence = (int)($student['has_absence_request'] ?? 0) === 1;
+                                                $isAbsentNow = ((string)($student['attendance_status'] ?? '') === 'Absent');
+                                                $sid = (int)$student['id'];
+                                            ?>
+                                            <tr class="<?= ($hasAbsence && $isAbsentNow) ? 'table-danger' : '' ?>">
                                                 <td><?php echo htmlspecialchars($student['student_name']); ?></td>
+                                                <input type="hidden" name="status[<?php echo $sid; ?>]" value="<?php echo htmlspecialchars((string)$student['attendance_status']); ?>" class="att-hidden-status" data-student="<?= $sid ?>">
+                                                <td class="att-choice-cell present <?= ($student['attendance_status'] === 'Present') ? 'active' : '' ?>">
+                                                    <label class="choice-wrap mb-0 text-success">
+                                                        <input type="checkbox" class="att-check present-check" data-student="<?= $sid ?>" data-status="Present" <?php echo ($student['attendance_status'] === 'Present') ? 'checked' : ''; ?>>
+                                                        <span>P</span>
+                                                    </label>
+                                                </td>
+                                                <td class="att-choice-cell absent <?= ($student['attendance_status'] === 'Absent') ? 'active' : '' ?>">
+                                                    <label class="choice-wrap mb-0 text-danger">
+                                                        <input type="checkbox" class="att-check absent-check" data-student="<?= $sid ?>" data-status="Absent" <?php echo ($student['attendance_status'] === 'Absent') ? 'checked' : ''; ?>>
+                                                        <span>A</span>
+                                                    </label>
+                                                </td>
+                                                <td class="att-choice-cell late <?= ($student['attendance_status'] === 'Late') ? 'active' : '' ?>">
+                                                    <label class="choice-wrap mb-0 text-warning">
+                                                        <input type="checkbox" class="att-check late-check" data-student="<?= $sid ?>" data-status="Late" <?php echo ($student['attendance_status'] === 'Late') ? 'checked' : ''; ?>>
+                                                        <span>L</span>
+                                                    </label>
+                                                </td>
                                                 <td>
-                                                    <select name="status[<?php echo (int)$student['id']; ?>]" class="form-control">
-                                                        <option value="Present" <?php echo ($student['attendance_status'] === 'Present') ? 'selected' : ''; ?>>Present</option>
-                                                        <option value="Absent" <?php echo ($student['attendance_status'] === 'Absent') ? 'selected' : ''; ?>>Absent</option>
-                                                        <option value="Late" <?php echo ($student['attendance_status'] === 'Late') ? 'selected' : ''; ?>>Late</option>
-                                                    </select>
+                                                    <?php if ($hasAbsence): ?>
+                                                        <span class="badge badge-danger">Parent Marked Absent</span>
+                                                    <?php else: ?>
+                                                        <span class="text-muted">-</span>
+                                                    <?php endif; ?>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
                                         <?php if (empty($studentList)): ?>
-                                            <tr><td colspan="2" class="text-center">No students assigned to this class.</td></tr>
+                                            <tr><td colspan="5" class="text-center">No students assigned to this class.</td></tr>
                                         <?php endif; ?>
                                         </tbody>
                                     </table>
@@ -300,4 +358,50 @@ if ($selectedClassId > 0) {
     </div>
 </div>
 </body>
+<script src="vendor/jquery/jquery.min.js"></script>
+<script>
+$(function () {
+    function setRowStatus($row, studentId, status) {
+        $row.find('.att-check').prop('checked', false);
+        $row.find('.att-check[data-status="' + status + '"]').prop('checked', true);
+        $row.find('.att-hidden-status[data-student="' + studentId + '"]').val(status);
+        $row.find('.att-choice-cell').removeClass('active');
+        if (status === 'Present') {
+            $row.find('.att-choice-cell.present').addClass('active');
+        } else if (status === 'Absent') {
+            $row.find('.att-choice-cell.absent').addClass('active');
+        } else if (status === 'Late') {
+            $row.find('.att-choice-cell.late').addClass('active');
+        }
+    }
+
+    $(document).on('change', '.att-check', function () {
+        var studentId = $(this).data('student');
+        var status = $(this).data('status');
+        var $row = $(this).closest('tr');
+
+        if ($(this).is(':checked')) {
+            setRowStatus($row, studentId, status);
+        } else {
+            var current = $row.find('.att-hidden-status[data-student="' + studentId + '"]').val() || 'Absent';
+            setRowStatus($row, studentId, current);
+        }
+    });
+
+    $('#teacherAttendanceForm').on('submit', function (e) {
+        var hasMissing = false;
+        $('.att-hidden-status').each(function () {
+            var val = ($(this).val() || '').trim();
+            if (val !== 'Present' && val !== 'Absent' && val !== 'Late') {
+                hasMissing = true;
+                return false;
+            }
+        });
+        if (hasMissing) {
+            e.preventDefault();
+            alert('Please select Present, Absent, or Late for each student before saving.');
+        }
+    });
+});
+</script>
 </html>
