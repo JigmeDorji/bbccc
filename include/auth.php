@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/acl.php';
 
 /**
  * Log in a particular user and store extra info
@@ -85,5 +86,6 @@ function require_login() {
         header('Location: index');
         exit;
     }
+    bbcc_acl_enforce_current_page();
 }
 ?>

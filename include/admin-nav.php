@@ -394,10 +394,11 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                 <i class="fas fa-user-cog"></i>
                 <span>Admin Settings</span>
             </a>
-            <div id="collapseAdmin" class="collapse <?= in_array($currentPage, ['userSetup.php','adminProfile.php']) ? 'show' : '' ?>">
+            <div id="collapseAdmin" class="collapse <?= in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php']) ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <a class="collapse-item <?= ($currentPage == 'userSetup.php') ? 'active' : '' ?>" href="userSetup"><i class="fas fa-users-cog fa-sm mr-1 text-muted"></i> User Management</a>
                     <a class="collapse-item <?= ($currentPage == 'adminProfile.php') ? 'active' : '' ?>" href="adminProfile"><i class="fas fa-id-badge fa-sm mr-1 text-muted"></i> My Profile</a>
+                    <a class="collapse-item <?= ($currentPage == 'acl-debug.php') ? 'active' : '' ?>" href="acl-debug"><i class="fas fa-shield-alt fa-sm mr-1 text-muted"></i> ACL Debug</a>
                 </div>
             </div>
         </li>
