@@ -3,6 +3,7 @@ require_once "include/config.php";
 require_once "include/auth.php";
 require_once "access_control.php";
 require_once "include/role_helpers.php";
+require_once "include/pcm_helpers.php";
 require_login();
 allowRoles(['Administrator', 'Admin', 'Company Admin', 'System_owner', 'Staff']);
 
@@ -17,6 +18,20 @@ try {
     bbcc_fail_db($e);
 }
 
+function bbcc_ensure_class_campus_column(PDO $pdo): void {
+    static $done = false;
+    if ($done) return;
+    $stmt = $pdo->query("SHOW COLUMNS FROM classes LIKE 'campus_key'");
+    if (!$stmt || !$stmt->fetch(PDO::FETCH_ASSOC)) {
+        $pdo->exec("ALTER TABLE classes ADD COLUMN campus_key VARCHAR(20) NOT NULL DEFAULT 'c1' AFTER class_name");
+    }
+    $done = true;
+}
+
+bbcc_ensure_class_campus_column($pdo);
+$campusChoices = pcm_campus_choice_labels();
+$validCampusKeys = array_keys($campusChoices);
+
 // ─── POST handler with PRG pattern ───────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -28,7 +43,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'assign') {
             $studentId = (int)($_POST['student_id'] ?? 0);
             $classId   = (int)($_POST['class_id']   ?? 0);
-            if ($studentId === 0 || $classId === 0) throw new Exception("Student and class are required.");
+            $campusKey = trim((string)($_POST['campus_key'] ?? ''));
+            if ($studentId === 0 || $classId === 0 || $campusKey === '') throw new Exception("Campus, student and class are required.");
+            if (!in_array($campusKey, $validCampusKeys, true)) throw new Exception("Please select a valid campus.");
+
+            $classRow = $pdo->prepare("SELECT id, campus_key FROM classes WHERE id = :id AND active = 1 LIMIT 1");
+            $classRow->execute([':id' => $classId]);
+            $classRow = $classRow->fetch(PDO::FETCH_ASSOC);
+            if (!$classRow) throw new Exception("Selected class is not available.");
+            if (strtolower((string)($classRow['campus_key'] ?? '')) !== strtolower($campusKey)) {
+                throw new Exception("Selected class does not belong to selected campus.");
+            }
+
+            $stuRow = $pdo->prepare("
+                SELECT s.id, e.campus_preference, ca.id AS assignment_id
+                FROM students s
+                LEFT JOIN class_assignments ca ON ca.student_id = s.id
+                LEFT JOIN pcm_enrolments e ON e.student_id = s.id AND e.status = 'Approved'
+                WHERE s.id = :sid AND s.approval_status = 'Approved'
+                LIMIT 1
+            ");
+            $stuRow->execute([':sid' => $studentId]);
+            $stuRow = $stuRow->fetch(PDO::FETCH_ASSOC);
+            if (!$stuRow) throw new Exception("Selected student is not eligible.");
+            if (!empty($stuRow['assignment_id'])) throw new Exception("Selected student is already assigned.");
+
+            $studentCampus = pcm_normalize_campus_selection((string)($stuRow['campus_preference'] ?? ''));
+            if (!in_array($campusKey, $studentCampus, true)) {
+                throw new Exception("Selected student is not eligible for selected campus.");
+            }
 
             $exist = $pdo->prepare("SELECT id FROM class_assignments WHERE student_id = :sid");
             $exist->execute([':sid' => $studentId]);
@@ -41,6 +84,70 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ->execute([':cid' => $classId, ':sid' => $studentId, ':by' => $_SESSION['userid'] ?? null]);
                 $msg = "Student assigned to class successfully.";
             }
+
+        // ── Assign selected (bulk from campus table) ─────────
+        } elseif ($action === 'assign_selected') {
+            $campusKey = trim((string)($_POST['campus_key'] ?? ''));
+            $selectedStudentIds = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['selected_students'] ?? [])))));
+            $classMap = (array)($_POST['class_map'] ?? []);
+
+            if ($campusKey === '' || !in_array($campusKey, $validCampusKeys, true)) {
+                throw new Exception("Please select a valid campus.");
+            }
+            if (empty($selectedStudentIds)) {
+                throw new Exception("Select at least one student to assign.");
+            }
+
+            $pdo->beginTransaction();
+            $assignedCount = 0;
+            $classCampusCache = [];
+
+            foreach ($selectedStudentIds as $studentId) {
+                $classId = (int)($classMap[$studentId] ?? 0);
+                if ($classId <= 0) {
+                    throw new Exception("Please choose class for each selected student.");
+                }
+
+                if (!isset($classCampusCache[$classId])) {
+                    $classRow = $pdo->prepare("SELECT id, campus_key FROM classes WHERE id = :id AND active = 1 LIMIT 1");
+                    $classRow->execute([':id' => $classId]);
+                    $classCampusCache[$classId] = $classRow->fetch(PDO::FETCH_ASSOC) ?: null;
+                }
+                $classRow = $classCampusCache[$classId];
+                if (!$classRow) throw new Exception("One of the selected classes is not available.");
+                if (strtolower((string)($classRow['campus_key'] ?? '')) !== strtolower($campusKey)) {
+                    throw new Exception("One of the selected classes does not belong to selected campus.");
+                }
+
+                $stuRow = $pdo->prepare("
+                    SELECT s.id, e.campus_preference, ca.id AS assignment_id
+                    FROM students s
+                    LEFT JOIN class_assignments ca ON ca.student_id = s.id
+                    LEFT JOIN pcm_enrolments e ON e.student_id = s.id AND e.status = 'Approved'
+                    WHERE s.id = :sid AND s.approval_status = 'Approved'
+                    LIMIT 1
+                ");
+                $stuRow->execute([':sid' => $studentId]);
+                $stuRow = $stuRow->fetch(PDO::FETCH_ASSOC);
+                if (!$stuRow) throw new Exception("One selected student is not eligible.");
+                if (!empty($stuRow['assignment_id'])) throw new Exception("One selected student is already assigned. Refresh and try again.");
+
+                $studentCampus = pcm_normalize_campus_selection((string)($stuRow['campus_preference'] ?? ''));
+                if (!in_array($campusKey, $studentCampus, true)) {
+                    throw new Exception("One selected student is not eligible for selected campus.");
+                }
+
+                $pdo->prepare("INSERT INTO class_assignments (class_id, student_id, assigned_by) VALUES (:cid,:sid,:by)")
+                    ->execute([
+                        ':cid' => $classId,
+                        ':sid' => $studentId,
+                        ':by'  => $_SESSION['userid'] ?? null
+                    ]);
+                $assignedCount++;
+            }
+
+            $pdo->commit();
+            $msg = $assignedCount . " student(s) assigned successfully.";
 
         // ── Bulk transfer ───────────────────────────────────
         } elseif ($action === 'transfer_bulk') {
@@ -82,13 +189,44 @@ $flash = $_SESSION['assign_flash'] ?? null;
 unset($_SESSION['assign_flash']);
 
 // ─── Data ────────────────────────────────────────────────
-$allClasses = $pdo->query("SELECT id, class_name FROM classes WHERE active=1 ORDER BY class_name")->fetchAll();
+$allClasses = $pdo->query("SELECT id, class_name, campus_key FROM classes WHERE active=1 ORDER BY class_name")->fetchAll();
 
 $unassignedStudents = $pdo->query(
-    "SELECT s.id, s.student_name, s.student_id FROM students s
+    "SELECT s.id, s.student_name, s.student_id, e.campus_preference
+     FROM students s
      LEFT JOIN class_assignments ca ON ca.student_id = s.id
+     LEFT JOIN pcm_enrolments e ON e.student_id = s.id AND e.status = 'Approved'
      WHERE s.approval_status='Approved' AND ca.id IS NULL ORDER BY s.student_name"
 )->fetchAll();
+
+$classesByCampus = [];
+foreach ($validCampusKeys as $ck) {
+    $classesByCampus[$ck] = [];
+}
+foreach ($allClasses as $c) {
+    $ck = strtolower((string)($c['campus_key'] ?? 'c1'));
+    if (!isset($classesByCampus[$ck])) $classesByCampus[$ck] = [];
+    $classesByCampus[$ck][] = [
+        'id' => (int)$c['id'],
+        'name' => (string)$c['class_name'],
+    ];
+}
+
+$studentsByCampus = [];
+foreach ($validCampusKeys as $ck) {
+    $studentsByCampus[$ck] = [];
+}
+foreach ($unassignedStudents as $s) {
+    $campusKeys = pcm_normalize_campus_selection((string)($s['campus_preference'] ?? ''));
+    foreach ($campusKeys as $ck) {
+        if (!isset($studentsByCampus[$ck])) $studentsByCampus[$ck] = [];
+        $studentsByCampus[$ck][] = [
+            'id' => (int)$s['id'],
+            'name' => (string)$s['student_name'],
+            'sid' => (string)($s['student_id'] ?? ''),
+        ];
+    }
+}
 
 $assignedStudents = $pdo->query(
     "SELECT s.id, s.student_name, s.student_id, c.class_name, c.id AS class_id
@@ -200,38 +338,51 @@ foreach ($assignedStudents as $row) {
                                         <i class="fas fa-check-circle mr-1"></i> All students already have a class assignment. Use the <strong>Bulk Transfer</strong> tab to move them.
                                     </div>
                                 <?php else: ?>
-                                <form method="POST">
-                                    <input type="hidden" name="action" value="assign">
-                                    <div class="form-row align-items-end">
+                                    <div class="form-row align-items-end mb-3">
                                         <div class="form-group col-md-5">
-                                            <label><i class="fas fa-user-graduate mr-1" style="color:var(--brand);font-size:.7rem;"></i> Unassigned Student <span class="text-danger">*</span></label>
-                                            <select name="student_id" class="form-control" required>
-                                                <option value="">— Select student —</option>
-                                                <?php foreach ($unassignedStudents as $s): ?>
-                                                    <option value="<?= (int)$s['id'] ?>">
-                                                        <?= htmlspecialchars($s['student_name']) ?>
-                                                        <?= $s['student_id'] ? '(' . htmlspecialchars($s['student_id']) . ')' : '' ?>
-                                                    </option>
+                                            <label><i class="fas fa-map-marker-alt mr-1" style="color:var(--brand);font-size:.7rem;"></i> Campus <span class="text-danger">*</span></label>
+                                            <select id="assignCampus" class="form-control" required>
+                                                <option value="">— Select campus —</option>
+                                                <?php foreach ($campusChoices as $ck => $cl): ?>
+                                                    <option value="<?= htmlspecialchars($ck) ?>"><?= htmlspecialchars($cl) ?></option>
                                                 <?php endforeach; ?>
                                             </select>
-                                            <small class="text-muted"><?= count($unassignedStudents) ?> student(s) without a class</small>
-                                        </div>
-                                        <div class="form-group col-md-5">
-                                            <label><i class="fas fa-chalkboard mr-1" style="color:var(--brand);font-size:.7rem;"></i> Class <span class="text-danger">*</span></label>
-                                            <select name="class_id" class="form-control" required>
-                                                <option value="">— Select class —</option>
-                                                <?php foreach ($allClasses as $c): ?>
-                                                    <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['class_name']) ?></option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                        </div>
-                                        <div class="form-group col-md-2">
-                                            <button type="submit" class="btn btn-primary btn-block" style="border-radius:10px;">
-                                                <i class="fas fa-check mr-1"></i> Assign
-                                            </button>
+                                            <small class="text-muted" id="assignStudentHelp"><?= count($unassignedStudents) ?> student(s) without a class</small>
                                         </div>
                                     </div>
-                                </form>
+
+                                    <div id="assignCampusEmpty" class="alert alert-light" style="border-radius:10px;">
+                                        Select a campus to load unassigned students.
+                                    </div>
+                                    <form method="POST" id="assignSelectedForm">
+                                        <input type="hidden" name="action" value="assign_selected">
+                                        <input type="hidden" name="campus_key" id="assignSelectedCampus" value="">
+                                        <div id="assignCampusTableWrap" style="display:none;">
+                                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                                <div>
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary mr-1" id="assignSelectAllBtn" style="border-radius:8px;">Select All</button>
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="assignDeselectAllBtn" style="border-radius:8px;">Deselect All</button>
+                                                </div>
+                                                <button type="submit" class="btn btn-sm btn-primary px-3" id="assignSelectedSubmit" style="border-radius:10px;">
+                                                    <i class="fas fa-check mr-1"></i> Assign Selected
+                                                </button>
+                                            </div>
+                                            <div class="table-responsive">
+                                                <table class="table table-bordered table-hover mb-0">
+                                                    <thead class="thead-light">
+                                                    <tr>
+                                                        <th style="width:60px;">#</th>
+                                                        <th style="width:90px;">Select</th>
+                                                        <th>Student Name</th>
+                                                        <th style="width:180px;">Student ID</th>
+                                                        <th>Class to be Assigned</th>
+                                                    </tr>
+                                                    </thead>
+                                                    <tbody id="assignCampusTableBody"></tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </form>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -358,6 +509,9 @@ foreach ($assignedStudents as $row) {
 <script src="vendor/datatables/dataTables.bootstrap4.min.js"></script>
 <script>
 var classMembersMap = <?= json_encode($classMembersMap) ?>;
+var studentsByCampus = <?= json_encode($studentsByCampus) ?>;
+var classesByCampus = <?= json_encode($classesByCampus) ?>;
+var campusChoices = <?= json_encode($campusChoices) ?>;
 
 $(function () {
     // Restore active tab from URL hash
@@ -376,6 +530,109 @@ $(function () {
             language: { searchPlaceholder: 'Search...' }
         });
     }
+
+    // Assign tab campus-driven table
+    function escapeHtml(text) {
+        return $('<span>').text(text == null ? '' : String(text)).html();
+    }
+
+    function refreshAssignOptions() {
+        var campus = $('#assignCampus').val() || '';
+        var $tableWrap = $('#assignCampusTableWrap');
+        var $tableBody = $('#assignCampusTableBody');
+        var $empty = $('#assignCampusEmpty');
+        var $help = $('#assignStudentHelp');
+        var $campusHidden = $('#assignSelectedCampus');
+        var $submitBtn = $('#assignSelectedSubmit');
+
+        $tableBody.empty();
+        $campusHidden.val(campus);
+        $submitBtn.prop('disabled', true);
+
+        if (!campus) {
+            $tableWrap.hide();
+            $empty.show().text('Select a campus to load unassigned students.');
+            return;
+        }
+
+        var students = studentsByCampus[campus] || [];
+        var classes = classesByCampus[campus] || [];
+        var campusName = campusChoices[campus] || campus;
+
+        $help.text(students.length + ' unassigned student(s) for ' + campusName + '.');
+
+        if (students.length === 0) {
+            $tableWrap.hide();
+            $empty.show().html('<i class="fas fa-inbox mr-1"></i> No unassigned students for ' + escapeHtml(campusName) + '.');
+            return;
+        }
+
+        var classOptionsHtml = '<option value="">— Select class —</option>';
+        $.each(classes, function(_, c){
+            classOptionsHtml += '<option value="' + parseInt(c.id, 10) + '">' + escapeHtml(c.name || '') + '</option>';
+        });
+
+        $.each(students, function(i, s){
+            var sid = s.sid ? '<code>' + escapeHtml(s.sid) + '</code>' : '—';
+            var studentId = parseInt(s.id, 10);
+            var row = ''
+                + '<tr>'
+                +   '<td>' + (i + 1) + '</td>'
+                +   '<td class="text-center"><input type="checkbox" class="assign-select-one" name="selected_students[]" value="' + studentId + '" checked></td>'
+                +   '<td>' + escapeHtml(s.name || '') + '</td>'
+                +   '<td>' + sid + '</td>'
+                +   '<td>'
+                +       '<select name="class_map[' + studentId + ']" class="form-control form-control-sm assign-class-select" style="min-width:230px;" data-student-id="' + studentId + '">'
+                +         classOptionsHtml
+                +       '</select>'
+                +       '<small class="text-danger d-none assign-class-error" data-student-id="' + studentId + '">Select class</small>'
+                +   '</td>'
+                + '</tr>';
+            $tableBody.append(row);
+        });
+
+        $empty.hide();
+        $tableWrap.show();
+        $submitBtn.prop('disabled', students.length === 0);
+    }
+
+    $('#assignCampus').on('change', refreshAssignOptions);
+    refreshAssignOptions();
+
+    $('#assignSelectAllBtn').on('click', function () {
+        $('.assign-select-one').prop('checked', true);
+    });
+
+    $('#assignDeselectAllBtn').on('click', function () {
+        $('.assign-select-one').prop('checked', false);
+    });
+
+    $('#assignSelectedForm').on('submit', function (e) {
+        var selectedCount = $('.assign-select-one:checked').length;
+        if (!selectedCount) {
+            e.preventDefault();
+            Swal.fire({ icon: 'warning', title: 'Select at least one student.', timer: 1800, showConfirmButton: false });
+            return;
+        }
+
+        var missingClass = false;
+        $('.assign-class-error').addClass('d-none');
+
+        $('.assign-select-one:checked').each(function () {
+            var studentId = parseInt($(this).val(), 10) || 0;
+            var classVal = $('select.assign-class-select[data-student-id="' + studentId + '"]').val();
+            if (!classVal) {
+                missingClass = true;
+                $('.assign-class-error[data-student-id="' + studentId + '"]').removeClass('d-none');
+            }
+        });
+
+        if (missingClass) {
+            e.preventDefault();
+            Swal.fire({ icon: 'warning', title: 'Choose class for all selected students.', timer: 2000, showConfirmButton: false });
+            return;
+        }
+    });
 
     // Bulk — Load students
     $('#bulkLoadBtn').on('click', function () {
