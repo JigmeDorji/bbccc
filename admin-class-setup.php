@@ -18,6 +18,36 @@ try {
     bbcc_fail_db($e);
 }
 
+function bbcc_ensure_class_campus_column(PDO $pdo): void {
+    static $done = false;
+    if ($done) return;
+    $stmt = $pdo->query("SHOW COLUMNS FROM classes LIKE 'campus_key'");
+    if (!$stmt || !$stmt->fetch(PDO::FETCH_ASSOC)) {
+        $pdo->exec("ALTER TABLE classes ADD COLUMN campus_key VARCHAR(20) NOT NULL DEFAULT 'c1' AFTER class_name");
+    }
+    $done = true;
+}
+
+function bbcc_campus_options(PDO $pdo): array {
+    $default1 = 'North Canberra Campus';
+    $default2 = 'South Canberra Campus';
+    try {
+        $row = $pdo->query("SELECT campus_one_name, campus_two_name FROM fees_settings WHERE id = 1 LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: [];
+        $c1 = trim((string)($row['campus_one_name'] ?? ''));
+        $c2 = trim((string)($row['campus_two_name'] ?? ''));
+        return [
+            'c1' => ($c1 !== '' ? $c1 : $default1),
+            'c2' => ($c2 !== '' ? $c2 : $default2),
+        ];
+    } catch (Throwable $e) {
+        return ['c1' => $default1, 'c2' => $default2];
+    }
+}
+
+bbcc_ensure_class_campus_column($pdo);
+$campusOptions = bbcc_campus_options($pdo);
+$validCampusKeys = array_keys($campusOptions);
+
 // ─── Handle all POST actions before SELECT ───
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -26,6 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'create_class') {
         try {
             $className = trim($_POST['class_name'] ?? '');
+            $campusKey = trim((string)($_POST['campus_key'] ?? 'c1'));
             $description = trim($_POST['description'] ?? '');
             $capacity = (int)($_POST['capacity'] ?? 0);
             $scheduleText = trim($_POST['schedule_text'] ?? '');
@@ -33,13 +64,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($className === '') {
                 throw new Exception("Class name is required.");
             }
+            if (!in_array($campusKey, $validCampusKeys, true)) {
+                throw new Exception("Please select a valid campus.");
+            }
+
+            $dup = $pdo->prepare("SELECT id FROM classes WHERE LOWER(class_name) = LOWER(:name) LIMIT 1");
+            $dup->execute([':name' => $className]);
+            if ($dup->fetch(PDO::FETCH_ASSOC)) {
+                throw new Exception("A class with this name already exists.");
+            }
 
             $stmt = $pdo->prepare(
-                "INSERT INTO classes (class_name, description, capacity, schedule_text)
-                 VALUES (:class_name, :description, :capacity, :schedule_text)"
+                "INSERT INTO classes (class_name, campus_key, description, capacity, schedule_text)
+                 VALUES (:class_name, :campus_key, :description, :capacity, :schedule_text)"
             );
             $stmt->execute([
                 ':class_name' => $className,
+                ':campus_key' => $campusKey,
                 ':description' => $description === '' ? null : $description,
                 ':capacity' => $capacity,
                 ':schedule_text' => $scheduleText === '' ? null : $scheduleText
@@ -56,6 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $editId = (int)($_POST['edit_id'] ?? 0);
             $className = trim($_POST['class_name'] ?? '');
+            $campusKey = trim((string)($_POST['campus_key'] ?? 'c1'));
             $description = trim($_POST['description'] ?? '');
             $capacity = (int)($_POST['capacity'] ?? 0);
             $scheduleText = trim($_POST['schedule_text'] ?? '');
@@ -64,16 +106,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($editId === 0 || $className === '') {
                 throw new Exception("Class ID and name are required.");
             }
+            if (!in_array($campusKey, $validCampusKeys, true)) {
+                throw new Exception("Please select a valid campus.");
+            }
+
+            $dup = $pdo->prepare("SELECT id FROM classes WHERE LOWER(class_name) = LOWER(:name) AND id <> :id LIMIT 1");
+            $dup->execute([':name' => $className, ':id' => $editId]);
+            if ($dup->fetch(PDO::FETCH_ASSOC)) {
+                throw new Exception("Another class with this name already exists.");
+            }
 
             $teacherId = (int)($_POST['teacher_id'] ?? 0) ?: null;
 
             $stmt = $pdo->prepare(
                 "UPDATE classes SET class_name = :class_name, description = :description,
-                 capacity = :capacity, schedule_text = :schedule_text, active = :active,
+                 campus_key = :campus_key, capacity = :capacity, schedule_text = :schedule_text, active = :active,
                  teacher_id = :teacher_id WHERE id = :id"
             );
             $stmt->execute([
                 ':class_name'   => $className,
+                ':campus_key'   => $campusKey,
                 ':description'  => $description === '' ? null : $description,
                 ':capacity'     => $capacity,
                 ':schedule_text'=> $scheduleText === '' ? null : $scheduleText,
@@ -126,6 +178,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("Teacher ID and name are required.");
             }
 
+            $teacherRow = $pdo->prepare("SELECT id, user_id, email FROM teachers WHERE id = :id LIMIT 1");
+            $teacherRow->execute([':id' => $editId]);
+            $teacherRow = $teacherRow->fetch(PDO::FETCH_ASSOC);
+            if (!$teacherRow) {
+                throw new Exception("Teacher not found.");
+            }
+            $userId = (string)($teacherRow['user_id'] ?? '');
+
+            if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                throw new Exception("Please enter a valid email address.");
+            }
+
+            if ($email !== '') {
+                $dupTeacher = $pdo->prepare("SELECT id FROM teachers WHERE LOWER(email) = LOWER(:email) AND id <> :id LIMIT 1");
+                $dupTeacher->execute([':email' => $email, ':id' => $editId]);
+                if ($dupTeacher->fetch(PDO::FETCH_ASSOC)) {
+                    throw new Exception("This email is already used by another teacher.");
+                }
+
+                $dupUser = $pdo->prepare("SELECT userid FROM user WHERE LOWER(username) = LOWER(:username) AND userid <> :uid LIMIT 1");
+                $dupUser->execute([':username' => $email, ':uid' => $userId]);
+                if ($dupUser->fetch(PDO::FETCH_ASSOC)) {
+                    throw new Exception("This email is already used by another user account.");
+                }
+            }
+
+            $pdo->beginTransaction();
             $stmt = $pdo->prepare(
                 "UPDATE teachers SET full_name = :full_name, email = :email, phone = :phone, active = :active WHERE id = :id"
             );
@@ -137,9 +216,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':id' => $editId
             ]);
 
+            if ($email !== '' && $userId !== '') {
+                $pdo->prepare("UPDATE user SET username = :username WHERE userid = :uid")
+                    ->execute([':username' => $email, ':uid' => $userId]);
+            }
+            $pdo->commit();
+
             $message = "Teacher updated successfully.";
             $messageTab = 'teachers';
         } catch (Exception $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
             $message = "Error: " . $e->getMessage();
         }
     }
@@ -219,7 +305,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("Please enter a valid email address.");
             }
 
-            $chk = $pdo->prepare("SELECT userid FROM user WHERE username = :username");
+            $dupTeacher = $pdo->prepare("SELECT id FROM teachers WHERE LOWER(email) = LOWER(:email) LIMIT 1");
+            $dupTeacher->execute([':email' => $email]);
+            if ($dupTeacher->fetch(PDO::FETCH_ASSOC)) {
+                throw new Exception("This teacher email already exists.");
+            }
+
+            $chk = $pdo->prepare("SELECT userid FROM user WHERE LOWER(username) = LOWER(:username) LIMIT 1");
             $chk->execute([':username' => $username]);
             if ($chk->fetch()) {
                 throw new Exception("Username already exists.");
@@ -343,15 +435,23 @@ $teachers = $pdo->query(
                                 <form method="POST">
                                     <input type="hidden" name="action" value="create_class">
                                     <div class="form-row">
-                                        <div class="form-group col-md-5">
+                                        <div class="form-group col-md-4">
                                             <label><i class="fas fa-tag mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Class Name <span class="text-danger">*</span></label>
                                             <input type="text" class="form-control" name="class_name" required placeholder="e.g. Beginner Dzongkha">
+                                        </div>
+                                        <div class="form-group col-md-3">
+                                            <label><i class="fas fa-map-marker-alt mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Campus <span class="text-danger">*</span></label>
+                                            <select class="form-control" name="campus_key" required>
+                                                <?php foreach ($campusOptions as $k => $label): ?>
+                                                    <option value="<?= htmlspecialchars($k) ?>"><?= htmlspecialchars($label) ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
                                         </div>
                                         <div class="form-group col-md-3">
                                             <label><i class="fas fa-users mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Capacity</label>
                                             <input type="number" class="form-control" name="capacity" min="0" placeholder="e.g. 25">
                                         </div>
-                                        <div class="form-group col-md-4">
+                                        <div class="form-group col-md-2">
                                             <label><i class="fas fa-clock mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Schedule</label>
                                             <input type="text" class="form-control" name="schedule_text" placeholder="e.g. Sat 10:00-12:00">
                                         </div>
@@ -379,7 +479,7 @@ $teachers = $pdo->query(
                                             <select name="class_id" class="form-control" required>
                                                 <option value="">— Select class —</option>
                                                 <?php foreach ($classes as $class): ?>
-                                                    <option value="<?= (int)$class['id'] ?>"><?= htmlspecialchars($class['class_name']) ?></option>
+                                                    <option value="<?= (int)$class['id'] ?>"><?= htmlspecialchars($class['class_name']) ?> (<?= htmlspecialchars($campusOptions[(string)($class['campus_key'] ?? 'c1')] ?? 'Campus') ?>)</option>
                                                 <?php endforeach; ?>
                                             </select>
                                         </div>
@@ -411,6 +511,7 @@ $teachers = $pdo->query(
                                         <thead style="background:#f8f9fc;">
                                         <tr>
                                             <th style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Class</th>
+                                            <th style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Campus</th>
                                             <th style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Teacher</th>
                                             <th style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Capacity</th>
                                             <th style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Schedule</th>
@@ -422,6 +523,7 @@ $teachers = $pdo->query(
                                         <?php foreach ($classes as $class): ?>
                                             <tr>
                                                 <td class="font-weight-bold"><?= htmlspecialchars($class['class_name']) ?></td>
+                                                <td><?= htmlspecialchars($campusOptions[(string)($class['campus_key'] ?? 'c1')] ?? '—') ?></td>
                                                 <td><?= htmlspecialchars($class['teacher_name'] ?? 'Not Assigned') ?></td>
                                                 <td><?= htmlspecialchars($class['capacity']) ?></td>
                                                 <td><?= htmlspecialchars($class['schedule_text'] ?? '') ?></td>
@@ -437,6 +539,7 @@ $teachers = $pdo->query(
                                                         title="Edit"
                                                         data-id="<?= (int)$class['id'] ?>"
                                                         data-name="<?= htmlspecialchars($class['class_name'], ENT_QUOTES) ?>"
+                                                        data-campus="<?= htmlspecialchars((string)($class['campus_key'] ?? 'c1'), ENT_QUOTES) ?>"
                                                         data-description="<?= htmlspecialchars($class['description'] ?? '', ENT_QUOTES) ?>"
                                                         data-capacity="<?= (int)$class['capacity'] ?>"
                                                         data-schedule="<?= htmlspecialchars($class['schedule_text'] ?? '', ENT_QUOTES) ?>"
@@ -455,7 +558,7 @@ $teachers = $pdo->query(
                                             </tr>
                                         <?php endforeach; ?>
                                         <?php if (empty($classes)): ?>
-                                            <tr><td colspan="6" class="text-center text-muted py-4"><i class="fas fa-inbox mr-1"></i> No classes found.</td></tr>
+                                            <tr><td colspan="7" class="text-center text-muted py-4"><i class="fas fa-inbox mr-1"></i> No classes found.</td></tr>
                                         <?php endif; ?>
                                         </tbody>
                                     </table>
@@ -595,6 +698,14 @@ $teachers = $pdo->query(
                         <label><i class="fas fa-tag mr-1" style="color:#881b12;font-size:.7rem;"></i> Class Name <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" name="class_name" id="edit_class_name" required>
                     </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-map-marker-alt mr-1" style="color:#881b12;font-size:.7rem;"></i> Campus <span class="text-danger">*</span></label>
+                        <select class="form-control" name="campus_key" id="edit_campus_key" required>
+                            <?php foreach ($campusOptions as $k => $label): ?>
+                                <option value="<?= htmlspecialchars($k) ?>"><?= htmlspecialchars($label) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                     <div class="form-row">
                         <div class="form-group col-md-6">
                             <label><i class="fas fa-users mr-1" style="color:#881b12;font-size:.7rem;"></i> Capacity</label>
@@ -710,6 +821,7 @@ $(document).on('click', '.btn-edit-class', function(){
     var btn = $(this);
     $('#edit_id').val(btn.data('id'));
     $('#edit_class_name').val(btn.data('name'));
+    $('#edit_campus_key').val(btn.data('campus') ? String(btn.data('campus')) : 'c1');
     $('#edit_description').val(btn.data('description'));
     $('#edit_capacity').val(btn.data('capacity'));
     $('#edit_schedule').val(btn.data('schedule'));
