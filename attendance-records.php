@@ -43,6 +43,7 @@ bbcc_ensure_attendance_batch_column($pdo);
 $isAdmin = is_admin_role();
 $teacherId = 0;
 $parentId = 0;
+$parentChildren = [];
 $canEdit = false;
 $viewMode = 'none';
 $currentRole = strtolower(trim((string)($_SESSION['role'] ?? '')));
@@ -62,26 +63,23 @@ if ($isAdmin) {
     }
 }
 
-// If not resolved by active role, detect teacher profile.
+// Detect teacher profile (needed for mixed accounts + explicit teacher override).
 $sessionUserId = (string)($_SESSION['userid'] ?? '');
 $sessionUsername = (string)($_SESSION['username'] ?? '');
+$stmtTeacher = $pdo->prepare("
+    SELECT id
+    FROM teachers
+    WHERE (user_id = :uid AND :uid <> '')
+       OR LOWER(email) = LOWER(:em)
+    ORDER BY id ASC
+    LIMIT 1
+");
+$stmtTeacher->execute([':uid' => $sessionUserId, ':em' => $sessionUsername]);
+$teacherId = (int)$stmtTeacher->fetchColumn();
 
-if ($viewMode === 'none') {
-    $stmtTeacher = $pdo->prepare("
-        SELECT id
-        FROM teachers
-        WHERE (user_id = :uid AND :uid <> '')
-           OR LOWER(email) = LOWER(:em)
-        ORDER BY id ASC
-        LIMIT 1
-    ");
-    $stmtTeacher->execute([':uid' => $sessionUserId, ':em' => $sessionUsername]);
-    $teacherId = (int)$stmtTeacher->fetchColumn();
-
-    if ($teacherId > 0) {
-        $viewMode = 'teacher';
-        $canEdit = true;
-    }
+if ($viewMode === 'none' && $teacherId > 0) {
+    $viewMode = 'teacher';
+    $canEdit = true;
 }
 
 // Mixed account support: allow explicit teacher-mode override when teacher profile exists.
@@ -89,10 +87,32 @@ if ($requestedAs === 'teacher' && $teacherId > 0) {
     $viewMode = 'teacher';
     $canEdit = true;
 }
+if ($requestedAs === 'parent') {
+    if ($parentId <= 0) {
+        $stmtParent = $pdo->prepare("SELECT id FROM parents WHERE username = :u LIMIT 1");
+        $stmtParent->execute([':u' => (string)($_SESSION['username'] ?? '')]);
+        $parentId = (int)$stmtParent->fetchColumn();
+    }
+    if ($parentId > 0) {
+        $viewMode = 'parent';
+        $canEdit = false;
+    }
+}
 
 if ($viewMode === 'none' || is_patron_role()) {
     header("Location: unauthorized");
     exit;
+}
+
+if ($viewMode === 'parent') {
+    $stmtChildren = $pdo->prepare("
+        SELECT id, student_name, student_id
+        FROM students
+        WHERE parentId = :pid
+        ORDER BY student_name
+    ");
+    $stmtChildren->execute([':pid' => $parentId]);
+    $parentChildren = $stmtChildren->fetchAll(PDO::FETCH_ASSOC);
 }
 
 // Allowed classes for filtering/edit access
@@ -142,8 +162,12 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? ''
             $ownStmt = $pdo->prepare("
                 SELECT a.id
                 FROM attendance a
-                INNER JOIN classes c ON c.id = a.class_id
-                WHERE a.id = :id AND c.teacher_id = :tid
+                LEFT JOIN classes c ON c.id = a.class_id
+                WHERE a.id = :id
+                  AND (
+                        c.teacher_id = :tid
+                        OR a.teacher_id = :tid
+                      )
                 LIMIT 1
             ");
             $ownStmt->execute([':id' => $attendanceId, ':tid' => $teacherId]);
@@ -172,11 +196,18 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? ''
 }
 
 $filterClassId = (int)($_GET['class_id'] ?? 0);
+$filterChildId = (int)($_GET['child_id'] ?? 0);
 $fromDate = trim((string)($_GET['from_date'] ?? ''));
 $toDate = trim((string)($_GET['to_date'] ?? ''));
 
 if ($filterClassId > 0 && !$isAdmin && !in_array($filterClassId, $allowedClassIds, true)) {
     $filterClassId = 0;
+}
+if ($viewMode === 'parent' && $filterChildId > 0) {
+    $allowedChildIds = array_map('intval', array_column($parentChildren, 'id'));
+    if (!in_array($filterChildId, $allowedChildIds, true)) {
+        $filterChildId = 0;
+    }
 }
 
 $where = [];
@@ -192,7 +223,10 @@ if ($viewMode === 'admin') {
     $params[':parent_id'] = $parentId;
 }
 
-if ($filterClassId > 0) {
+if ($viewMode === 'parent' && $filterChildId > 0) {
+    $where[] = "a.student_id = :child_id";
+    $params[':child_id'] = $filterChildId;
+} elseif ($filterClassId > 0) {
     $where[] = "a.class_id = :class_id";
     $params[':class_id'] = $filterClassId;
 }
@@ -317,6 +351,18 @@ if ($viewMode === 'parent') {
     }
     .att-summary-label { font-size: .75rem; color: #6c757d; text-transform: uppercase; letter-spacing: .03em; }
     .att-summary-value { font-size: 1.2rem; font-weight: 700; color: #1f2937; line-height: 1.2; }
+    .att-cell-wrap { display: inline-flex; align-items: center; gap: 6px; }
+    .att-edit-btn {
+        border: 1px solid #d1d5db;
+        background: #fff;
+        color: #374151;
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-size: .72rem;
+        line-height: 1.2;
+        cursor: pointer;
+    }
+    .att-edit-btn:hover { background: #f3f4f6; }
     </style>
 </head>
 <body id="page-top">
@@ -378,6 +424,11 @@ if ($viewMode === 'parent') {
                         <span class="badge badge-warning ml-1">Late</span>
                     </div>
                 <?php endif; ?>
+                <?php if ($canEdit): ?>
+                    <div class="alert alert-light border mb-3">
+                        Click the <strong>Edit</strong> button in any date cell to update attendance.
+                    </div>
+                <?php endif; ?>
 
                 <div class="card shadow mb-4">
                     <div class="card-header py-3">
@@ -385,17 +436,31 @@ if ($viewMode === 'parent') {
                     </div>
                     <div class="card-body">
                         <form method="GET" class="form-row">
-                            <div class="form-group col-md-4">
-                                <label>Class</label>
-                                <select name="class_id" class="form-control">
-                                    <option value="0">All classes</option>
-                                    <?php foreach ($classes as $cl): ?>
-                                        <option value="<?= (int)$cl['id'] ?>" <?= $filterClassId === (int)$cl['id'] ? 'selected' : '' ?>>
-                                            <?= htmlspecialchars($cl['class_name']) ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
+                            <?php if ($viewMode === 'parent'): ?>
+                                <div class="form-group col-md-4">
+                                    <label>Child</label>
+                                    <select name="child_id" class="form-control">
+                                        <option value="0">All children</option>
+                                        <?php foreach ($parentChildren as $ch): ?>
+                                            <option value="<?= (int)$ch['id'] ?>" <?= $filterChildId === (int)$ch['id'] ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars(($ch['student_name'] ?? '') . ' (' . ($ch['student_id'] ?? '-') . ')') ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            <?php else: ?>
+                                <div class="form-group col-md-4">
+                                    <label>Class</label>
+                                    <select name="class_id" class="form-control">
+                                        <option value="0">All classes</option>
+                                        <?php foreach ($classes as $cl): ?>
+                                            <option value="<?= (int)$cl['id'] ?>" <?= $filterClassId === (int)$cl['id'] ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars($cl['class_name']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                            <?php endif; ?>
                             <div class="form-group col-md-3">
                                 <label>From Date</label>
                                 <input type="date" class="form-control" name="from_date" value="<?= htmlspecialchars($fromDate) ?>">
@@ -462,18 +527,21 @@ if ($viewMode === 'parent') {
                                                         $badge = $status === 'present' ? 'success' : ($status === 'absent' ? 'danger' : ($status === 'late' ? 'warning' : 'secondary'));
                                                         ?>
                                                         <?php if ($canEdit): ?>
-                                                            <button
-                                                                type="button"
-                                                                class="btn btn-sm btn-edit-att p-0"
-                                                                data-id="<?= (int)$cell['id'] ?>"
-                                                                data-name="<?= htmlspecialchars($gr['student_name'] ?? '', ENT_QUOTES) ?>"
-                                                                data-date="<?= htmlspecialchars($cell['date'] ?? '', ENT_QUOTES) ?>"
-                                                                data-status="<?= htmlspecialchars($cell['status'] ?? '', ENT_QUOTES) ?>"
-                                                                data-notes="<?= htmlspecialchars($cell['notes'] ?? '', ENT_QUOTES) ?>"
-                                                                title="Edit attendance"
-                                                            >
+                                                            <span class="att-cell-wrap">
                                                                 <span class="badge badge-<?= $badge ?>"><?= htmlspecialchars($cell['status'] ?: 'Unknown') ?></span>
-                                                            </button>
+                                                                <button
+                                                                    type="button"
+                                                                    class="att-edit-btn btn-edit-att"
+                                                                    data-id="<?= (int)$cell['id'] ?>"
+                                                                    data-name="<?= htmlspecialchars($gr['student_name'] ?? '', ENT_QUOTES) ?>"
+                                                                    data-date="<?= htmlspecialchars($cell['date'] ?? '', ENT_QUOTES) ?>"
+                                                                    data-status="<?= htmlspecialchars($cell['status'] ?? '', ENT_QUOTES) ?>"
+                                                                    data-notes="<?= htmlspecialchars($cell['notes'] ?? '', ENT_QUOTES) ?>"
+                                                                    title="Edit attendance"
+                                                                >
+                                                                    Edit
+                                                                </button>
+                                                            </span>
                                                         <?php else: ?>
                                                             <span class="badge badge-<?= $badge ?>" title="<?= htmlspecialchars($cell['notes'] ?? '') ?>"><?= htmlspecialchars($cell['status'] ?: 'Unknown') ?></span>
                                                         <?php endif; ?>

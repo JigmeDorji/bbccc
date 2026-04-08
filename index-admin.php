@@ -621,7 +621,7 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                     <div class="quick-actions">
                         <a href="children-enrollment"><i class="fas fa-plus"></i> Add Student</a>
                         <a href="parentFeesPayment"><i class="fas fa-money-check-alt"></i> Pay Fees</a>
-                        <a href="attendanceParent"><i class="fas fa-clipboard-check"></i> Attendance</a>
+                        <a href="mark-absenteeism"><i class="fas fa-clipboard-check"></i> Mark Absenteeism</a>
                     </div>
                 </div>
 
@@ -746,7 +746,7 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                     <div class="card-body" style="padding:22px 24px;">
                         <div class="section-title mb-2" style="font-size:.95rem;">
                             <span><i class="fas fa-clipboard-check mr-2" style="color:#36b9cc;"></i>Term Attendance Progress</span>
-                            <a href="parent-attendance">View Attendance</a>
+                            <a href="mark-absenteeism">View Attendance</a>
                         </div>
                         <div class="table-responsive">
                             <table class="dash-table">

@@ -18,5 +18,13 @@ function is_patron_role() {
 
 function is_admin_role() {
     $role = normalize_role($_SESSION['role'] ?? '');
-    return in_array($role, ['administrator', 'admin', 'company admin', 'system_owner', 'system owner', 'staff'], true);
+    return in_array($role, [
+        'administrator',
+        'admin',
+        'company admin',
+        'company_admin',
+        'system_owner',
+        'system owner',
+        'staff'
+    ], true);
 }

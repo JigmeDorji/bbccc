@@ -206,7 +206,7 @@ if ($classId) {
                         </form>
                         <?php if ($classId > 0): ?>
                             <div class="mt-2">
-                                <a class="btn btn-outline-primary btn-sm" href="attendance-records?as=teacher&class_id=<?= (int)$classId ?>&from_date=<?= htmlspecialchars($date) ?>&to_date=<?= htmlspecialchars($date) ?>">
+                                <a class="btn btn-outline-primary btn-sm" href="attendance-records?class_id=<?= (int)$classId ?>&from_date=<?= urlencode((string)$date) ?>&to_date=<?= urlencode((string)$date) ?>">
                                     <i class="fas fa-edit mr-1"></i> Edit Attendance History
                                 </a>
                             </div>

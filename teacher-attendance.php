@@ -264,7 +264,15 @@ if ($selectedClassId > 0) {
                         </form>
                         <?php if ($selectedClassId > 0): ?>
                             <div class="mt-2">
-                                <a class="btn btn-outline-primary btn-sm" href="attendance-records?as=teacher&class_id=<?= (int)$selectedClassId ?>&from_date=<?= htmlspecialchars($selectedDate) ?>&to_date=<?= htmlspecialchars($selectedDate) ?>">
+                                <?php
+                                $historyBase = $isAdmin ? 'attendance-records' : 'attendance-records?as=teacher';
+                                $historyUrl = $historyBase
+                                    . (str_contains($historyBase, '?') ? '&' : '?')
+                                    . 'class_id=' . (int)$selectedClassId
+                                    . '&from_date=' . urlencode((string)$selectedDate)
+                                    . '&to_date=' . urlencode((string)$selectedDate);
+                                ?>
+                                <a class="btn btn-outline-primary btn-sm" href="<?= htmlspecialchars($historyUrl, ENT_QUOTES, 'UTF-8') ?>">
                                     <i class="fas fa-edit mr-1"></i> Edit Attendance History
                                 </a>
                             </div>
