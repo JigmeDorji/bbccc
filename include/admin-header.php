@@ -6,7 +6,9 @@ require_once "include/notifications.php";
 require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
-$profileUrl = ($role === 'parent') ? 'parentProfile.php' : 'adminProfile.php';
+$profileUrl = ($role === 'parent')
+    ? 'parentProfile.php'
+    : (($role === 'teacher') ? 'teacherProfile.php' : 'adminProfile.php');
 $notificationsUrl = 'notifications.php';
 $unreadNotifications = 0;
 try {
@@ -56,6 +58,7 @@ $_pageTitles = [
     'generateStatement'    => 'Financial Statement',
     'parentProfile'        => 'My Profile',
     'adminProfile'         => 'My Profile',
+    'teacherProfile'       => 'My Profile',
     'studentSetup'         => 'Student Enrollment',
     'attendanceParent'     => 'Attendance',
     'parentFeesPayment'    => 'Fees Payments',

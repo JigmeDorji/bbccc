@@ -298,8 +298,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $username = $email; // email is the login username
             $password = $_POST['password'] ?? '';
 
-            if ($fullName === '' || $email === '' || $password === '') {
-                throw new Exception("Full name, email and password are required.");
+            if ($fullName === '' || $email === '') {
+                throw new Exception("Full name and email are required.");
             }
             if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 throw new Exception("Please enter a valid email address.");
@@ -311,26 +311,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("This teacher email already exists.");
             }
 
-            $chk = $pdo->prepare("SELECT userid FROM user WHERE LOWER(username) = LOWER(:username) LIMIT 1");
-            $chk->execute([':username' => $username]);
-            if ($chk->fetch()) {
-                throw new Exception("Username already exists.");
-            }
-
-            $row    = $pdo->query("SELECT MAX(CAST(userid AS UNSIGNED)) AS max_id FROM user")->fetch(PDO::FETCH_ASSOC);
-            $userId = (string)((int)($row['max_id'] ?? 0) + 1);
-
             $pdo->beginTransaction();
+            $existingUserStmt = $pdo->prepare("SELECT userid, role FROM user WHERE LOWER(username) = LOWER(:username) LIMIT 1");
+            $existingUserStmt->execute([':username' => $username]);
+            $existingUser = $existingUserStmt->fetch(PDO::FETCH_ASSOC);
 
-            $pdo->prepare(
-                "INSERT INTO user (userid, username, password, role, createdDate)
-                 VALUES (:userid, :username, :password, 'teacher', :createdDate)"
-            )->execute([
-                ':userid'      => $userId,
-                ':username'    => $username,
-                ':password'    => password_hash($password, PASSWORD_DEFAULT),
-                ':createdDate' => date('Y-m-d H:i:s'),
-            ]);
+            if ($existingUser) {
+                $userId = (string)$existingUser['userid'];
+
+                $alreadyTeacherByUser = $pdo->prepare("SELECT id FROM teachers WHERE user_id = :uid LIMIT 1");
+                $alreadyTeacherByUser->execute([':uid' => $userId]);
+                if ($alreadyTeacherByUser->fetch(PDO::FETCH_ASSOC)) {
+                    throw new Exception("This account is already linked to a teacher profile.");
+                }
+            } else {
+                if (trim((string)$password) === '') {
+                    throw new Exception("Temp password is required for a new teacher email.");
+                }
+
+                $row    = $pdo->query("SELECT MAX(CAST(userid AS UNSIGNED)) AS max_id FROM user")->fetch(PDO::FETCH_ASSOC);
+                $userId = (string)((int)($row['max_id'] ?? 0) + 1);
+
+                $pdo->prepare(
+                    "INSERT INTO user (userid, username, password, role, createdDate)
+                     VALUES (:userid, :username, :password, 'teacher', :createdDate)"
+                )->execute([
+                    ':userid'      => $userId,
+                    ':username'    => $username,
+                    ':password'    => password_hash($password, PASSWORD_DEFAULT),
+                    ':createdDate' => date('Y-m-d H:i:s'),
+                ]);
+            }
 
             $pdo->prepare(
                 "INSERT INTO teachers (user_id, full_name, email, phone)
@@ -344,7 +355,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $pdo->commit();
 
-            $message    = "Teacher created successfully.";
+            $message    = $existingUser
+                ? "Teacher profile created and linked to existing account."
+                : "Teacher created successfully.";
             $messageTab = 'teachers';
         } catch (Exception $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -594,8 +607,8 @@ $teachers = $pdo->query(
                                     </div>
                                     <div class="form-row">
                                         <div class="form-group col-md-12">
-                                            <label><i class="fas fa-key mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Temp Password <span class="text-danger">*</span></label>
-                                            <input type="password" class="form-control" name="password" required placeholder="Initial password">
+                                            <label><i class="fas fa-key mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Temp Password <span class="text-danger">*</span> <small class="text-muted">(required only for new email)</small></label>
+                                            <input type="password" class="form-control" name="password" placeholder="Initial password for new teacher account">
                                         </div>
                                     </div>
                                     <button type="submit" class="btn btn-primary" style="border-radius:10px;"><i class="fas fa-user-plus mr-1"></i> Create Teacher</button>

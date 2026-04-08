@@ -48,21 +48,6 @@ if (!$parent) {
 
 $parentId = (int)$parent['id'];
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'mark_notification_read') {
-    $nid = (int)($_POST['notification_id'] ?? 0);
-    if ($nid > 0) {
-        bbcc_mark_notification_read($pdo, $nid, $loginEmail, (string)($_SESSION['role'] ?? 'parent'));
-    }
-    header("Location: parentProfile" . ($isEditMode ? '?edit=1' : ''));
-    exit;
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'mark_all_notifications_read') {
-    bbcc_mark_all_notifications_read($pdo, $loginEmail, (string)($_SESSION['role'] ?? 'parent'));
-    header("Location: parentProfile" . ($isEditMode ? '?edit=1' : ''));
-    exit;
-}
-
 // Sticky values (default from DB)
 $full_name = $parent['full_name'] ?? '';
 $gender    = $parent['gender'] ?? '';
@@ -256,13 +241,6 @@ $gender    = $parent['gender'] ?? '';
 $email     = $parent['email'] ?? '';
 $phone     = $parent['phone'] ?? '';
 $address   = $parent['address'] ?? '';
-$notifications = bbcc_fetch_notifications_for_user($pdo, $loginEmail, (string)($_SESSION['role'] ?? 'parent'), 20);
-$unreadCount = 0;
-foreach ($notifications as $n) {
-    if ((int)($n['is_read'] ?? 0) === 0) {
-        $unreadCount++;
-    }
-}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -322,50 +300,6 @@ foreach ($notifications as $n) {
                 <?php endif; ?>
 
                 <?php if (!$isEditMode): ?>
-                    <div class="card shadow mb-4">
-                        <div class="card-header py-3 d-flex align-items-center justify-content-between">
-                            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-bell mr-1"></i> Notifications</h6>
-                            <div>
-                                <?php if ($unreadCount > 0): ?>
-                                    <span class="badge badge-danger mr-2"><?= (int)$unreadCount ?> new</span>
-                                <?php endif; ?>
-                                <form method="POST" class="d-inline">
-                                    <input type="hidden" name="action" value="mark_all_notifications_read">
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary">Mark All Read</button>
-                                </form>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <?php if (empty($notifications)): ?>
-                                <p class="text-muted mb-0">No notifications yet.</p>
-                            <?php else: ?>
-                                <?php foreach ($notifications as $n): ?>
-                                    <div class="border rounded p-3 mb-2 <?= ((int)($n['is_read'] ?? 0) === 0) ? 'bg-light' : '' ?>">
-                                        <div class="d-flex justify-content-between align-items-start">
-                                            <div>
-                                                <div class="font-weight-bold"><?= htmlspecialchars((string)($n['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
-                                                <?php if (!empty($n['body'])): ?>
-                                                    <div class="text-muted small mt-1"><?= htmlspecialchars((string)$n['body'], ENT_QUOTES, 'UTF-8') ?></div>
-                                                <?php endif; ?>
-                                                <div class="small text-muted mt-1"><?= htmlspecialchars((string)($n['created_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
-                                                <?php if (!empty($n['link_url'])): ?>
-                                                    <a href="<?= htmlspecialchars((string)$n['link_url'], ENT_QUOTES, 'UTF-8') ?>" class="small">Open</a>
-                                                <?php endif; ?>
-                                            </div>
-                                            <?php if ((int)($n['is_read'] ?? 0) === 0): ?>
-                                                <form method="POST" class="ml-2">
-                                                    <input type="hidden" name="action" value="mark_notification_read">
-                                                    <input type="hidden" name="notification_id" value="<?= (int)($n['id'] ?? 0) ?>">
-                                                    <button type="submit" class="btn btn-sm btn-outline-primary">Mark Read</button>
-                                                </form>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-
                     <!-- VIEW MODE -->
                     <div class="card shadow mb-4">
                         <div class="card-header py-3 d-flex align-items-center justify-content-between">

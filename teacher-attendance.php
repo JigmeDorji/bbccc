@@ -4,9 +4,9 @@ require_once "include/auth.php";
 require_once "access_control.php";
 require_once "include/role_helpers.php";
 require_login();
-allowRoles(['teacher']);
 
 $message = "";
+$isAdmin = is_admin_role();
 
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
@@ -17,25 +17,48 @@ try {
     bbcc_fail_db($e);
 }
 
-$teacherUserId = $_SESSION['userid'] ?? null;
-$stmt = $pdo->prepare("SELECT id, full_name FROM teachers WHERE user_id = :user_id");
-$stmt->execute([':user_id' => $teacherUserId]);
-$teacher = $stmt->fetch(PDO::FETCH_ASSOC);
+$teacherId = null;
+$classes = [];
+$sessionUserId = (string)($_SESSION['userid'] ?? '');
+$sessionUsername = (string)($_SESSION['username'] ?? '');
 
-if (!$teacher) {
-    die("Teacher record not found.");
+$teacherStmt = $pdo->prepare("
+    SELECT id, full_name
+    FROM teachers
+    WHERE (user_id = :uid AND :uid <> '')
+       OR LOWER(email) = LOWER(:em)
+    ORDER BY id ASC
+    LIMIT 1
+");
+$teacherStmt->execute([':uid' => $sessionUserId, ':em' => $sessionUsername]);
+$teacher = $teacherStmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$isAdmin && !$teacher) {
+    header("Location: unauthorized");
+    exit;
 }
 
-$teacherId = (int)$teacher['id'];
+if ($isAdmin) {
+    $stmt = $pdo->prepare(
+        "SELECT c.id, c.class_name
+         FROM classes c
+         WHERE c.active = 1
+         ORDER BY c.class_name"
+    );
+    $stmt->execute();
+    $classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} else {
+    $teacherId = (int)$teacher['id'];
 
-$stmt = $pdo->prepare(
-    "SELECT c.id, c.class_name
-     FROM classes c
-     WHERE c.teacher_id = :teacher_id AND c.active = 1
-     ORDER BY c.class_name"
-);
-$stmt->execute([':teacher_id' => $teacherId]);
-$classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $stmt = $pdo->prepare(
+        "SELECT c.id, c.class_name
+         FROM classes c
+         WHERE c.teacher_id = :teacher_id AND c.active = 1
+         ORDER BY c.class_name"
+    );
+    $stmt->execute([':teacher_id' => $teacherId]);
+    $classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 $allowedClassIds = array_map(function ($class) {
     return (int)$class['id'];
@@ -121,6 +144,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
 $selectedClassId = (int)($_GET['class_id'] ?? 0);
 $selectedDate = $_GET['date'] ?? date('Y-m-d');
 $studentList = [];
+$selectedClassMeta = null;
 
 if ($selectedClassId > 0 && !in_array($selectedClassId, $allowedClassIds, true)) {
     $selectedClassId = 0;
@@ -133,6 +157,16 @@ if ($selectedDate < $lockDate) {
 }
 
 if ($selectedClassId > 0) {
+    $metaStmt = $pdo->prepare(
+        "SELECT c.class_name, t.full_name AS teacher_name
+         FROM classes c
+         LEFT JOIN teachers t ON t.id = c.teacher_id
+         WHERE c.id = :class_id
+         LIMIT 1"
+    );
+    $metaStmt->execute([':class_id' => $selectedClassId]);
+    $selectedClassMeta = $metaStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+
     $stmt = $pdo->prepare(
         "SELECT s.id, s.student_name,
                 COALESCE(a.status, 'Absent') AS attendance_status
@@ -211,6 +245,11 @@ if ($selectedClassId > 0) {
                 </div>
 
                 <?php if ($selectedClassId > 0): ?>
+                    <div class="alert alert-info">
+                        <strong>Class:</strong> <?php echo htmlspecialchars((string)($selectedClassMeta['class_name'] ?? 'Selected Class')); ?>
+                        &nbsp;|&nbsp;
+                        <strong>Assigned Teacher:</strong> <?php echo htmlspecialchars((string)($selectedClassMeta['teacher_name'] ?? 'Not Assigned')); ?>
+                    </div>
                     <div class="card shadow mb-4">
                         <div class="card-header py-3">
                             <h6 class="m-0 font-weight-bold text-primary">Mark Attendance</h6>
