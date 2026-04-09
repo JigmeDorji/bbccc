@@ -56,6 +56,7 @@ $_pageTitles = [
     'user-profile-view'    => 'User Profile Details',
     'parent-email'         => 'Parent Email',
     'acl-debug'            => 'ACL Debug',
+    'audit-logs'           => 'Audit Logs',
     'createAccHead'        => 'Account Heads',
     'createSubAccHead'     => 'Sub Account Heads',
     'createJournalEntry'   => 'Journal Entry',

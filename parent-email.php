@@ -121,10 +121,24 @@ try {
 
 $sessionUsername = trim((string)($_SESSION['username'] ?? ''));
 $senderDisplayName = pe_pretty_name_from_username($sessionUsername);
+$sessionUserId = trim((string)($_SESSION['userid'] ?? ''));
 
 $isAdmin = is_admin_role();
 $teacherId = 0;
 $teacherName = '';
+
+if ($isAdmin && $sessionUserId !== '') {
+    try {
+        $stmtAdminName = $pdo->prepare("SELECT full_name FROM admin_profiles WHERE user_id = :uid LIMIT 1");
+        $stmtAdminName->execute([':uid' => $sessionUserId]);
+        $adminFullName = trim((string)$stmtAdminName->fetchColumn());
+        if ($adminFullName !== '') {
+            $senderDisplayName = $adminFullName;
+        }
+    } catch (Throwable $e) {
+        // Keep fallback display name if admin_profiles table is not present.
+    }
+}
 
 if (!$isAdmin) {
     $sessionUserId = (string)($_SESSION['userid'] ?? '');

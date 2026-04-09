@@ -112,6 +112,7 @@ function bbcc_acl_page_rules(): array {
         'admin-student-approvals' => ['admin'],
         'exportbookings' => ['admin'],
         'acl-debug' => ['admin'],
+        'audit-logs' => ['admin'],
 
         // Teacher/admin shared
         'teacher-attendance' => ['admin', 'teacher'],
@@ -151,6 +152,12 @@ function bbcc_acl_log_denied(string $routeKey, array $allowedCaps): void {
         (string)($_SERVER['REMOTE_ADDR'] ?? '-')
     );
     error_log($line);
+    if (function_exists('bbcc_audit_log')) {
+        bbcc_audit_log('acl_denied', 'security', [
+            'route' => $routeKey,
+            'allowed' => $allowedCaps,
+        ], 'warning');
+    }
 }
 
 function bbcc_acl_enforce_current_page(): void {

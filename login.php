@@ -171,6 +171,12 @@ if (!empty($userName) && !empty($password)) {
 
     mysqli_stmt_close($stmt);
     mysqli_close($conn);
+
+    if ($login_error) {
+        bbcc_audit_log('login_failed', 'auth', [
+            'username_input' => (string)$userName,
+        ], 'warning');
+    }
 }
 ?>
 <?php login_render: ?>
