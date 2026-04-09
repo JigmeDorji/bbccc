@@ -244,7 +244,7 @@ $parentUsers = $pdo->query(
                                             <th>Username</th>
                                             <th>Role</th>
                                             <th>Created</th>
-                                            <th style="width:90px;text-align:center;">Actions</th>
+                                            <th style="width:160px;text-align:center;">Actions</th>
                                         </tr>
                                         </thead>
                                         <tbody>
@@ -263,6 +263,14 @@ $parentUsers = $pdo->query(
                                                 <td><span class="role-badge <?= $rc ?>"><?= htmlspecialchars($u['role']) ?></span></td>
                                                 <td style="font-size:.84rem;color:#888;"><?= $u['createdDate'] ? htmlspecialchars(date('d M Y', strtotime($u['createdDate']))) : '—' ?></td>
                                                 <td class="text-center">
+                                                    <a
+                                                        href="user-profile-view?type=user&userid=<?= urlencode((string)$u['userid']) ?>"
+                                                        class="btn btn-sm btn-outline-info"
+                                                        title="View Profile"
+                                                        style="width:32px;height:32px;padding:0;border-radius:8px;line-height:32px;"
+                                                    >
+                                                        <i class="fas fa-eye" style="font-size:.75rem;"></i>
+                                                    </a>
                                                     <?php if (in_array($u['role'], ['Admin','Company Admin','Staff','System_owner','Administrator'])): ?>
                                                     <button type="button" class="btn btn-sm btn-outline-primary btn-edit-user"
                                                         data-userid="<?= htmlspecialchars($u['userid'], ENT_QUOTES) ?>"
@@ -306,7 +314,7 @@ $parentUsers = $pdo->query(
                                             <th>Username</th>
                                             <th>Role</th>
                                             <th>Created</th>
-                                            <th style="width:90px;text-align:center;">Actions</th>
+                                            <th style="width:160px;text-align:center;">Actions</th>
                                         </tr>
                                         </thead>
                                         <tbody>
@@ -319,6 +327,14 @@ $parentUsers = $pdo->query(
                                                 <td><span class="role-badge role-admin"><?= htmlspecialchars($u['role']) ?></span></td>
                                                 <td style="font-size:.84rem;color:#888;"><?= $u['createdDate'] ? htmlspecialchars(date('d M Y', strtotime($u['createdDate']))) : '—' ?></td>
                                                 <td class="text-center">
+                                                    <a
+                                                        href="user-profile-view?type=user&userid=<?= urlencode((string)$u['userid']) ?>"
+                                                        class="btn btn-sm btn-outline-info"
+                                                        title="View Profile"
+                                                        style="width:32px;height:32px;padding:0;border-radius:8px;line-height:32px;"
+                                                    >
+                                                        <i class="fas fa-eye" style="font-size:.75rem;"></i>
+                                                    </a>
                                                     <button type="button" class="btn btn-sm btn-outline-primary btn-edit-user"
                                                         data-userid="<?= htmlspecialchars($u['userid'], ENT_QUOTES) ?>"
                                                         data-username="<?= htmlspecialchars($u['username'], ENT_QUOTES) ?>"
@@ -367,7 +383,7 @@ $parentUsers = $pdo->query(
                                             <th>Email</th>
                                             <th>Phone</th>
                                             <th>Status</th>
-                                            <th style="width:70px;text-align:center;">Toggle</th>
+                                            <th style="width:120px;text-align:center;">Actions</th>
                                         </tr>
                                         </thead>
                                         <tbody>
@@ -388,6 +404,14 @@ $parentUsers = $pdo->query(
                                                     <?php endif; ?>
                                                 </td>
                                                 <td class="text-center">
+                                                    <a
+                                                        href="user-profile-view?type=teacher&teacher_id=<?= (int)$t['teacher_id'] ?>"
+                                                        class="btn btn-sm btn-outline-info"
+                                                        title="View Profile"
+                                                        style="width:32px;height:32px;padding:0;border-radius:8px;line-height:32px;"
+                                                    >
+                                                        <i class="fas fa-eye" style="font-size:.75rem;"></i>
+                                                    </a>
                                                     <form method="POST" style="display:inline;">
                                                         <input type="hidden" name="action" value="toggle_teacher_active">
                                                         <input type="hidden" name="teacher_id" value="<?= (int)$t['teacher_id'] ?>">
@@ -421,7 +445,7 @@ $parentUsers = $pdo->query(
                                             <th>Phone</th>
                                             <th>Status</th>
                                             <th>Joined</th>
-                                            <th style="width:70px;text-align:center;">Toggle</th>
+                                            <th style="width:120px;text-align:center;">Actions</th>
                                         </tr>
                                         </thead>
                                         <tbody>
@@ -447,6 +471,14 @@ $parentUsers = $pdo->query(
                                                 </td>
                                                 <td style="font-size:.84rem;color:#888;"><?= htmlspecialchars(date('d M Y', strtotime($p['created_at']))) ?></td>
                                                 <td class="text-center">
+                                                    <a
+                                                        href="user-profile-view?type=parent&parent_id=<?= (int)$p['id'] ?>"
+                                                        class="btn btn-sm btn-outline-info"
+                                                        title="View Profile"
+                                                        style="width:32px;height:32px;padding:0;border-radius:8px;line-height:32px;"
+                                                    >
+                                                        <i class="fas fa-eye" style="font-size:.75rem;"></i>
+                                                    </a>
                                                     <form method="POST" style="display:inline;">
                                                         <input type="hidden" name="action" value="toggle_parent_status">
                                                         <input type="hidden" name="parent_id" value="<?= (int)$p['id'] ?>">

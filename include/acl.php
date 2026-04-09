@@ -98,6 +98,7 @@ function bbcc_acl_page_rules(): array {
 
         // Admin operations
         'usersetup' => ['admin'],
+        'user-profile-view' => ['admin'],
         'admin-class-setup' => ['admin'],
         'admin-assign-class' => ['admin'],
         'admin-enrolments' => ['admin'],
@@ -107,6 +108,7 @@ function bbcc_acl_page_rules(): array {
         'admin-parent-pins' => ['admin'],
         'admin-bank-settings' => ['admin'],
         'mail-test' => ['admin'],
+        'parent-email' => ['admin', 'teacher'],
         'admin-student-approvals' => ['admin'],
         'exportbookings' => ['admin'],
         'acl-debug' => ['admin'],
