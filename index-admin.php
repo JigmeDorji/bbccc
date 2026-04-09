@@ -52,6 +52,7 @@ $parentChildTermProgress = [];
 $parentTermTotals = [1 => 0, 2 => 0, 3 => 0, 4 => 0];
 $recentClassroomActivity = [];
 $dashboardTeacherId = 0;
+$parentHasTeacherProfile = false;
 
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
@@ -69,6 +70,7 @@ try {
     /* ═══ PARENT DASHBOARD ═══ */
     if ($role === 'parent') {
         $sessionUsername = $_SESSION['username'] ?? '';
+        $sessionUserId = (string)($_SESSION['userid'] ?? '');
         if ($sessionUsername === '') {
             throw new Exception("Session username missing. Please logout and login again.");
         }
@@ -141,6 +143,16 @@ try {
                 4 => (int)($totalRow['term4_total_classes'] ?? 0),
             ];
         }
+
+        $stmtParentTeacher = $pdo->prepare("
+            SELECT id
+            FROM teachers
+            WHERE (user_id = :uid AND :uid <> '')
+               OR LOWER(email) = LOWER(:em)
+            LIMIT 1
+        ");
+        $stmtParentTeacher->execute([':uid' => $sessionUserId, ':em' => $sessionUsername]);
+        $parentHasTeacherProfile = (bool)$stmtParentTeacher->fetch(PDO::FETCH_ASSOC);
     }
 
     /* ═══ ADMIN DASHBOARD STATS ═══ */
@@ -324,7 +336,7 @@ try {
                 $appendActivity(
                     'report',
                     'Report for ' . (string)($row['student_name'] ?? 'Student'),
-                    (string)($row['report_title'] ?? 'Student report updated'),
+                    (string)($row['report_title'] ?? 'Student progress note updated'),
                     (string)($row['created_at'] ?? ''),
                     'dzongkha-classroom?tab=reports&as=parent'
                 );
@@ -365,7 +377,7 @@ try {
                 $appendActivity(
                     'report',
                     'Report for ' . (string)($row['student_name'] ?? 'Student'),
-                    (string)($row['report_title'] ?? 'Student report posted'),
+                    (string)($row['report_title'] ?? 'Student progress note posted'),
                     (string)($row['created_at'] ?? ''),
                     'dzongkha-classroom?tab=reports&as=teacher'
                 );
@@ -414,7 +426,7 @@ try {
                 $appendActivity(
                     'report',
                     'Report for ' . (string)($row['student_name'] ?? 'Student'),
-                    (string)($row['report_title'] ?? 'Student report posted'),
+                    (string)($row['report_title'] ?? 'Student progress note posted'),
                     (string)($row['created_at'] ?? ''),
                     'dzongkha-classroom?tab=reports'
                 );
@@ -812,9 +824,12 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                     <h2><i class="fas fa-namaste"></i> Welcome, <?php echo htmlspecialchars($parentProfile['full_name'] ?? $_SESSION['username'] ?? 'Parent'); ?>!</h2>
                     <p>Manage your children's enrollments, track attendance, and make fee payments from your dashboard.</p>
                     <div class="quick-actions">
-                        <a href="children-enrollment"><i class="fas fa-plus"></i> Add Student</a>
-                        <a href="parentFeesPayment"><i class="fas fa-money-check-alt"></i> Pay Fees</a>
                         <a href="mark-absenteeism"><i class="fas fa-clipboard-check"></i> Mark Absenteeism</a>
+                        <?php if ($parentHasTeacherProfile): ?>
+                            <a href="teacher-attendance" style="background:#1cc88a;border-color:#1cc88a;">
+                                <i class="fas fa-clipboard-list"></i> Take Attendance
+                            </a>
+                        <?php endif; ?>
                     </div>
                 </div>
 

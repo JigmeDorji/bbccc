@@ -122,7 +122,6 @@ function bbcc_acl_page_rules(): array {
         'admin-attendance' => ['admin'],
 
         // Parent-only flows
-        'parent-dashboard' => ['parent'],
         'parent-children' => ['parent'],
         'parentprofile' => ['parent'],
         'children-enrollment' => ['parent'],

@@ -149,9 +149,7 @@ if (!empty($userName) && !empty($password)) {
 
                     $role = strtolower(trim((string)($row['role'] ?? '')));
                     $redirect = 'index-admin';
-                    if ($role === 'parent') {
-                        $redirect = 'parent-dashboard';
-                    } elseif ($role === 'patron') {
+                    if ($role === 'patron') {
                         $redirect = 'patron-dashboard';
                     }
 

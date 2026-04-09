@@ -94,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'upgra
         $pdo->commit();
 
         $_SESSION['role'] = 'parent';
-        header("Location: parent-dashboard");
+        header("Location: index-admin");
         exit;
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {

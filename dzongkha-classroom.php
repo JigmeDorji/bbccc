@@ -50,14 +50,21 @@ function dc_detect_parent(PDO $pdo): array {
     return $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 }
 
-function dc_notify_usernames(PDO $pdo, array $usernames, string $title, string $body = '', string $linkUrl = ''): void {
+function dc_notify_usernames(PDO $pdo, array $usernames, string $title, string $body = '', string $linkUrl = '', array $excludeUsernames = []): void {
     if (!function_exists('bbcc_notify_username')) {
         return;
     }
     $sent = [];
+    $exclude = [];
+    foreach ($excludeUsernames as $ex) {
+        $exKey = strtolower(trim((string)$ex));
+        if ($exKey !== '') {
+            $exclude[$exKey] = true;
+        }
+    }
     foreach ($usernames as $u) {
         $uname = strtolower(trim((string)$u));
-        if ($uname === '' || isset($sent[$uname])) {
+        if ($uname === '' || isset($sent[$uname]) || isset($exclude[$uname])) {
             continue;
         }
         $sent[$uname] = true;
@@ -304,10 +311,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $notifBody = $title . ' by ' . $postedBy;
 
             $parentUsers = dc_collect_parent_usernames_by_class_ids($pdo, $notifyClassIds);
-            dc_notify_usernames($pdo, $parentUsers, $notifTitle, $notifBody, 'dzongkha-classroom?tab=announcements&as=parent');
-
             $teacherUsers = dc_collect_teacher_usernames_by_class_ids($pdo, $notifyClassIds);
-            dc_notify_usernames($pdo, $teacherUsers, $notifTitle, $notifBody, 'dzongkha-classroom?tab=announcements&as=teacher');
+            $allRecipients = array_merge($parentUsers, $teacherUsers);
+            dc_notify_usernames(
+                $pdo,
+                $allRecipients,
+                $notifTitle,
+                $notifBody,
+                ($viewMode === 'teacher' ? 'dzongkha-classroom?tab=announcements&as=teacher' : 'dzongkha-classroom?tab=announcements'),
+                [(string)($_SESSION['username'] ?? '')]
+            );
 
             if (function_exists('bbcc_notify_admins')) {
                 bbcc_notify_admins($pdo, $notifTitle, $notifBody, 'dzongkha-classroom?tab=announcements');
@@ -377,14 +390,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 bbcc_notify_username(
                     $pdo,
                     $parentUsername,
-                    'New Student Report Added',
-                    'A new report has been posted for your child.',
+                    'New Student Progress Note Added',
+                    'A new progress note has been posted for your child.',
                     'dzongkha-classroom?tab=reports&as=parent'
                 );
             }
 
             $flashType = 'success';
-            $flashMsg = 'Student report posted successfully.';
+            $flashMsg = 'Student progress note posted successfully.';
             $tab = 'reports';
         } catch (Throwable $e) {
             $flashType = 'danger';
@@ -441,15 +454,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 bbcc_notify_username(
                     $pdo,
                     $teacherEmail,
-                    'New Parent Comment on Student Report',
-                    'A parent added a comment to a student report.',
+                    'New Parent Comment on Student Progress Note',
+                    'A parent added a comment to a student progress note.',
                     'dzongkha-classroom?tab=reports&as=teacher'
                 );
             }
             if (function_exists('bbcc_notify_admins')) {
                 bbcc_notify_admins(
                     $pdo,
-                    'New Parent Comment on Student Report',
+                    'New Parent Comment on Student Progress Note',
                     'A parent added a comment to a classroom report.',
                     'dzongkha-classroom?tab=reports'
                 );
@@ -507,8 +520,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 bbcc_notify_username(
                     $pdo,
                     $parentUsername,
-                    'Student Report Updated',
-                    'A teacher updated a report for your child.',
+                    'Student Progress Note Updated',
+                    'A teacher updated a progress note for your child.',
                     'dzongkha-classroom?tab=reports&as=parent'
                 );
             }
@@ -694,7 +707,7 @@ if ($reportIds) {
                     </li>
                     <li class="nav-item">
                         <a class="nav-link <?= $tab === 'reports' ? 'active' : '' ?>" href="dzongkha-classroom?tab=reports<?= dc_h($modeQuery) ?>">
-                            <i class="fas fa-file-alt mr-1"></i> Student Reports
+                            <i class="fas fa-file-alt mr-1"></i> Student Progress Notes
                         </a>
                     </li>
                 </ul>
@@ -813,7 +826,7 @@ if ($reportIds) {
                     <?php if ($viewMode === 'teacher'): ?>
                         <div class="card shadow mb-3">
                             <div class="card-header py-3">
-                                <h6 class="m-0 font-weight-bold text-primary">Create Student Report / Feedback</h6>
+                                <h6 class="m-0 font-weight-bold text-primary">Create Student Progress Note / Feedback</h6>
                             </div>
                             <div class="card-body">
                                 <form method="POST">
@@ -853,7 +866,7 @@ if ($reportIds) {
                                     </div>
 
                                     <div class="form-group">
-                                        <label>Report Title</label>
+                                        <label>Progress Note Title</label>
                                         <input type="text" name="report_title" class="form-control" maxlength="200" required>
                                     </div>
                                     <div class="form-group">
@@ -862,7 +875,7 @@ if ($reportIds) {
                                     </div>
 
                                     <button type="submit" class="btn btn-primary">
-                                        <i class="fas fa-save mr-1"></i> Save Report
+                                        <i class="fas fa-save mr-1"></i> Save Progress Note
                                     </button>
                                 </form>
                             </div>
@@ -871,11 +884,11 @@ if ($reportIds) {
 
                     <div class="card shadow">
                         <div class="card-header py-3">
-                            <h6 class="m-0 font-weight-bold text-primary">Student Reports</h6>
+                            <h6 class="m-0 font-weight-bold text-primary">Student Progress Notes</h6>
                         </div>
                         <div class="card-body">
                             <?php if (empty($reports)): ?>
-                                <div class="text-muted">No reports available in your scope.</div>
+                                <div class="text-muted">No progress notes available in your scope.</div>
                             <?php else: ?>
                                 <?php foreach ($reports as $r): ?>
                                     <div class="border rounded p-3 mb-3">
@@ -996,7 +1009,7 @@ if ($reportIds) {
             <input type="hidden" name="action" value="teacher_update_report">
             <input type="hidden" name="report_id" id="editReportId" value="">
             <div class="modal-header">
-                <h5 class="modal-title">Edit Student Report</h5>
+                <h5 class="modal-title">Edit Student Progress Note</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
@@ -1025,7 +1038,7 @@ if ($reportIds) {
             <div class="modal-footer">
                 <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
                 <button type="submit" class="btn btn-primary">
-                    <i class="fas fa-save mr-1"></i> Update Report
+                    <i class="fas fa-save mr-1"></i> Update Progress Note
                 </button>
             </div>
         </form>
