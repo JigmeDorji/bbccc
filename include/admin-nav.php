@@ -352,12 +352,13 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                 <span>Dzo Class Mgmt</span>
             </a>
 
-            <div id="collapseOrders" class="collapse <?= in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php']) ? 'show' : '' ?>">
+            <div id="collapseOrders" class="collapse <?= in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php']) ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <h6 class="collapse-header">Operations</h6>
                     <a class="collapse-item <?= ($currentPage === 'dzoClassManagement.php') ? 'active' : '' ?>" href="dzoClassManagement"><i class="fas fa-user-plus fa-sm mr-1 text-muted"></i> Child Registration</a>
                     <a class="collapse-item <?= ($currentPage === 'admin-enrolments.php') ? 'active' : '' ?>" href="admin-enrolments"><i class="fas fa-file-signature fa-sm mr-1 text-muted"></i> Enrollment</a>
                     <a class="collapse-item <?= in_array($currentPage, ['feesManagement.php','admin-fee-verification.php']) ? 'active' : '' ?>" href="feesManagement"><i class="fas fa-money-check-alt fa-sm mr-1 text-muted"></i> Fees</a>
+                    <a class="collapse-item <?= ($currentPage == 'dzongkha-classroom.php') ? 'active' : '' ?>" href="dzongkha-classroom"><i class="fas fa-bullhorn fa-sm mr-1 text-muted"></i> Dzongkha Classroom</a>
                     <a class="collapse-item <?= ($currentPage == 'attendanceManagement.php') ? 'active' : '' ?>" href="attendanceManagement"><i class="fas fa-clipboard-check fa-sm mr-1 text-muted"></i> Attendance</a>
                     <a class="collapse-item <?= ($currentPage == 'attendance-records.php') ? 'active' : '' ?>" href="attendance-records"><i class="fas fa-table fa-sm mr-1 text-muted"></i> Attendance Records</a>
                     <a class="collapse-item <?= ($currentPage == 'parent-email.php') ? 'active' : '' ?>" href="parent-email"><i class="fas fa-envelope-open-text fa-sm mr-1 text-muted"></i> Send Parent Email</a>
@@ -453,6 +454,13 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
             </a>
         </li>
 
+        <li class="nav-item <?= ($currentPage == 'dzongkha-classroom.php' && (($_GET['as'] ?? '') !== 'parent')) ? 'active' : '' ?>">
+            <a class="nav-link" href="dzongkha-classroom?as=teacher">
+                <i class="fas fa-bullhorn"></i>
+                <span>Dzongkha Classroom</span>
+            </a>
+        </li>
+
         <li class="nav-item <?= ($currentPage == 'adminProfile.php') ? 'active' : '' ?>">
             <a class="nav-link" href="adminProfile">
                 <i class="fas fa-user"></i>
@@ -505,6 +513,13 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
             <a class="nav-link <?= ($currentPage == 'attendance-records.php' && (($_GET['as'] ?? '') !== 'teacher')) ? 'active' : '' ?>" href="attendance-records?as=parent">
                 <i class="fas fa-table"></i>
                 <span>Student Attendance Record</span>
+            </a>
+        </li>
+
+        <li class="nav-item <?= ($currentPage == 'dzongkha-classroom.php' && (($_GET['as'] ?? '') !== 'teacher')) ? 'active' : '' ?>">
+            <a class="nav-link" href="dzongkha-classroom?as=parent">
+                <i class="fas fa-bullhorn"></i>
+                <span>Dzongkha Classroom</span>
             </a>
         </li>
 

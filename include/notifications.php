@@ -140,3 +140,18 @@ function bbcc_mark_all_notifications_read(PDO $pdo, string $username, string $ro
     ");
     $stmt->execute([':u' => strtolower(trim($username)), ':r' => $roleKey]);
 }
+
+function bbcc_delete_notification(PDO $pdo, int $id, string $username, string $role): void {
+    bbcc_ensure_notifications_table($pdo);
+    $roleKey = bbcc_notification_role_key($role);
+    $stmt = $pdo->prepare("
+        DELETE FROM app_notifications
+        WHERE id = :id
+          AND (
+              (target_username IS NOT NULL AND LOWER(target_username) = LOWER(:u))
+              OR (target_role IS NOT NULL AND target_role = :r)
+              OR (target_role = 'all')
+          )
+    ");
+    $stmt->execute([':id' => $id, ':u' => strtolower(trim($username)), ':r' => $roleKey]);
+}

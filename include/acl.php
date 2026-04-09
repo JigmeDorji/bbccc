@@ -109,6 +109,7 @@ function bbcc_acl_page_rules(): array {
         'admin-bank-settings' => ['admin'],
         'mail-test' => ['admin'],
         'parent-email' => ['admin', 'teacher'],
+        'dzongkha-classroom' => ['admin', 'teacher', 'parent'],
         'admin-student-approvals' => ['admin'],
         'exportbookings' => ['admin'],
         'acl-debug' => ['admin'],

@@ -44,6 +44,7 @@ $_pageTitles = [
     'ourTeamSetup'         => 'Team Setup',
     'viewFeedback'         => 'Contact Messages',
     'dzoClassManagement'   => 'Child Registration',
+    'dzongkha-classroom'   => 'Dzongkha Classroom',
     'feesManagement'       => 'Fees Management',
     'feesSetting'          => 'Fees Settings',
     'attendanceManagement' => 'Attendance',

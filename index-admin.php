@@ -40,6 +40,8 @@ $attendanceViewLink = 'attendanceManagement';
 $parentClassesAttended = 0;
 $parentChildTermProgress = [];
 $parentTermTotals = [1 => 0, 2 => 0, 3 => 0, 4 => 0];
+$recentClassroomActivity = [];
+$dashboardTeacherId = 0;
 
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
@@ -182,6 +184,7 @@ try {
             $stmtTeacher->execute([':uid' => $sessionUserId, ':em' => $sessionUsername]);
             $teacherRow = $stmtTeacher->fetch(PDO::FETCH_ASSOC);
             $teacherId = (int)($teacherRow['id'] ?? 0);
+            $dashboardTeacherId = $teacherId;
 
             if ($teacherId > 0) {
                 $stmtTeacherAttendance = $pdo->prepare("
@@ -251,6 +254,179 @@ try {
         // Total classes
         $totalClasses = (int)$pdo->query("SELECT COUNT(*) FROM classes")->fetchColumn();
     }
+
+    /* ═══ CLASSROOM ACTIVITY FEED (ALL ROLES) ═══ */
+    $activityItems = [];
+    $appendActivity = static function (string $type, string $title, string $detail, string $at, string $url) use (&$activityItems): void {
+        if (trim($at) === '') return;
+        $activityItems[] = [
+            'type' => $type,
+            'title' => $title,
+            'detail' => $detail,
+            'at' => $at,
+            'url' => $url,
+        ];
+    };
+
+    if ($role === 'parent' && (int)$parentDbId > 0) {
+        $stmtA = $pdo->prepare("
+            SELECT a.created_at, a.title, a.category
+            FROM classroom_announcements a
+            WHERE a.scope_type = 'all_classes'
+               OR EXISTS (
+                    SELECT 1
+                    FROM classroom_announcement_classes ac
+                    INNER JOIN class_assignments ca ON ca.class_id = ac.class_id
+                    INNER JOIN students s ON s.id = ca.student_id
+                    WHERE ac.announcement_id = a.id
+                      AND s.parentId = :pid
+               )
+            ORDER BY a.created_at DESC
+            LIMIT 6
+        ");
+        $stmtA->execute([':pid' => (int)$parentDbId]);
+        foreach ($stmtA->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $appendActivity(
+                'announcement',
+                (string)($row['title'] ?? 'Classroom Announcement'),
+                (string)($row['category'] ?? 'Announcement'),
+                (string)($row['created_at'] ?? ''),
+                'dzongkha-classroom?tab=announcements&as=parent'
+            );
+        }
+
+        $stmtR = $pdo->prepare("
+            SELECT r.created_at, r.report_title, s.student_name
+            FROM classroom_reports r
+            INNER JOIN students s ON s.id = r.student_id
+            WHERE s.parentId = :pid
+            ORDER BY r.created_at DESC
+            LIMIT 8
+        ");
+        $stmtR->execute([':pid' => (int)$parentDbId]);
+        foreach ($stmtR->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $appendActivity(
+                'report',
+                'Report for ' . (string)($row['student_name'] ?? 'Student'),
+                (string)($row['report_title'] ?? 'Student report updated'),
+                (string)($row['created_at'] ?? ''),
+                'dzongkha-classroom?tab=reports&as=parent'
+            );
+        }
+    } elseif ($role === 'teacher' && $dashboardTeacherId > 0) {
+        $stmtA = $pdo->prepare("
+            SELECT DISTINCT a.created_at, a.title, a.category
+            FROM classroom_announcements a
+            LEFT JOIN classroom_announcement_classes ac ON ac.announcement_id = a.id
+            LEFT JOIN classes c ON c.id = ac.class_id
+            WHERE a.scope_type = 'all_classes'
+               OR c.teacher_id = :tid
+            ORDER BY a.created_at DESC
+            LIMIT 6
+        ");
+        $stmtA->execute([':tid' => $dashboardTeacherId]);
+        foreach ($stmtA->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $appendActivity(
+                'announcement',
+                (string)($row['title'] ?? 'Classroom Announcement'),
+                (string)($row['category'] ?? 'Announcement'),
+                (string)($row['created_at'] ?? ''),
+                'dzongkha-classroom?tab=announcements&as=teacher'
+            );
+        }
+
+        $stmtR = $pdo->prepare("
+            SELECT r.created_at, r.report_title, s.student_name
+            FROM classroom_reports r
+            INNER JOIN students s ON s.id = r.student_id
+            INNER JOIN classes c ON c.id = r.class_id
+            WHERE c.teacher_id = :tid
+            ORDER BY r.created_at DESC
+            LIMIT 8
+        ");
+        $stmtR->execute([':tid' => $dashboardTeacherId]);
+        foreach ($stmtR->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $appendActivity(
+                'report',
+                'Report for ' . (string)($row['student_name'] ?? 'Student'),
+                (string)($row['report_title'] ?? 'Student report posted'),
+                (string)($row['created_at'] ?? ''),
+                'dzongkha-classroom?tab=reports&as=teacher'
+            );
+        }
+
+        $stmtC = $pdo->prepare("
+            SELECT cm.created_at, s.student_name
+            FROM classroom_report_comments cm
+            INNER JOIN classroom_reports r ON r.id = cm.report_id
+            INNER JOIN students s ON s.id = r.student_id
+            INNER JOIN classes c ON c.id = r.class_id
+            WHERE c.teacher_id = :tid
+            ORDER BY cm.created_at DESC
+            LIMIT 8
+        ");
+        $stmtC->execute([':tid' => $dashboardTeacherId]);
+        foreach ($stmtC->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $appendActivity(
+                'comment',
+                'Parent comment received',
+                'On report for ' . (string)($row['student_name'] ?? 'Student'),
+                (string)($row['created_at'] ?? ''),
+                'dzongkha-classroom?tab=reports&as=teacher'
+            );
+        }
+    } elseif ($role !== 'parent') {
+        $rowsA = $pdo->query("SELECT created_at, title, category FROM classroom_announcements ORDER BY created_at DESC LIMIT 8")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($rowsA as $row) {
+            $appendActivity(
+                'announcement',
+                (string)($row['title'] ?? 'Classroom Announcement'),
+                (string)($row['category'] ?? 'Announcement'),
+                (string)($row['created_at'] ?? ''),
+                'dzongkha-classroom?tab=announcements'
+            );
+        }
+
+        $rowsR = $pdo->query("
+            SELECT r.created_at, r.report_title, s.student_name
+            FROM classroom_reports r
+            INNER JOIN students s ON s.id = r.student_id
+            ORDER BY r.created_at DESC
+            LIMIT 10
+        ")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($rowsR as $row) {
+            $appendActivity(
+                'report',
+                'Report for ' . (string)($row['student_name'] ?? 'Student'),
+                (string)($row['report_title'] ?? 'Student report posted'),
+                (string)($row['created_at'] ?? ''),
+                'dzongkha-classroom?tab=reports'
+            );
+        }
+
+        $rowsC = $pdo->query("
+            SELECT cm.created_at, s.student_name
+            FROM classroom_report_comments cm
+            INNER JOIN classroom_reports r ON r.id = cm.report_id
+            INNER JOIN students s ON s.id = r.student_id
+            ORDER BY cm.created_at DESC
+            LIMIT 10
+        ")->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($rowsC as $row) {
+            $appendActivity(
+                'comment',
+                'Parent comment received',
+                'On report for ' . (string)($row['student_name'] ?? 'Student'),
+                (string)($row['created_at'] ?? ''),
+                'dzongkha-classroom?tab=reports'
+            );
+        }
+    }
+
+    usort($activityItems, static function (array $a, array $b): int {
+        return strtotime((string)$b['at']) <=> strtotime((string)$a['at']);
+    });
+    $recentClassroomActivity = array_slice($activityItems, 0, 8);
 
 } catch (PDOException $e) {
     bbcc_fail_db($e);
@@ -788,6 +964,47 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                     </div>
                 </div>
 
+                <div class="card dash-card shadow mb-4">
+                    <div class="card-body p-0">
+                        <div class="p-3">
+                            <div class="section-title mb-0">
+                                <span><i class="fas fa-stream mr-2" style="color:#4e73df;"></i>Recent Classroom Activity</span>
+                                <a href="dzongkha-classroom?as=parent">Open Classroom</a>
+                            </div>
+                        </div>
+                        <?php if (empty($recentClassroomActivity)): ?>
+                            <div class="p-4 text-center" style="color:#ccc;">
+                                <i class="fas fa-inbox fa-2x mb-2"></i>
+                                <p class="mb-0" style="font-size:0.85rem;">No recent classroom activity yet</p>
+                            </div>
+                        <?php else: ?>
+                            <div class="table-responsive">
+                                <table class="dash-table">
+                                    <thead>
+                                    <tr><th>Type</th><th>Activity</th><th>Details</th><th>Time</th></tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($recentClassroomActivity as $act): ?>
+                                        <?php
+                                            $type = strtolower((string)($act['type'] ?? 'activity'));
+                                            $icon = 'fa-bullhorn';
+                                            if ($type === 'report') $icon = 'fa-file-alt';
+                                            if ($type === 'comment') $icon = 'fa-comment';
+                                        ?>
+                                        <tr>
+                                            <td><i class="fas <?= $icon ?>" style="color:#4e73df;"></i> <?= htmlspecialchars(ucfirst($type)); ?></td>
+                                            <td><a href="<?= htmlspecialchars((string)($act['url'] ?? 'dzongkha-classroom?as=parent')); ?>"><?= htmlspecialchars((string)($act['title'] ?? 'Activity')); ?></a></td>
+                                            <td><?= htmlspecialchars((string)($act['detail'] ?? '-')); ?></td>
+                                            <td><?= !empty($act['at']) ? date('d M Y, h:i A', strtotime((string)$act['at'])) : '-'; ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
 
             <?php else: ?>
                 <!-- ═══════════════════════════════════════════ -->
@@ -1099,6 +1316,47 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                                             </td>
                                             <td><?php echo htmlspecialchars($ar['class_name'] ?? '-'); ?></td>
                                             <td><span class="badge badge-<?php echo $attBadge; ?>"><?php echo htmlspecialchars($ar['status'] ?? 'Unknown'); ?></span></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <div class="card dash-card shadow mb-4">
+                    <div class="card-body p-0">
+                        <div class="p-3">
+                            <div class="section-title mb-0">
+                                <span><i class="fas fa-stream mr-2" style="color:#4e73df;"></i>Recent Classroom Activity</span>
+                                <a href="<?= $role === 'teacher' ? 'dzongkha-classroom?as=teacher' : 'dzongkha-classroom'; ?>">Open Classroom</a>
+                            </div>
+                        </div>
+                        <?php if (empty($recentClassroomActivity)): ?>
+                            <div class="p-4 text-center" style="color:#ccc;">
+                                <i class="fas fa-inbox fa-2x mb-2"></i>
+                                <p class="mb-0" style="font-size:0.85rem;">No recent classroom activity yet</p>
+                            </div>
+                        <?php else: ?>
+                            <div class="table-responsive">
+                                <table class="dash-table">
+                                    <thead>
+                                    <tr><th>Type</th><th>Activity</th><th>Details</th><th>Time</th></tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($recentClassroomActivity as $act): ?>
+                                        <?php
+                                            $type = strtolower((string)($act['type'] ?? 'activity'));
+                                            $icon = 'fa-bullhorn';
+                                            if ($type === 'report') $icon = 'fa-file-alt';
+                                            if ($type === 'comment') $icon = 'fa-comment';
+                                        ?>
+                                        <tr>
+                                            <td><i class="fas <?= $icon ?>" style="color:#4e73df;"></i> <?= htmlspecialchars(ucfirst($type)); ?></td>
+                                            <td><a href="<?= htmlspecialchars((string)($act['url'] ?? 'dzongkha-classroom')); ?>"><?= htmlspecialchars((string)($act['title'] ?? 'Activity')); ?></a></td>
+                                            <td><?= htmlspecialchars((string)($act['detail'] ?? '-')); ?></td>
+                                            <td><?= !empty($act['at']) ? date('d M Y, h:i A', strtotime((string)$act['at'])) : '-'; ?></td>
                                         </tr>
                                     <?php endforeach; ?>
                                     </tbody>

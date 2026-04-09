@@ -35,6 +35,7 @@ $stats = [
     'payments_pending' => 0,
     'notifications_unread' => 0
 ];
+$recentClassroomActivity = [];
 
 $stmt = $pdo->prepare("SELECT COUNT(*) FROM students WHERE {$studentParentColumn} = ?");
 $stmt->execute([$parentId]);
@@ -57,6 +58,56 @@ $stats['notifications_unread'] = bbcc_unread_notifications_count(
     (string)($_SESSION['username'] ?? ''),
     (string)($_SESSION['role'] ?? 'parent')
 );
+
+$stmtActA = $pdo->prepare("
+    SELECT a.created_at, a.title, a.category
+    FROM classroom_announcements a
+    WHERE a.scope_type = 'all_classes'
+       OR EXISTS (
+            SELECT 1
+            FROM classroom_announcement_classes ac
+            INNER JOIN class_assignments ca ON ca.class_id = ac.class_id
+            INNER JOIN students s ON s.id = ca.student_id
+            WHERE ac.announcement_id = a.id
+              AND s.parentId = :pid
+       )
+    ORDER BY a.created_at DESC
+    LIMIT 5
+");
+$stmtActA->execute([':pid' => $parentId]);
+foreach ($stmtActA->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    $recentClassroomActivity[] = [
+        'type' => 'announcement',
+        'title' => (string)($row['title'] ?? 'Classroom Announcement'),
+        'detail' => (string)($row['category'] ?? 'Announcement'),
+        'at' => (string)($row['created_at'] ?? ''),
+        'url' => 'dzongkha-classroom?tab=announcements&as=parent',
+    ];
+}
+
+$stmtActR = $pdo->prepare("
+    SELECT r.created_at, r.report_title, s.student_name
+    FROM classroom_reports r
+    INNER JOIN students s ON s.id = r.student_id
+    WHERE s.parentId = :pid
+    ORDER BY r.created_at DESC
+    LIMIT 8
+");
+$stmtActR->execute([':pid' => $parentId]);
+foreach ($stmtActR->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    $recentClassroomActivity[] = [
+        'type' => 'report',
+        'title' => 'Report for ' . (string)($row['student_name'] ?? 'Student'),
+        'detail' => (string)($row['report_title'] ?? 'Student report updated'),
+        'at' => (string)($row['created_at'] ?? ''),
+        'url' => 'dzongkha-classroom?tab=reports&as=parent',
+    ];
+}
+
+usort($recentClassroomActivity, static function (array $a, array $b): int {
+    return strtotime((string)$b['at']) <=> strtotime((string)$a['at']);
+});
+$recentClassroomActivity = array_slice($recentClassroomActivity, 0, 8);
 ?>
 
 <!DOCTYPE html>
@@ -138,6 +189,46 @@ $stats['notifications_unread'] = bbcc_unread_notifications_count(
                         <a href="parent-students" class="btn btn-primary mr-2">Manage Students</a>
                         <a href="parent-payments" class="btn btn-secondary mr-2">Upload Payment</a>
                         <a href="parent-signinout" class="btn btn-info">Sign In/Out</a>
+                    </div>
+                </div>
+
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">Recent Classroom Activity</h6>
+                        <a href="dzongkha-classroom?as=parent" class="small">Open Classroom</a>
+                    </div>
+                    <div class="card-body p-0">
+                        <?php if (empty($recentClassroomActivity)): ?>
+                            <div class="p-4 text-center text-muted">No recent classroom activity yet.</div>
+                        <?php else: ?>
+                            <div class="table-responsive">
+                                <table class="table table-sm mb-0">
+                                    <thead>
+                                    <tr>
+                                        <th class="pl-3">Type</th>
+                                        <th>Activity</th>
+                                        <th>Details</th>
+                                        <th class="pr-3">Time</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php foreach ($recentClassroomActivity as $act): ?>
+                                        <?php
+                                            $type = strtolower((string)($act['type'] ?? 'activity'));
+                                            $icon = 'fa-bullhorn';
+                                            if ($type === 'report') $icon = 'fa-file-alt';
+                                        ?>
+                                        <tr>
+                                            <td class="pl-3"><i class="fas <?= $icon ?> text-primary mr-1"></i><?= htmlspecialchars(ucfirst($type)); ?></td>
+                                            <td><a href="<?= htmlspecialchars((string)($act['url'] ?? 'dzongkha-classroom?as=parent')); ?>"><?= htmlspecialchars((string)($act['title'] ?? 'Activity')); ?></a></td>
+                                            <td><?= htmlspecialchars((string)($act['detail'] ?? '-')); ?></td>
+                                            <td class="pr-3"><?= !empty($act['at']) ? date('d M Y, h:i A', strtotime((string)$act['at'])) : '-'; ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>

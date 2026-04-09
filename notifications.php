@@ -31,6 +31,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($id > 0) {
             bbcc_mark_notification_read($pdo, $id, $username, $role);
         }
+    } elseif ($action === 'delete') {
+        $id = (int)($_POST['notification_id'] ?? 0);
+        if ($id > 0) {
+            bbcc_delete_notification($pdo, $id, $username, $role);
+        }
     } elseif ($action === 'mark_all') {
         bbcc_mark_all_notifications_read($pdo, $username, $role);
     }
@@ -122,6 +127,12 @@ function n_h(string $v): string {
                                             <?php else: ?>
                                                 <span class="badge badge-light">Read</span>
                                             <?php endif; ?>
+                                            <form method="POST" class="d-inline ml-1" onsubmit="return confirm('Delete this notification?');">
+                                                <?= csrf_field() ?>
+                                                <input type="hidden" name="action" value="delete">
+                                                <input type="hidden" name="notification_id" value="<?= (int)($n['id'] ?? 0) ?>">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                            </form>
                                         </div>
                                     </div>
                                 </div>
