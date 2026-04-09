@@ -5,6 +5,16 @@ require_once "include/auth.php";
 require_once "include/notifications.php";
 require_login();
 
+function bbcc_table_exists(PDO $pdo, string $table): bool {
+    try {
+        $stmt = $pdo->prepare("SHOW TABLES LIKE :t");
+        $stmt->execute([':t' => $table]);
+        return (bool)$stmt->fetch(PDO::FETCH_NUM);
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
 $filterCompanyID = $_SESSION['companyID'] ?? null;
 $filterProjectID = $_SESSION['projectID'] ?? null;
 
@@ -256,177 +266,184 @@ try {
     }
 
     /* ═══ CLASSROOM ACTIVITY FEED (ALL ROLES) ═══ */
-    $activityItems = [];
-    $appendActivity = static function (string $type, string $title, string $detail, string $at, string $url) use (&$activityItems): void {
-        if (trim($at) === '') return;
-        $activityItems[] = [
-            'type' => $type,
-            'title' => $title,
-            'detail' => $detail,
-            'at' => $at,
-            'url' => $url,
-        ];
-    };
+    if (
+        bbcc_table_exists($pdo, 'classroom_announcements') &&
+        bbcc_table_exists($pdo, 'classroom_announcement_classes') &&
+        bbcc_table_exists($pdo, 'classroom_reports') &&
+        bbcc_table_exists($pdo, 'classroom_report_comments')
+    ) {
+        $activityItems = [];
+        $appendActivity = static function (string $type, string $title, string $detail, string $at, string $url) use (&$activityItems): void {
+            if (trim($at) === '') return;
+            $activityItems[] = [
+                'type' => $type,
+                'title' => $title,
+                'detail' => $detail,
+                'at' => $at,
+                'url' => $url,
+            ];
+        };
 
-    if ($role === 'parent' && (int)$parentDbId > 0) {
-        $stmtA = $pdo->prepare("
-            SELECT a.created_at, a.title, a.category
-            FROM classroom_announcements a
-            WHERE a.scope_type = 'all_classes'
-               OR EXISTS (
-                    SELECT 1
-                    FROM classroom_announcement_classes ac
-                    INNER JOIN class_assignments ca ON ca.class_id = ac.class_id
-                    INNER JOIN students s ON s.id = ca.student_id
-                    WHERE ac.announcement_id = a.id
-                      AND s.parentId = :pid
-               )
-            ORDER BY a.created_at DESC
-            LIMIT 6
-        ");
-        $stmtA->execute([':pid' => (int)$parentDbId]);
-        foreach ($stmtA->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $appendActivity(
-                'announcement',
-                (string)($row['title'] ?? 'Classroom Announcement'),
-                (string)($row['category'] ?? 'Announcement'),
-                (string)($row['created_at'] ?? ''),
-                'dzongkha-classroom?tab=announcements&as=parent'
-            );
+        if ($role === 'parent' && (int)$parentDbId > 0) {
+            $stmtA = $pdo->prepare("
+                SELECT a.created_at, a.title, a.category
+                FROM classroom_announcements a
+                WHERE a.scope_type = 'all_classes'
+                   OR EXISTS (
+                        SELECT 1
+                        FROM classroom_announcement_classes ac
+                        INNER JOIN class_assignments ca ON ca.class_id = ac.class_id
+                        INNER JOIN students s ON s.id = ca.student_id
+                        WHERE ac.announcement_id = a.id
+                          AND s.parentId = :pid
+                   )
+                ORDER BY a.created_at DESC
+                LIMIT 6
+            ");
+            $stmtA->execute([':pid' => (int)$parentDbId]);
+            foreach ($stmtA->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $appendActivity(
+                    'announcement',
+                    (string)($row['title'] ?? 'Classroom Announcement'),
+                    (string)($row['category'] ?? 'Announcement'),
+                    (string)($row['created_at'] ?? ''),
+                    'dzongkha-classroom?tab=announcements&as=parent'
+                );
+            }
+
+            $stmtR = $pdo->prepare("
+                SELECT r.created_at, r.report_title, s.student_name
+                FROM classroom_reports r
+                INNER JOIN students s ON s.id = r.student_id
+                WHERE s.parentId = :pid
+                ORDER BY r.created_at DESC
+                LIMIT 8
+            ");
+            $stmtR->execute([':pid' => (int)$parentDbId]);
+            foreach ($stmtR->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $appendActivity(
+                    'report',
+                    'Report for ' . (string)($row['student_name'] ?? 'Student'),
+                    (string)($row['report_title'] ?? 'Student report updated'),
+                    (string)($row['created_at'] ?? ''),
+                    'dzongkha-classroom?tab=reports&as=parent'
+                );
+            }
+        } elseif ($role === 'teacher' && $dashboardTeacherId > 0) {
+            $stmtA = $pdo->prepare("
+                SELECT DISTINCT a.created_at, a.title, a.category
+                FROM classroom_announcements a
+                LEFT JOIN classroom_announcement_classes ac ON ac.announcement_id = a.id
+                LEFT JOIN classes c ON c.id = ac.class_id
+                WHERE a.scope_type = 'all_classes'
+                   OR c.teacher_id = :tid
+                ORDER BY a.created_at DESC
+                LIMIT 6
+            ");
+            $stmtA->execute([':tid' => $dashboardTeacherId]);
+            foreach ($stmtA->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $appendActivity(
+                    'announcement',
+                    (string)($row['title'] ?? 'Classroom Announcement'),
+                    (string)($row['category'] ?? 'Announcement'),
+                    (string)($row['created_at'] ?? ''),
+                    'dzongkha-classroom?tab=announcements&as=teacher'
+                );
+            }
+
+            $stmtR = $pdo->prepare("
+                SELECT r.created_at, r.report_title, s.student_name
+                FROM classroom_reports r
+                INNER JOIN students s ON s.id = r.student_id
+                INNER JOIN classes c ON c.id = r.class_id
+                WHERE c.teacher_id = :tid
+                ORDER BY r.created_at DESC
+                LIMIT 8
+            ");
+            $stmtR->execute([':tid' => $dashboardTeacherId]);
+            foreach ($stmtR->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $appendActivity(
+                    'report',
+                    'Report for ' . (string)($row['student_name'] ?? 'Student'),
+                    (string)($row['report_title'] ?? 'Student report posted'),
+                    (string)($row['created_at'] ?? ''),
+                    'dzongkha-classroom?tab=reports&as=teacher'
+                );
+            }
+
+            $stmtC = $pdo->prepare("
+                SELECT cm.created_at, s.student_name
+                FROM classroom_report_comments cm
+                INNER JOIN classroom_reports r ON r.id = cm.report_id
+                INNER JOIN students s ON s.id = r.student_id
+                INNER JOIN classes c ON c.id = r.class_id
+                WHERE c.teacher_id = :tid
+                ORDER BY cm.created_at DESC
+                LIMIT 8
+            ");
+            $stmtC->execute([':tid' => $dashboardTeacherId]);
+            foreach ($stmtC->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $appendActivity(
+                    'comment',
+                    'Parent comment received',
+                    'On report for ' . (string)($row['student_name'] ?? 'Student'),
+                    (string)($row['created_at'] ?? ''),
+                    'dzongkha-classroom?tab=reports&as=teacher'
+                );
+            }
+        } elseif ($role !== 'parent') {
+            $rowsA = $pdo->query("SELECT created_at, title, category FROM classroom_announcements ORDER BY created_at DESC LIMIT 8")->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($rowsA as $row) {
+                $appendActivity(
+                    'announcement',
+                    (string)($row['title'] ?? 'Classroom Announcement'),
+                    (string)($row['category'] ?? 'Announcement'),
+                    (string)($row['created_at'] ?? ''),
+                    'dzongkha-classroom?tab=announcements'
+                );
+            }
+
+            $rowsR = $pdo->query("
+                SELECT r.created_at, r.report_title, s.student_name
+                FROM classroom_reports r
+                INNER JOIN students s ON s.id = r.student_id
+                ORDER BY r.created_at DESC
+                LIMIT 10
+            ")->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($rowsR as $row) {
+                $appendActivity(
+                    'report',
+                    'Report for ' . (string)($row['student_name'] ?? 'Student'),
+                    (string)($row['report_title'] ?? 'Student report posted'),
+                    (string)($row['created_at'] ?? ''),
+                    'dzongkha-classroom?tab=reports'
+                );
+            }
+
+            $rowsC = $pdo->query("
+                SELECT cm.created_at, s.student_name
+                FROM classroom_report_comments cm
+                INNER JOIN classroom_reports r ON r.id = cm.report_id
+                INNER JOIN students s ON s.id = r.student_id
+                ORDER BY cm.created_at DESC
+                LIMIT 10
+            ")->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($rowsC as $row) {
+                $appendActivity(
+                    'comment',
+                    'Parent comment received',
+                    'On report for ' . (string)($row['student_name'] ?? 'Student'),
+                    (string)($row['created_at'] ?? ''),
+                    'dzongkha-classroom?tab=reports'
+                );
+            }
         }
 
-        $stmtR = $pdo->prepare("
-            SELECT r.created_at, r.report_title, s.student_name
-            FROM classroom_reports r
-            INNER JOIN students s ON s.id = r.student_id
-            WHERE s.parentId = :pid
-            ORDER BY r.created_at DESC
-            LIMIT 8
-        ");
-        $stmtR->execute([':pid' => (int)$parentDbId]);
-        foreach ($stmtR->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $appendActivity(
-                'report',
-                'Report for ' . (string)($row['student_name'] ?? 'Student'),
-                (string)($row['report_title'] ?? 'Student report updated'),
-                (string)($row['created_at'] ?? ''),
-                'dzongkha-classroom?tab=reports&as=parent'
-            );
-        }
-    } elseif ($role === 'teacher' && $dashboardTeacherId > 0) {
-        $stmtA = $pdo->prepare("
-            SELECT DISTINCT a.created_at, a.title, a.category
-            FROM classroom_announcements a
-            LEFT JOIN classroom_announcement_classes ac ON ac.announcement_id = a.id
-            LEFT JOIN classes c ON c.id = ac.class_id
-            WHERE a.scope_type = 'all_classes'
-               OR c.teacher_id = :tid
-            ORDER BY a.created_at DESC
-            LIMIT 6
-        ");
-        $stmtA->execute([':tid' => $dashboardTeacherId]);
-        foreach ($stmtA->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $appendActivity(
-                'announcement',
-                (string)($row['title'] ?? 'Classroom Announcement'),
-                (string)($row['category'] ?? 'Announcement'),
-                (string)($row['created_at'] ?? ''),
-                'dzongkha-classroom?tab=announcements&as=teacher'
-            );
-        }
-
-        $stmtR = $pdo->prepare("
-            SELECT r.created_at, r.report_title, s.student_name
-            FROM classroom_reports r
-            INNER JOIN students s ON s.id = r.student_id
-            INNER JOIN classes c ON c.id = r.class_id
-            WHERE c.teacher_id = :tid
-            ORDER BY r.created_at DESC
-            LIMIT 8
-        ");
-        $stmtR->execute([':tid' => $dashboardTeacherId]);
-        foreach ($stmtR->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $appendActivity(
-                'report',
-                'Report for ' . (string)($row['student_name'] ?? 'Student'),
-                (string)($row['report_title'] ?? 'Student report posted'),
-                (string)($row['created_at'] ?? ''),
-                'dzongkha-classroom?tab=reports&as=teacher'
-            );
-        }
-
-        $stmtC = $pdo->prepare("
-            SELECT cm.created_at, s.student_name
-            FROM classroom_report_comments cm
-            INNER JOIN classroom_reports r ON r.id = cm.report_id
-            INNER JOIN students s ON s.id = r.student_id
-            INNER JOIN classes c ON c.id = r.class_id
-            WHERE c.teacher_id = :tid
-            ORDER BY cm.created_at DESC
-            LIMIT 8
-        ");
-        $stmtC->execute([':tid' => $dashboardTeacherId]);
-        foreach ($stmtC->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $appendActivity(
-                'comment',
-                'Parent comment received',
-                'On report for ' . (string)($row['student_name'] ?? 'Student'),
-                (string)($row['created_at'] ?? ''),
-                'dzongkha-classroom?tab=reports&as=teacher'
-            );
-        }
-    } elseif ($role !== 'parent') {
-        $rowsA = $pdo->query("SELECT created_at, title, category FROM classroom_announcements ORDER BY created_at DESC LIMIT 8")->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($rowsA as $row) {
-            $appendActivity(
-                'announcement',
-                (string)($row['title'] ?? 'Classroom Announcement'),
-                (string)($row['category'] ?? 'Announcement'),
-                (string)($row['created_at'] ?? ''),
-                'dzongkha-classroom?tab=announcements'
-            );
-        }
-
-        $rowsR = $pdo->query("
-            SELECT r.created_at, r.report_title, s.student_name
-            FROM classroom_reports r
-            INNER JOIN students s ON s.id = r.student_id
-            ORDER BY r.created_at DESC
-            LIMIT 10
-        ")->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($rowsR as $row) {
-            $appendActivity(
-                'report',
-                'Report for ' . (string)($row['student_name'] ?? 'Student'),
-                (string)($row['report_title'] ?? 'Student report posted'),
-                (string)($row['created_at'] ?? ''),
-                'dzongkha-classroom?tab=reports'
-            );
-        }
-
-        $rowsC = $pdo->query("
-            SELECT cm.created_at, s.student_name
-            FROM classroom_report_comments cm
-            INNER JOIN classroom_reports r ON r.id = cm.report_id
-            INNER JOIN students s ON s.id = r.student_id
-            ORDER BY cm.created_at DESC
-            LIMIT 10
-        ")->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($rowsC as $row) {
-            $appendActivity(
-                'comment',
-                'Parent comment received',
-                'On report for ' . (string)($row['student_name'] ?? 'Student'),
-                (string)($row['created_at'] ?? ''),
-                'dzongkha-classroom?tab=reports'
-            );
-        }
+        usort($activityItems, static function (array $a, array $b): int {
+            return strtotime((string)$b['at']) <=> strtotime((string)$a['at']);
+        });
+        $recentClassroomActivity = array_slice($activityItems, 0, 8);
     }
-
-    usort($activityItems, static function (array $a, array $b): int {
-        return strtotime((string)$b['at']) <=> strtotime((string)$a['at']);
-    });
-    $recentClassroomActivity = array_slice($activityItems, 0, 8);
 
 } catch (PDOException $e) {
     bbcc_fail_db($e);

@@ -7,6 +7,16 @@ require_once "include/notifications.php";
 require_login();
 allowRoles(['parent']);
 
+function bbcc_table_exists(PDO $pdo, string $table): bool {
+    try {
+        $stmt = $pdo->prepare("SHOW TABLES LIKE :t");
+        $stmt->execute([':t' => $table]);
+        return (bool)$stmt->fetch(PDO::FETCH_NUM);
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -59,49 +69,55 @@ $stats['notifications_unread'] = bbcc_unread_notifications_count(
     (string)($_SESSION['role'] ?? 'parent')
 );
 
-$stmtActA = $pdo->prepare("
-    SELECT a.created_at, a.title, a.category
-    FROM classroom_announcements a
-    WHERE a.scope_type = 'all_classes'
-       OR EXISTS (
-            SELECT 1
-            FROM classroom_announcement_classes ac
-            INNER JOIN class_assignments ca ON ca.class_id = ac.class_id
-            INNER JOIN students s ON s.id = ca.student_id
-            WHERE ac.announcement_id = a.id
-              AND s.parentId = :pid
-       )
-    ORDER BY a.created_at DESC
-    LIMIT 5
-");
-$stmtActA->execute([':pid' => $parentId]);
-foreach ($stmtActA->fetchAll(PDO::FETCH_ASSOC) as $row) {
-    $recentClassroomActivity[] = [
-        'type' => 'announcement',
-        'title' => (string)($row['title'] ?? 'Classroom Announcement'),
-        'detail' => (string)($row['category'] ?? 'Announcement'),
-        'at' => (string)($row['created_at'] ?? ''),
-        'url' => 'dzongkha-classroom?tab=announcements&as=parent',
-    ];
-}
+if (
+    bbcc_table_exists($pdo, 'classroom_announcements') &&
+    bbcc_table_exists($pdo, 'classroom_announcement_classes') &&
+    bbcc_table_exists($pdo, 'classroom_reports')
+) {
+    $stmtActA = $pdo->prepare("
+        SELECT a.created_at, a.title, a.category
+        FROM classroom_announcements a
+        WHERE a.scope_type = 'all_classes'
+           OR EXISTS (
+                SELECT 1
+                FROM classroom_announcement_classes ac
+                INNER JOIN class_assignments ca ON ca.class_id = ac.class_id
+                INNER JOIN students s ON s.id = ca.student_id
+                WHERE ac.announcement_id = a.id
+                  AND s.parentId = :pid
+           )
+        ORDER BY a.created_at DESC
+        LIMIT 5
+    ");
+    $stmtActA->execute([':pid' => $parentId]);
+    foreach ($stmtActA->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $recentClassroomActivity[] = [
+            'type' => 'announcement',
+            'title' => (string)($row['title'] ?? 'Classroom Announcement'),
+            'detail' => (string)($row['category'] ?? 'Announcement'),
+            'at' => (string)($row['created_at'] ?? ''),
+            'url' => 'dzongkha-classroom?tab=announcements&as=parent',
+        ];
+    }
 
-$stmtActR = $pdo->prepare("
-    SELECT r.created_at, r.report_title, s.student_name
-    FROM classroom_reports r
-    INNER JOIN students s ON s.id = r.student_id
-    WHERE s.parentId = :pid
-    ORDER BY r.created_at DESC
-    LIMIT 8
-");
-$stmtActR->execute([':pid' => $parentId]);
-foreach ($stmtActR->fetchAll(PDO::FETCH_ASSOC) as $row) {
-    $recentClassroomActivity[] = [
-        'type' => 'report',
-        'title' => 'Report for ' . (string)($row['student_name'] ?? 'Student'),
-        'detail' => (string)($row['report_title'] ?? 'Student report updated'),
-        'at' => (string)($row['created_at'] ?? ''),
-        'url' => 'dzongkha-classroom?tab=reports&as=parent',
-    ];
+    $stmtActR = $pdo->prepare("
+        SELECT r.created_at, r.report_title, s.student_name
+        FROM classroom_reports r
+        INNER JOIN students s ON s.id = r.student_id
+        WHERE s.parentId = :pid
+        ORDER BY r.created_at DESC
+        LIMIT 8
+    ");
+    $stmtActR->execute([':pid' => $parentId]);
+    foreach ($stmtActR->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $recentClassroomActivity[] = [
+            'type' => 'report',
+            'title' => 'Report for ' . (string)($row['student_name'] ?? 'Student'),
+            'detail' => (string)($row['report_title'] ?? 'Student report updated'),
+            'at' => (string)($row['created_at'] ?? ''),
+            'url' => 'dzongkha-classroom?tab=reports&as=parent',
+        ];
+    }
 }
 
 usort($recentClassroomActivity, static function (array $a, array $b): int {
