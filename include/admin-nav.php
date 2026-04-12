@@ -224,21 +224,33 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
     margin: 0;
 }
 #accordionSidebar .collapse-header.dzo-group-header {
-    margin-top: 8px;
-}
-#accordionSidebar .collapse-header.dzo-group-header:first-of-type {
-    margin-top: 0;
+    display: none !important;
 }
 
 /* Dzo Class Mgmt subgroup toggles */
-#collapseOrders .dzo-subgroup-trigger {
-    display: none;
+#collapseOrders .collapse-item.dzo-subgroup-trigger {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    padding-left: 20px !important;
+    font-weight: 600;
+    color: rgba(255,255,255,0.92) !important;
 }
-@media (min-width: 992px) {
-    #collapseOrders .dzo-subgroup-links {
-        display: block !important;
-        height: auto !important;
-    }
+#collapseOrders .collapse-item {
+    padding-left: 20px !important;
+    min-height: 44px;
+    font-size: 0.82rem !important;
+    white-space: normal !important;
+    line-height: 1.25;
+}
+#collapseOrders .dzo-subgroup-trigger::after {
+    content: '▾';
+    font-size: 0.85rem;
+    opacity: 0.85;
+    transition: transform .18s ease;
+}
+#collapseOrders .dzo-subgroup-trigger.collapsed::after {
+    transform: rotate(-90deg);
 }
 
 /* ── 5. BRAND + DIVIDERS + HEADINGS ─────────────────────────────── */
@@ -326,25 +338,9 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
 
     /* Dzo Class Mgmt mobile subgroups */
     #collapseOrders .dzo-group-header { display: none !important; }
-    #collapseOrders .dzo-subgroup-trigger {
-        display: flex !important;
-        align-items: center;
-        justify-content: space-between;
-        padding-left: 38px !important;
-        font-weight: 700;
-        color: rgba(255,255,255,0.92) !important;
-    }
-    #collapseOrders .dzo-subgroup-trigger::after {
-        content: '▾';
-        font-size: 0.85rem;
-        opacity: 0.85;
-        transition: transform .18s ease;
-    }
-    #collapseOrders .dzo-subgroup-trigger.collapsed::after {
-        transform: rotate(-90deg);
-    }
     #collapseOrders .dzo-subgroup-links .collapse-item {
-        padding-left: 52px !important;
+        padding-left: 20px !important;
+        min-height: 44px;
     }
 }
 
@@ -441,7 +437,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                         $dzoConfigActive = in_array($currentPage, ['admin-class-setup.php','feesSetting.php','admin-parent-pins.php'], true);
                     ?>
 
-                    <h6 class="collapse-header dzo-group-header">Enrollment Workflow</h6>
+                    <h6 class="collapse-header dzo-group-header d-none d-lg-block">Enrollment Workflow</h6>
                     <a class="collapse-item dzo-subgroup-trigger <?= $dzoEnrollActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseDzoEnroll" aria-expanded="<?= $dzoEnrollActive ? 'true' : 'false' ?>" aria-controls="collapseDzoEnroll">Enrollment Workflow</a>
                     <div id="collapseDzoEnroll" class="collapse dzo-subgroup-links <?= $dzoEnrollActive ? 'show' : '' ?>" data-parent="#collapseOrders">
                         <a class="collapse-item <?= ($currentPage === 'dzoClassManagement.php') ? 'active' : '' ?>" href="dzoClassManagement"><i class="fas fa-user-plus fa-sm mr-1 text-muted"></i> Child Registration</a>
@@ -450,7 +446,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                         <a class="collapse-item <?= ($currentPage == 'admin-assign-class.php') ? 'active' : '' ?>" href="admin-assign-class"><i class="fas fa-user-plus fa-sm mr-1 text-muted"></i> Assign Students</a>
                     </div>
 
-                    <h6 class="collapse-header dzo-group-header">Classroom Operations</h6>
+                    <h6 class="collapse-header dzo-group-header d-none d-lg-block">Classroom Operations</h6>
                     <a class="collapse-item dzo-subgroup-trigger <?= $dzoOpsActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseDzoOps" aria-expanded="<?= $dzoOpsActive ? 'true' : 'false' ?>" aria-controls="collapseDzoOps">Classroom Operations</a>
                     <div id="collapseDzoOps" class="collapse dzo-subgroup-links <?= $dzoOpsActive ? 'show' : '' ?>" data-parent="#collapseOrders">
                         <a class="collapse-item <?= ($currentPage == 'dzongkha-classroom.php') ? 'active' : '' ?>" href="dzongkha-classroom"><i class="fas fa-bullhorn fa-sm mr-1 text-muted"></i> Dzongkha Classroom</a>
@@ -460,7 +456,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                         <a class="collapse-item <?= ($currentPage == 'admin-attendance.php') ? 'active' : '' ?>" href="admin-attendance"><i class="fas fa-door-open fa-sm mr-1 text-muted"></i> Kiosk Sign In/Out</a>
                     </div>
 
-                    <h6 class="collapse-header dzo-group-header">Configuration</h6>
+                    <h6 class="collapse-header dzo-group-header d-none d-lg-block">Configuration</h6>
                     <a class="collapse-item dzo-subgroup-trigger <?= $dzoConfigActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseDzoConfig" aria-expanded="<?= $dzoConfigActive ? 'true' : 'false' ?>" aria-controls="collapseDzoConfig">Configuration</a>
                     <div id="collapseDzoConfig" class="collapse dzo-subgroup-links <?= $dzoConfigActive ? 'show' : '' ?>" data-parent="#collapseOrders">
                         <a class="collapse-item <?= ($currentPage === 'admin-class-setup.php') ? 'active' : '' ?>" href="admin-class-setup"><i class="fas fa-chalkboard fa-sm mr-1 text-muted"></i> Classes & Teachers</a>

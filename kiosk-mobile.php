@@ -136,6 +136,7 @@ $csrfToken = csrf_token();
     var parentData = null;
     var submitting = false;
     var qrSession  = '';  // session key from token validation
+    var pendingActions = {}; // { childId: 'in' | 'out' }
 
     function $(s)  { return document.querySelector(s); }
     function $$(s) { return document.querySelectorAll(s); }
@@ -226,6 +227,7 @@ $csrfToken = csrf_token();
 
             if (r.ok) {
                 parentData = r.data;
+                pendingActions = {};
                 renderChildren();
                 go('children');
             } else if (r.token_expired) {
@@ -261,17 +263,26 @@ $csrfToken = csrf_token();
             var initials = child.student_name.split(' ').map(function(w){ return w[0]; }).join('').toUpperCase().slice(0,2);
             var statusHtml = '';
             var actionHtml = '';
+            var queuedMode = pendingActions[String(child.id)] || '';
 
-            if (child.status === 'none') {
+            if (child.status === 'done') {
+                statusHtml = '<span class="km-child__status km-child__status--done">'
+                    + '<i class="fa-solid fa-circle-check"></i> Done (out ' + fmtTime(child.time_out) + ')</span>';
+            } else if (queuedMode === 'in') {
+                statusHtml = '<span class="km-child__status km-child__status--in"><i class="fa-solid fa-clock"></i> Queued: Sign In</span>';
+                actionHtml = '<button class="km-btn km-btn--outline km-btn--sm" data-child="'+child.id+'" data-mode="">'
+                    + '<i class="fa-solid fa-rotate-left"></i> Undo</button>';
+            } else if (queuedMode === 'out') {
+                statusHtml = '<span class="km-child__status km-child__status--in"><i class="fa-solid fa-clock"></i> Queued: Sign Out</span>';
+                actionHtml = '<button class="km-btn km-btn--outline km-btn--sm" data-child="'+child.id+'" data-mode="">'
+                    + '<i class="fa-solid fa-rotate-left"></i> Undo</button>';
+            } else if (child.status === 'none') {
                 actionHtml = '<button class="km-btn km-btn--success km-btn--sm" data-child="'+child.id+'" data-mode="in">'
-                    + '<i class="fa-solid fa-right-to-bracket"></i> Sign In</button>';
+                    + '<i class="fa-solid fa-right-to-bracket"></i> Queue Sign In</button>';
             } else if (child.status === 'signed_in') {
                 statusHtml = '<span class="km-child__status km-child__status--in">In at ' + fmtTime(child.time_in) + '</span>';
                 actionHtml = '<button class="km-btn km-btn--danger km-btn--sm" data-child="'+child.id+'" data-mode="out">'
-                    + '<i class="fa-solid fa-right-from-bracket"></i> Sign Out</button>';
-            } else {
-                statusHtml = '<span class="km-child__status km-child__status--done">'
-                    + '<i class="fa-solid fa-circle-check"></i> Done (out ' + fmtTime(child.time_out) + ')</span>';
+                    + '<i class="fa-solid fa-right-from-bracket"></i> Queue Sign Out</button>';
             }
 
             card.innerHTML = '<div class="km-child__info">'
@@ -287,56 +298,91 @@ $csrfToken = csrf_token();
 
         list.querySelectorAll('[data-child]').forEach(function(btn) {
             btn.addEventListener('click', function() {
-                doSign(parseInt(btn.dataset.child, 10), btn.dataset.mode);
+                queueSign(parseInt(btn.dataset.child, 10), btn.dataset.mode || '');
             });
         });
+        updateDoneButton();
     }
 
-    function doSign(childId, mode) {
-        if (submitting) return;
-        submitting = true;
+    function queueSign(childId, mode) {
+        var key = String(childId);
+        if (mode === 'in' || mode === 'out') pendingActions[key] = mode;
+        else delete pendingActions[key];
+        renderChildren();
+    }
 
-        api({ action: 'sign', parent_id: parentData.parent_id, child_id: childId, mode: mode })
-        .then(function(r) {
+    function updateDoneButton() {
+        var count = Object.keys(pendingActions).length;
+        var btn = $('#mDoneBtn');
+        if (!btn) return;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> '
+            + (count > 0 ? ('Done & Submit (' + count + ')') : 'Done');
+    }
+
+    function submitQueuedSigns() {
+        if (submitting) return;
+        var queued = Object.keys(pendingActions).map(function(k) {
+            return { child_id: parseInt(k, 10), mode: pendingActions[k] };
+        }).filter(function(x) { return x.child_id > 0 && (x.mode === 'in' || x.mode === 'out'); });
+
+        if (queued.length === 0) {
+            resetToAuth();
+            return;
+        }
+
+        submitting = true;
+        api({
+            action: 'sign_batch',
+            parent_id: parentData.parent_id,
+            actions: JSON.stringify(queued),
+            qr_session: qrSession
+        }).then(function(r) {
             submitting = false;
             if (r.ok) {
-                showConfirm(r.data);
-            } else {
-                alert(r.message);
-                refreshChildren();
-            }
-        });
-    }
-
-    function refreshChildren() {
-        api({ action: 'auth', phone: phone, pin: pin, qr_session: qrSession }).then(function(r) {
-            if (r.ok) { parentData = r.data; renderChildren(); }
-            else if (r.token_expired) {
+                pendingActions = {};
+                showConfirm({
+                    batch: true,
+                    message: (r.data && r.data.message) ? r.data.message : 'Attendance submitted successfully.',
+                    success_count: (r.data && r.data.success_count) ? r.data.success_count : queued.length,
+                    failed_count: (r.data && r.data.failed_count) ? r.data.failed_count : 0
+                });
+            } else if (r.token_expired) {
                 $('#mInvalidTitle').textContent = 'Session Expired';
                 $('#mInvalidMsg').textContent = r.message;
                 go('invalid');
+            } else {
+                alert(r.message || 'Unable to submit attendance. Please try again.');
             }
-            else { resetToAuth(); }
         });
     }
 
-    $('#mDoneBtn').addEventListener('click', resetToAuth);
+    $('#mDoneBtn').addEventListener('click', submitQueuedSigns);
 
     // ═══ CONFIRMATION ═══
     function showConfirm(data) {
+        var isBatch = !!data.batch;
         var isIn = (data.action === 'in');
         var icon = $('#mConfirmIcon');
-        icon.className = 'km-confirm__icon ' + (isIn ? 'km-confirm__icon--success' : 'km-confirm__icon--out');
-        icon.innerHTML = isIn
-            ? '<i class="fa-solid fa-right-to-bracket"></i>'
-            : '<i class="fa-solid fa-right-from-bracket"></i>';
-        $('#mConfirmTitle').textContent = isIn ? 'Signed In!' : 'Signed Out!';
-        $('#mConfirmDetail').textContent = data.child_name;
-        $('#mConfirmTime').textContent = data.time;
+        if (isBatch) {
+            icon.className = 'km-confirm__icon km-confirm__icon--success';
+            icon.innerHTML = '<i class="fa-solid fa-paper-plane"></i>';
+            $('#mConfirmTitle').textContent = 'Submitted';
+            $('#mConfirmDetail').textContent = data.message || 'Attendance submitted.';
+            $('#mConfirmTime').textContent = (data.success_count || 0) + ' successful'
+                + ((data.failed_count || 0) > 0 ? (', ' + data.failed_count + ' failed') : '');
+        } else {
+            icon.className = 'km-confirm__icon ' + (isIn ? 'km-confirm__icon--success' : 'km-confirm__icon--out');
+            icon.innerHTML = isIn
+                ? '<i class="fa-solid fa-right-to-bracket"></i>'
+                : '<i class="fa-solid fa-right-from-bracket"></i>';
+            $('#mConfirmTitle').textContent = isIn ? 'Signed In!' : 'Signed Out!';
+            $('#mConfirmDetail').textContent = data.child_name;
+            $('#mConfirmTime').textContent = data.time;
+        }
 
         go('confirm');
 
-        // Countdown back to children
+        // Countdown back to auth
         var sec = CONFIRM_S;
         $('#mConfirmCount').textContent = sec;
         var iv = setInterval(function() {
@@ -344,8 +390,7 @@ $csrfToken = csrf_token();
             $('#mConfirmCount').textContent = Math.max(0, sec);
             if (sec <= 0) {
                 clearInterval(iv);
-                refreshChildren();
-                go('children');
+                resetToAuth();
             }
         }, 1000);
     }
@@ -353,6 +398,8 @@ $csrfToken = csrf_token();
     // ═══ RESET ═══
     function resetToAuth() {
         parentData = null;
+        pendingActions = {};
+        submitting = false;
         mPhone.value = '';
         mPin.value = '';
         hideError();

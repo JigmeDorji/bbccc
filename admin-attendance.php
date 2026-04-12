@@ -42,26 +42,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([':cid'=>$childId, ':pid'=>$pid, ':d'=>$logDate, ':ti'=>$timeIn, ':to'=>$timeOut]);
             $flash = 'Manual entry saved.';
             $ok = true;
-        }
     }
 
-    // Approve / Reject absence
-    if (in_array($act, ['approve_absence','reject_absence'])) {
-        $absId = (int)($_POST['absence_id'] ?? 0);
-        $note  = trim($_POST['admin_note'] ?? '');
-        $newSt = ($act === 'approve_absence') ? 'Approved' : 'Rejected';
-
-        $upd = $pdo->prepare("
-            UPDATE pcm_absence_requests SET status=:st, admin_note=:n, decided_by=:db, decided_at=NOW()
-            WHERE id=:id AND status='Pending'
-        ");
-        $upd->execute([':st'=>$newSt, ':n'=>$note?:null, ':db'=>$_SESSION['username']??'admin', ':id'=>$absId]);
-        $flash = $upd->rowCount() ? "Absence request {$newSt}." : 'Already processed.';
-        $ok = (bool)$upd->rowCount();
+    // Admin override: clear/re-enable parent absence mark
+    if ($act === 'set_absence_status') {
+        $absenceId = (int)($_POST['absence_id'] ?? 0);
+        $newStatus = trim((string)($_POST['new_status'] ?? ''));
+        if ($absenceId <= 0 || !in_array($newStatus, ['Pending', 'Rejected'], true)) {
+            $flash = 'Invalid absence update request.';
+        } else {
+            $upd = $pdo->prepare("
+                UPDATE pcm_absence_requests
+                SET status = :st, decided_by = :db, decided_at = NOW()
+                WHERE id = :id
+            ");
+            $upd->execute([
+                ':st' => $newStatus,
+                ':db' => (string)($_SESSION['username'] ?? 'admin'),
+                ':id' => $absenceId
+            ]);
+            if ($upd->rowCount() > 0) {
+                $flash = ($newStatus === 'Rejected')
+                    ? 'Absence mark cleared by admin.'
+                    : 'Absence mark restored by admin.';
+                $ok = true;
+            } else {
+                $flash = 'No changes made.';
+            }
+        }
     }
 }
 
+}
+
 $tab = $_GET['tab'] ?? 'kiosk';
+
+// Shareable kiosk URLs for other iPads/devices
+$isHttps = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+$scheme = $isHttps ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\');
+$origin = $scheme . '://' . $host . ($basePath === '' || $basePath === '.' ? '' : $basePath);
+$doorKioskUrl = $origin . '/kiosk';
+$qrDisplayUrl = $origin . '/kiosk-qr';
+$mobileKioskUrl = $origin . '/kiosk-mobile';
 
 // ── Kiosk logs ──
 $filterDate = $_GET['date'] ?? date('Y-m-d');
@@ -85,11 +109,11 @@ $absences = $pdo->query("
     FROM pcm_absence_requests ar
     JOIN students s ON s.id = ar.child_id
     JOIN parents  p ON p.id = ar.parent_id
-    ORDER BY FIELD(ar.status,'Pending','Approved','Rejected'), ar.created_at DESC
+    ORDER BY ar.created_at DESC
     LIMIT 200
 ")->fetchAll();
 
-$pendingAbs = count(array_filter($absences, fn($r)=>$r['status']==='Pending'));
+$absenceCount = count($absences);
 
 $pageScripts = [];
 ?>
@@ -121,14 +145,53 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 <?php endif; ?>
 
+<!-- Shareable Kiosk Links -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-link mr-1"></i>Kiosk Links</h6>
+    </div>
+    <div class="card-body">
+        <p class="text-muted mb-3" style="font-size:.88rem;">
+            Copy and paste these links on your iPads/devices.
+        </p>
+        <div class="mb-3">
+            <label class="font-weight-bold mb-1">Door Kiosk (iPad at entrance)</label>
+            <div class="input-group">
+                <input type="text" class="form-control" id="doorKioskUrl" value="<?= h($doorKioskUrl) ?>" readonly>
+                <div class="input-group-append">
+                    <button type="button" class="btn btn-outline-primary js-copy-link" data-target="doorKioskUrl">Copy</button>
+                </div>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="font-weight-bold mb-1">QR Display (second iPad/screen)</label>
+            <div class="input-group">
+                <input type="text" class="form-control" id="qrDisplayUrl" value="<?= h($qrDisplayUrl) ?>" readonly>
+                <div class="input-group-append">
+                    <button type="button" class="btn btn-outline-primary js-copy-link" data-target="qrDisplayUrl">Copy</button>
+                </div>
+            </div>
+        </div>
+        <div class="mb-0">
+            <label class="font-weight-bold mb-1">Mobile Page (direct link)</label>
+            <div class="input-group">
+                <input type="text" class="form-control" id="mobileKioskUrl" value="<?= h($mobileKioskUrl) ?>" readonly>
+                <div class="input-group-append">
+                    <button type="button" class="btn btn-outline-primary js-copy-link" data-target="mobileKioskUrl">Copy</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Tabs -->
 <ul class="nav nav-tabs mb-4" role="tablist">
     <li class="nav-item"><a class="nav-link <?= $tab==='kiosk'?'active':'' ?>" href="?tab=kiosk"><i class="fas fa-door-open mr-1"></i>Kiosk Records</a></li>
     <li class="nav-item"><a class="nav-link <?= $tab==='manual'?'active':'' ?>" href="?tab=manual"><i class="fas fa-keyboard mr-1"></i>Manual Entry</a></li>
     <li class="nav-item">
         <a class="nav-link <?= $tab==='absence'?'active':'' ?>" href="?tab=absence">
-            <i class="fas fa-calendar-times mr-1"></i>Absence Requests
-            <?php if ($pendingAbs): ?><span class="badge badge-warning ml-1"><?= $pendingAbs ?></span><?php endif; ?>
+            <i class="fas fa-calendar-times mr-1"></i>Absence Records
+            <?php if ($absenceCount): ?><span class="badge badge-secondary ml-1"><?= $absenceCount ?></span><?php endif; ?>
         </a>
     </li>
 </ul>
@@ -207,54 +270,67 @@ document.addEventListener('DOMContentLoaded',()=>{
 </div>
 
 <?php elseif ($tab === 'absence'): ?>
-<!-- ─── Absence Requests ─── -->
+<!-- ─── Absence Records ─── -->
 <div class="card shadow">
-    <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Absence Requests (<?= $pendingAbs ?> pending)</h6></div>
+    <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary">Absence Records (<?= $absenceCount ?>)</h6></div>
     <div class="card-body">
     <?php if (empty($absences)): ?>
-        <p class="text-muted mb-0">No absence requests.</p>
+        <p class="text-muted mb-0">No absence records.</p>
     <?php else: ?>
         <div class="table-responsive">
             <table class="table table-bordered table-sm table-hover">
-                <thead class="thead-light"><tr><th>#</th><th>Child</th><th>Parent</th><th>Date</th><th>Reason</th><th>Status</th><th>Admin Note</th><th>Actions</th></tr></thead>
+                <thead class="thead-light"><tr><th>#</th><th>Date</th><th>Child</th><th>Parent</th><th>Reason</th><th>Date Applied</th><th>Remark</th><th>Admin Action</th></tr></thead>
                 <tbody>
                 <?php foreach ($absences as $i => $ab): ?>
                 <tr>
                     <td><?= $i+1 ?></td>
+                    <td><?= date('d M Y', strtotime($ab['absence_date'])) ?></td>
                     <td><?= h($ab['student_name']) ?></td>
                     <td><?= h($ab['parent_name']) ?></td>
-                    <td><?= date('d M Y', strtotime($ab['absence_date'])) ?></td>
                     <td style="max-width:200px"><?= h(mb_strimwidth($ab['reason'],0,100,'…')) ?></td>
-                    <td><span class="badge badge-<?= pcm_badge($ab['status']) ?>"><?= h($ab['status']) ?></span></td>
-                    <td><?= h($ab['admin_note'] ?? '—') ?></td>
+                    <td><?= !empty($ab['created_at']) ? date('d M Y, h:i A', strtotime($ab['created_at'])) : '—' ?></td>
                     <td>
-                        <?php if ($ab['status'] === 'Pending'): ?>
-                        <form method="POST" class="d-inline">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="action" value="approve_absence">
-                            <input type="hidden" name="absence_id" value="<?= $ab['id'] ?>">
-                            <button class="btn btn-success btn-sm" onclick="return confirm('Approve?')"><i class="fas fa-check"></i></button>
-                        </form>
-                        <button class="btn btn-danger btn-sm" data-toggle="modal" data-target="#rejectAbs<?= $ab['id'] ?>"><i class="fas fa-times"></i></button>
-
-                        <div class="modal fade" id="rejectAbs<?= $ab['id'] ?>" tabindex="-1">
-                            <div class="modal-dialog"><div class="modal-content">
-                                <form method="POST">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="action" value="reject_absence">
-                                    <input type="hidden" name="absence_id" value="<?= $ab['id'] ?>">
-                                    <div class="modal-header bg-danger text-white"><h5 class="modal-title">Reject Absence</h5><button class="close text-white" data-dismiss="modal">&times;</button></div>
-                                    <div class="modal-body">
-                                        <p><?= h($ab['student_name']) ?> — <?= date('d M Y', strtotime($ab['absence_date'])) ?></p>
-                                        <div class="form-group"><label>Note</label><textarea name="admin_note" class="form-control" rows="2"></textarea></div>
-                                    </div>
-                                    <div class="modal-footer"><button class="btn btn-secondary" data-dismiss="modal">Cancel</button><button class="btn btn-danger" type="submit">Reject</button></div>
-                                </form>
-                            </div></div>
-                        </div>
+                        <?php if (($ab['status'] ?? '') === 'Rejected'): ?>
+                            <span class="badge badge-secondary">Absence cleared by admin</span>
                         <?php else: ?>
-                            <span class="text-muted small"><?= h($ab['decided_by'] ?? '') ?></span>
+                            <span class="badge badge-danger">Marked absent by <?= h($ab['parent_name']) ?></span>
                         <?php endif; ?>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" data-toggle="modal" data-target="#editAbsence<?= (int)$ab['id'] ?>">Edit</button>
+
+                        <div class="modal fade" id="editAbsence<?= (int)$ab['id'] ?>" tabindex="-1" role="dialog" aria-hidden="true">
+                            <div class="modal-dialog" role="document">
+                                <div class="modal-content">
+                                    <form method="POST">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="action" value="set_absence_status">
+                                        <input type="hidden" name="absence_id" value="<?= (int)$ab['id'] ?>">
+                                        <div class="modal-header bg-primary text-white">
+                                            <h5 class="modal-title">Edit Absence Status</h5>
+                                            <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                                                <span aria-hidden="true">&times;</span>
+                                            </button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p class="mb-2"><strong>Child:</strong> <?= h($ab['student_name']) ?></p>
+                                            <p class="mb-3"><strong>Date:</strong> <?= date('d M Y', strtotime($ab['absence_date'])) ?></p>
+                                            <div class="form-group mb-0">
+                                                <label class="font-weight-bold">Status</label>
+                                                <select class="form-control" name="new_status" required>
+                                                    <option value="Pending" <?= (($ab['status'] ?? '') !== 'Rejected') ? 'selected' : '' ?>>Marked absent</option>
+                                                    <option value="Rejected" <?= (($ab['status'] ?? '') === 'Rejected') ? 'selected' : '' ?>>Cleared by admin</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                                            <button type="submit" class="btn btn-primary">Save</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
                     </td>
                 </tr>
                 <?php endforeach; ?>
@@ -271,5 +347,29 @@ document.addEventListener('DOMContentLoaded',()=>{
 <?php include 'include/admin-footer.php'; ?>
 </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.js-copy-link').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+            const id = this.getAttribute('data-target');
+            const input = document.getElementById(id);
+            if (!input) return;
+            const value = input.value || '';
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(value);
+                } else {
+                    input.select();
+                    input.setSelectionRange(0, value.length);
+                    document.execCommand('copy');
+                }
+                Swal.fire({ icon: 'success', title: 'Copied', text: 'Link copied to clipboard.', timer: 1300, showConfirmButton: false });
+            } catch (e) {
+                Swal.fire({ icon: 'error', title: 'Copy failed', text: 'Please copy the link manually.' });
+            }
+        });
+    });
+});
+</script>
 </body>
 </html>

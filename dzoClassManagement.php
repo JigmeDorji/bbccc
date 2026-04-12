@@ -213,6 +213,29 @@ $pageScripts = [
             background:var(--brand) !important;
             color:#fff !important;
         }
+
+        /* Header quick links (Enrollment / Attendance) */
+        .header-quick-links {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+        .header-quick-links .btn {
+            border-radius: 8px;
+            white-space: nowrap;
+        }
+        @media (max-width: 767.98px) {
+            .header-quick-links {
+                width: 100%;
+                justify-content: stretch;
+                margin-top: 10px;
+            }
+            .header-quick-links .btn {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body id="page-top">
@@ -248,11 +271,11 @@ document.addEventListener('DOMContentLoaded', () => {
         <h1 class="h3 mb-0 text-gray-800 font-weight-bold">Child Registration</h1>
         <p class="text-muted mb-0" style="font-size:.88rem;">Review and approve newly added children before parents can proceed to enrollment.</p>
     </div>
-    <div>
-        <a href="admin-enrolments" class="btn btn-sm btn-outline-primary mr-1" style="border-radius:8px;">
+    <div class="header-quick-links">
+        <a href="admin-enrolments" class="btn btn-sm btn-outline-primary">
             <i class="fas fa-file-signature mr-1"></i> Enrollment
         </a>
-        <a href="attendanceManagement" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;">
+        <a href="attendanceManagement" class="btn btn-sm btn-outline-secondary">
             <i class="fas fa-clipboard-check mr-1"></i> Attendance
         </a>
     </div>

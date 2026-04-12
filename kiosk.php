@@ -188,6 +188,7 @@ $csrfToken = csrf_token();
     var timerId    = null;
     var timerSec   = 0;
     var submitting = false;
+    var pendingActions = {}; // { childId: 'in' | 'out' }
 
     function $(s) { return document.querySelector(s); }
     function $$(s) { return document.querySelectorAll(s); }
@@ -241,7 +242,7 @@ $csrfToken = csrf_token();
     function idle() {
         stopTimer();
         hideOverlay();
-        phone = ''; pin = ''; activeField = 'phone'; parentData = null; submitting = false;
+        phone = ''; pin = ''; activeField = 'phone'; parentData = null; submitting = false; pendingActions = {};
         updatePhone(); updatePin();
         setFocus('phone');
         hideError();
@@ -379,20 +380,31 @@ $csrfToken = csrf_token();
             var initials = child.student_name.split(' ').map(function(w){return w[0];}).join('').toUpperCase().slice(0,2);
             var statusHtml = '';
             var actionHtml = '';
+            var queuedMode = pendingActions[String(child.id)] || '';
 
-            if (child.status === 'none') {
+            if (child.status === 'done') {
+                var tOut = fmtTime(child.time_out);
+                statusHtml = '<span class="kiosk-child-card__status kiosk-child-card__status--done">'
+                    + '<i class="fa-solid fa-circle-check"></i> Done (out ' + tOut + ')</span>';
+            } else if (queuedMode === 'in') {
+                statusHtml = '<span class="kiosk-child-card__status kiosk-child-card__status--in">'
+                    + '<i class="fa-solid fa-clock"></i> Queued: Sign In</span>';
+                actionHtml = '<button class="kiosk-btn kiosk-btn--outline' + (isSingle ? ' kiosk-btn--lg' : '') + '" data-child="'+child.id+'" data-mode="">'
+                    + '<i class="fa-solid fa-rotate-left"></i> Undo</button>';
+            } else if (queuedMode === 'out') {
+                statusHtml = '<span class="kiosk-child-card__status kiosk-child-card__status--in">'
+                    + '<i class="fa-solid fa-clock"></i> Queued: Sign Out</span>';
+                actionHtml = '<button class="kiosk-btn kiosk-btn--outline' + (isSingle ? ' kiosk-btn--lg' : '') + '" data-child="'+child.id+'" data-mode="">'
+                    + '<i class="fa-solid fa-rotate-left"></i> Undo</button>';
+            } else if (child.status === 'none') {
                 actionHtml = '<button class="kiosk-btn kiosk-btn--success' + (isSingle ? ' kiosk-btn--lg' : '') + '" data-child="'+child.id+'" data-mode="in">'
-                    + '<i class="fa-solid fa-right-to-bracket"></i> Sign In</button>';
+                    + '<i class="fa-solid fa-right-to-bracket"></i> Queue Sign In</button>';
             } else if (child.status === 'signed_in') {
                 var tIn = fmtTime(child.time_in);
                 statusHtml = '<span class="kiosk-child-card__status kiosk-child-card__status--in">'
                     + 'In at ' + tIn + '</span>';
                 actionHtml = '<button class="kiosk-btn kiosk-btn--danger' + (isSingle ? ' kiosk-btn--lg' : '') + '" data-child="'+child.id+'" data-mode="out">'
-                    + '<i class="fa-solid fa-right-from-bracket"></i> Sign Out</button>';
-            } else {
-                var tOut = fmtTime(child.time_out);
-                statusHtml = '<span class="kiosk-child-card__status kiosk-child-card__status--done">'
-                    + '<i class="fa-solid fa-circle-check"></i> Done (out ' + tOut + ')</span>';
+                    + '<i class="fa-solid fa-right-from-bracket"></i> Queue Sign Out</button>';
             }
 
             card.innerHTML = '<div class="kiosk-child-card__info">'
@@ -409,52 +421,86 @@ $csrfToken = csrf_token();
         // Attach handlers
         list.querySelectorAll('[data-child]').forEach(function(btn) {
             btn.addEventListener('click', function() {
-                doSign(parseInt(btn.dataset.child,10), btn.dataset.mode);
+                queueSign(parseInt(btn.dataset.child,10), btn.dataset.mode || '');
             });
         });
+        updateDoneButton();
     }
 
-    function doSign(childId, mode) {
-        if (submitting) return;
-        submitting = true;
+    function queueSign(childId, mode) {
+        var key = String(childId);
+        if (mode === 'in' || mode === 'out') pendingActions[key] = mode;
+        else delete pendingActions[key];
+        renderChildren();
+    }
 
-        api({ action:'sign', parent_id:parentData.parent_id, child_id:childId, mode:mode })
-        .then(function(r) {
+    function updateDoneButton() {
+        var count = Object.keys(pendingActions).length;
+        var btn = $('#childrenDone');
+        if (!btn) return;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> '
+            + (count > 0 ? ('Done & Submit (' + count + ')') : 'Done');
+    }
+
+    function submitQueuedSigns() {
+        if (submitting) return;
+        var queued = Object.keys(pendingActions).map(function(k) {
+            return { child_id: parseInt(k, 10), mode: pendingActions[k] };
+        }).filter(function(x) { return x.child_id > 0 && (x.mode === 'in' || x.mode === 'out'); });
+
+        if (queued.length === 0) {
+            idle();
+            return;
+        }
+
+        submitting = true;
+        api({
+            action: 'sign_batch',
+            parent_id: parentData.parent_id,
+            actions: JSON.stringify(queued)
+        }).then(function(r) {
             submitting = false;
             if (r.ok) {
-                showOverlay(r.data);
-                // After confirmation, refresh children
+                pendingActions = {};
+                showOverlay({
+                    batch: true,
+                    message: (r.data && r.data.message) ? r.data.message : 'Attendance submitted successfully.',
+                    success_count: (r.data && r.data.success_count) ? r.data.success_count : queued.length,
+                    failed_count: (r.data && r.data.failed_count) ? r.data.failed_count : 0
+                });
                 setTimeout(function() {
                     hideOverlay();
-                    refreshChildren();
+                    idle();
                 }, CONFIRM * 1000);
             } else {
-                alert(r.message);
-                refreshChildren();
+                alert(r.message || 'Unable to submit attendance. Please try again.');
             }
         });
     }
 
-    function refreshChildren() {
-        api({ action:'auth', phone:phone, pin:pin }).then(function(r) {
-            if (r.ok) { parentData = r.data; renderChildren(); }
-            else { idle(); }
-        });
-    }
-
-    $('#childrenDone').addEventListener('click', idle);
+    $('#childrenDone').addEventListener('click', submitQueuedSigns);
 
     // ═══ CONFIRMATION OVERLAY ═══
     function showOverlay(data) {
+        var isBatch = !!data.batch;
         var isIn = (data.action === 'in');
         var icon = $('#confirmIcon');
-        icon.className = 'kiosk-confirm__icon ' + (isIn ? 'kiosk-confirm__icon--success' : 'kiosk-confirm__icon--out');
-        icon.innerHTML = isIn
-            ? '<i class="fa-solid fa-right-to-bracket"></i>'
-            : '<i class="fa-solid fa-right-from-bracket"></i>';
-        $('#confirmTitle').textContent = isIn ? 'Signed In!' : 'Signed Out!';
-        $('#confirmDetail').textContent = data.child_name;
-        $('#confirmTime').textContent = data.time;
+        if (isBatch) {
+            icon.className = 'kiosk-confirm__icon kiosk-confirm__icon--success';
+            icon.innerHTML = '<i class="fa-solid fa-paper-plane"></i>';
+            $('#confirmTitle').textContent = 'Submitted';
+            $('#confirmDetail').textContent = data.message || 'Attendance submitted.';
+            $('#confirmTime').textContent = (data.success_count || 0) + ' successful'
+                + ((data.failed_count || 0) > 0 ? (', ' + data.failed_count + ' failed') : '');
+        } else {
+            icon.className = 'kiosk-confirm__icon ' + (isIn ? 'kiosk-confirm__icon--success' : 'kiosk-confirm__icon--out');
+            icon.innerHTML = isIn
+                ? '<i class="fa-solid fa-right-to-bracket"></i>'
+                : '<i class="fa-solid fa-right-from-bracket"></i>';
+            $('#confirmTitle').textContent = isIn ? 'Signed In!' : 'Signed Out!';
+            $('#confirmDetail').textContent = data.child_name;
+            $('#confirmTime').textContent = data.time;
+        }
         $('#confirmOverlay').classList.add('show');
     }
 

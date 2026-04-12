@@ -138,22 +138,31 @@ if (!hash_equals(csrf_token(), $submitted_csrf)) {
     exit;
 }
 
+function bbcc_verify_kiosk_mobile_session(): bool {
+    $qrSession = trim((string)($_POST['qr_session'] ?? ''));
+    if ($qrSession === '') {
+        // Non-QR/iPad kiosk flow does not send qr_session.
+        return true;
+    }
+    if (!isset($_SESSION['kiosk_mobile_key'], $_SESSION['kiosk_mobile_expires'])) {
+        return false;
+    }
+    if (!hash_equals((string)$_SESSION['kiosk_mobile_key'], $qrSession)) {
+        return false;
+    }
+    if ((int)$_SESSION['kiosk_mobile_expires'] <= time()) {
+        return false;
+    }
+    return true;
+}
+
 // ═══════════════════════════════════════════════════════════
 // ACTION: Authenticate parent by phone + PIN
 // ═══════════════════════════════════════════════════════════
 if ($action === 'auth') {
-    // If this is a mobile request (has qr_session), verify the session is valid
-    $qrSession = $_POST['qr_session'] ?? '';
-    if ($qrSession) {
-        $validSession = isset($_SESSION['kiosk_mobile_key'])
-            && hash_equals($_SESSION['kiosk_mobile_key'], $qrSession)
-            && isset($_SESSION['kiosk_mobile_expires'])
-            && $_SESSION['kiosk_mobile_expires'] > time();
-
-        if (!$validSession) {
-            echo json_encode(['ok' => false, 'message' => 'Session expired. Please scan the QR code again at the door.', 'token_expired' => true]);
-            exit;
-        }
+    if (!bbcc_verify_kiosk_mobile_session()) {
+        echo json_encode(['ok' => false, 'message' => 'Session expired. Please scan the QR code again at the door.', 'token_expired' => true]);
+        exit;
     }
     $phone = preg_replace('/[^0-9]/', '', $_POST['phone'] ?? '');
     $pin   = trim($_POST['pin'] ?? '');
@@ -241,9 +250,125 @@ if ($action === 'auth') {
 }
 
 // ═══════════════════════════════════════════════════════════
+// ACTION: Batch sign-in/out children (submit on Done)
+// ═══════════════════════════════════════════════════════════
+if ($action === 'sign_batch') {
+    if (!bbcc_verify_kiosk_mobile_session()) {
+        echo json_encode(['ok' => false, 'message' => 'Session expired. Please scan the QR code again at the door.', 'token_expired' => true]);
+        exit;
+    }
+
+    $parentId = (int)($_POST['parent_id'] ?? 0);
+    $rawActions = (string)($_POST['actions'] ?? '');
+    $actions = json_decode($rawActions, true);
+
+    if ($parentId <= 0 || !is_array($actions) || empty($actions)) {
+        echo json_encode(['ok' => false, 'message' => 'No attendance actions to submit.']);
+        exit;
+    }
+
+    $today = date('Y-m-d');
+    $now = date('H:i:s');
+    $results = [];
+    $successCount = 0;
+    $failedCount = 0;
+
+    $verify = $pdo->prepare("
+        SELECT s.id, s.student_name
+        FROM students s
+        JOIN pcm_enrolments e ON e.student_id = s.id AND e.status = 'Approved'
+        WHERE s.id = :cid AND s.parentId = :pid
+        LIMIT 1
+    ");
+    $selectLog = $pdo->prepare("SELECT id, time_in, time_out FROM pcm_kiosk_log WHERE child_id = :cid AND log_date = :d LIMIT 1");
+    $insertIn = $pdo->prepare("
+        INSERT INTO pcm_kiosk_log (child_id, parent_id, log_date, time_in, method)
+        VALUES (:cid, :pid, :d, :t, 'KIOSK')
+    ");
+    $updateOut = $pdo->prepare("
+        UPDATE pcm_kiosk_log SET time_out = :t
+        WHERE child_id = :cid AND log_date = :d AND time_out IS NULL
+    ");
+
+    foreach ($actions as $row) {
+        $childId = (int)($row['child_id'] ?? 0);
+        $mode = (string)($row['mode'] ?? '');
+
+        if ($childId <= 0 || !in_array($mode, ['in', 'out'], true)) {
+            $failedCount++;
+            $results[] = ['child_id' => $childId, 'mode' => $mode, 'ok' => false, 'message' => 'Invalid child action.'];
+            continue;
+        }
+
+        $verify->execute([':cid' => $childId, ':pid' => $parentId]);
+        $child = $verify->fetch();
+        if (!$child) {
+            $failedCount++;
+            $results[] = ['child_id' => $childId, 'mode' => $mode, 'ok' => false, 'message' => 'Child not found or not enrolled.'];
+            continue;
+        }
+
+        if ($mode === 'in') {
+            $selectLog->execute([':cid' => $childId, ':d' => $today]);
+            $existing = $selectLog->fetch();
+            if ($existing && $existing['time_in'] && !$existing['time_out']) {
+                $failedCount++;
+                $results[] = ['child_id' => $childId, 'child_name' => $child['student_name'], 'mode' => 'in', 'ok' => false, 'message' => $child['student_name'] . ' is already signed in.'];
+                continue;
+            }
+            if ($existing && $existing['time_out']) {
+                $failedCount++;
+                $results[] = ['child_id' => $childId, 'child_name' => $child['student_name'], 'mode' => 'in', 'ok' => false, 'message' => $child['student_name'] . ' is already signed out today.'];
+                continue;
+            }
+
+            $insertIn->execute([':cid' => $childId, ':pid' => $parentId, ':d' => $today, ':t' => $now]);
+            $successCount++;
+            $results[] = ['child_id' => $childId, 'child_name' => $child['student_name'], 'mode' => 'in', 'ok' => true, 'message' => $child['student_name'] . ' signed in.'];
+            continue;
+        }
+
+        $updateOut->execute([':t' => $now, ':cid' => $childId, ':d' => $today]);
+        if ($updateOut->rowCount() === 0) {
+            $failedCount++;
+            $results[] = ['child_id' => $childId, 'child_name' => $child['student_name'], 'mode' => 'out', 'ok' => false, 'message' => 'No active sign-in found for ' . $child['student_name'] . '.'];
+            continue;
+        }
+        $successCount++;
+        $results[] = ['child_id' => $childId, 'child_name' => $child['student_name'], 'mode' => 'out', 'ok' => true, 'message' => $child['student_name'] . ' signed out.'];
+    }
+
+    if ($successCount === 0) {
+        $msg = !empty($results[0]['message']) ? (string)$results[0]['message'] : 'No actions were completed.';
+        echo json_encode(['ok' => false, 'message' => $msg, 'data' => ['results' => $results, 'success_count' => 0, 'failed_count' => $failedCount]]);
+        exit;
+    }
+
+    $message = ($failedCount > 0)
+        ? ("Submitted " . $successCount . " action(s). " . $failedCount . " could not be processed.")
+        : ("Submitted " . $successCount . " action(s) successfully.");
+
+    echo json_encode([
+        'ok' => true,
+        'data' => [
+            'message' => $message,
+            'success_count' => $successCount,
+            'failed_count' => $failedCount,
+            'results' => $results,
+        ],
+    ]);
+    exit;
+}
+
+// ═══════════════════════════════════════════════════════════
 // ACTION: Sign in or sign out a child
 // ═══════════════════════════════════════════════════════════
 if ($action === 'sign') {
+    if (!bbcc_verify_kiosk_mobile_session()) {
+        echo json_encode(['ok' => false, 'message' => 'Session expired. Please scan the QR code again at the door.', 'token_expired' => true]);
+        exit;
+    }
+
     $parentId  = (int)($_POST['parent_id'] ?? 0);
     $childId   = (int)($_POST['child_id'] ?? 0);
     $signMode  = $_POST['mode'] ?? ''; // 'in' or 'out'
