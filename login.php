@@ -118,6 +118,43 @@ if (!empty($userName) && !empty($password)) {
 
                     // ✅ IMPORTANT: store email in session for parent matching
                     $_SESSION['email'] = $row['username'];
+                    unset($_SESSION['active_portal']);
+
+                    // Mixed profile default portal: Teacher first
+                    $hasParentProfile = false;
+                    $hasTeacherProfile = false;
+
+                    $stmtParentProfile = mysqli_prepare(
+                        $conn,
+                        "SELECT id FROM parents WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?) LIMIT 1"
+                    );
+                    if ($stmtParentProfile) {
+                        mysqli_stmt_bind_param($stmtParentProfile, "ss", $row['username'], $row['username']);
+                        if (mysqli_stmt_execute($stmtParentProfile)) {
+                            $parentResult = mysqli_stmt_get_result($stmtParentProfile);
+                            $hasParentProfile = (bool)mysqli_fetch_assoc($parentResult);
+                        }
+                        mysqli_stmt_close($stmtParentProfile);
+                    }
+
+                    $stmtTeacherProfile = mysqli_prepare(
+                        $conn,
+                        "SELECT id FROM teachers WHERE (user_id = ? AND ? <> '') OR LOWER(email) = LOWER(?) LIMIT 1"
+                    );
+                    if ($stmtTeacherProfile) {
+                        mysqli_stmt_bind_param($stmtTeacherProfile, "sss", $row['userid'], $row['userid'], $row['username']);
+                        if (mysqli_stmt_execute($stmtTeacherProfile)) {
+                            $teacherResult = mysqli_stmt_get_result($stmtTeacherProfile);
+                            $hasTeacherProfile = (bool)mysqli_fetch_assoc($teacherResult);
+                        }
+                        mysqli_stmt_close($stmtTeacherProfile);
+                    }
+
+                    if ($hasTeacherProfile) {
+                        $_SESSION['active_portal'] = 'teacher';
+                    } elseif ($hasParentProfile) {
+                        $_SESSION['active_portal'] = 'parent';
+                    }
 
                     // Optional: load projects for this company (if you use it)
                     try {

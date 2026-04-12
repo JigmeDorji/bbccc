@@ -75,6 +75,20 @@ function n_h(string $v): string {
         .notif-card { border-radius: 12px; border: 1px solid #e6e6e6; }
         .notif-item { border: 1px solid #ececec; border-radius: 10px; padding: 14px; margin-bottom: 10px; }
         .notif-item.unread { background: #f8fbff; border-color: #d6e8ff; }
+        .notif-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .notif-toolbar form { margin: 0; }
+        @media (max-width: 576px) {
+            .notif-toolbar { width: 100%; }
+            .notif-toolbar .btn,
+            .notif-toolbar form {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body id="page-top">
@@ -85,12 +99,12 @@ function n_h(string $v): string {
             <?php include 'include/admin-header.php'; ?>
 
             <div class="container-fluid py-3">
-                <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap mb-3">
                     <h1 class="h4 mb-0">Notifications</h1>
-                    <div>
+                    <div class="notif-toolbar mt-2 mt-sm-0">
                         <a href="notifications?filter=all" class="btn btn-sm <?= $filter === 'unread' ? 'btn-outline-secondary' : 'btn-primary' ?>">All</a>
                         <a href="notifications?filter=unread" class="btn btn-sm <?= $filter === 'unread' ? 'btn-primary' : 'btn-outline-secondary' ?>">Unread (<?= (int)$unreadCount ?>)</a>
-                        <form method="POST" class="d-inline">
+                        <form method="POST">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="mark_all">
                             <button type="submit" class="btn btn-sm btn-outline-dark">Mark All Read</button>

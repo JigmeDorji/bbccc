@@ -60,7 +60,7 @@ if (is_teacher_role()) {
 $isMixedPortalUser = $hasParentProfileForSwitch && $hasTeacherProfileForSwitch;
 if ($isMixedPortalUser) {
     if (!in_array($activePortalMode, ['parent', 'teacher'], true)) {
-        $activePortalMode = is_teacher_role() ? 'teacher' : 'parent';
+        $activePortalMode = 'teacher';
         $_SESSION['active_portal'] = $activePortalMode;
     }
 } else {

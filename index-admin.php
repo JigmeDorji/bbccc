@@ -89,8 +89,13 @@ try {
     $stmtHasTeacher->execute([':uid' => $sessionUserId, ':em' => $sessionUsername]);
     $hasTeacherProfile = (bool)$stmtHasTeacher->fetch(PDO::FETCH_ASSOC);
 
-    if ($hasParentProfile && $hasTeacherProfile && in_array($activePortal, ['parent', 'teacher'], true)) {
-        $dashboardRole = $activePortal;
+    if ($hasParentProfile && $hasTeacherProfile) {
+        if (in_array($activePortal, ['parent', 'teacher'], true)) {
+            $dashboardRole = $activePortal;
+        } else {
+            $dashboardRole = 'teacher';
+            $_SESSION['active_portal'] = 'teacher';
+        }
     }
 
     /* ═══ PARENT DASHBOARD ═══ */
@@ -1089,7 +1094,13 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                 <!-- Welcome Banner -->
                 <div class="welcome-banner">
                     <h2>Welcome back, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Admin'); ?>!</h2>
-                    <p>Here's an overview of your community centre. Today is <?php echo date('l, d F Y'); ?>.</p>
+                    <p>
+                        <?php if ($dashboardRole === 'teacher'): ?>
+                            Here's an overview of your classroom.
+                        <?php else: ?>
+                            Here's an overview of your community centre. Today is <?php echo date('l, d F Y'); ?>.
+                        <?php endif; ?>
+                    </p>
                     <div class="quick-actions">
                         <?php if ($dashboardRole === 'teacher'): ?>
                             <a href="teacher-attendance" style="background:#1cc88a;border-color:#1cc88a;">
