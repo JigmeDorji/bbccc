@@ -19,10 +19,10 @@ $csrfToken = csrf_token();
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="BBCC Kiosk">
+    <meta name="apple-mobile-web-app-title" content="Bhutanese Language and Culture School">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#881b12">
-    <title>BBCC — Sign In / Sign Out</title>
+    <title>Bhutanese Language and Culture School</title>
     <link rel="icon" type="image/jpeg" href="bbccassests/img/logo/logo5.jpg">
     <link rel="apple-touch-icon" href="bbccassests/img/logo/logo5.jpg">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -37,7 +37,7 @@ $csrfToken = csrf_token();
         <div class="kiosk-header__brand">
             <img src="bbccassests/img/logo/logo5.jpg" alt="BBCC" class="kiosk-header__logo" onerror="this.style.display='none'">
             <div>
-                <div class="kiosk-header__title">BBCC Kiosk</div>
+                <div class="kiosk-header__title">Bhutanese Language and Culture School</div>
                 <div class="kiosk-header__subtitle">Bhutanese Buddhist &amp; Cultural Centre</div>
             </div>
         </div>
@@ -118,8 +118,13 @@ $csrfToken = csrf_token();
                         <i class="fa-solid fa-arrow-left"></i> Cancel
                     </button>
                     <button class="kiosk-btn kiosk-btn--primary kiosk-btn--verify" id="authVerify" type="button">
-                        <i class="fa-solid fa-arrow-right-to-bracket"></i> Verify
+                        <i class="fa-solid fa-arrow-right-to-bracket"></i> Log In
                     </button>
+                </div>
+                <div style="text-align:center; margin-top:10px;">
+                    <a href="forgotKioskPin" target="_blank" rel="noopener" style="font-size:0.86rem; color:#9a3412; text-decoration:underline;">
+                        Forgot PIN? Reset with phone number
+                    </a>
                 </div>
             </div>
             <div class="kiosk-timeout-bar" id="authTimeout"></div>
@@ -135,7 +140,7 @@ $csrfToken = csrf_token();
 
                 <div id="childrenList"></div>
 
-                <button class="kiosk-btn kiosk-btn--outline kiosk-btn--block" id="childrenDone" type="button" style="margin-top:16px;">
+                <button class="kiosk-btn kiosk-btn--success kiosk-btn--block" id="childrenDone" type="button" style="margin-top:16px;font-weight:700;">
                     <i class="fa-solid fa-right-from-bracket"></i> Done
                 </button>
             </div>
@@ -388,23 +393,23 @@ $csrfToken = csrf_token();
                     + '<i class="fa-solid fa-circle-check"></i> Done (out ' + tOut + ')</span>';
             } else if (queuedMode === 'in') {
                 statusHtml = '<span class="kiosk-child-card__status kiosk-child-card__status--in">'
-                    + '<i class="fa-solid fa-clock"></i> Queued: Sign In</span>';
+                    + '<i class="fa-solid fa-clock"></i> Sign In selected</span>';
                 actionHtml = '<button class="kiosk-btn kiosk-btn--outline' + (isSingle ? ' kiosk-btn--lg' : '') + '" data-child="'+child.id+'" data-mode="">'
                     + '<i class="fa-solid fa-rotate-left"></i> Undo</button>';
             } else if (queuedMode === 'out') {
                 statusHtml = '<span class="kiosk-child-card__status kiosk-child-card__status--in">'
-                    + '<i class="fa-solid fa-clock"></i> Queued: Sign Out</span>';
+                    + '<i class="fa-solid fa-clock"></i> Sign Out selected</span>';
                 actionHtml = '<button class="kiosk-btn kiosk-btn--outline' + (isSingle ? ' kiosk-btn--lg' : '') + '" data-child="'+child.id+'" data-mode="">'
                     + '<i class="fa-solid fa-rotate-left"></i> Undo</button>';
             } else if (child.status === 'none') {
                 actionHtml = '<button class="kiosk-btn kiosk-btn--success' + (isSingle ? ' kiosk-btn--lg' : '') + '" data-child="'+child.id+'" data-mode="in">'
-                    + '<i class="fa-solid fa-right-to-bracket"></i> Queue Sign In</button>';
+                    + '<i class="fa-solid fa-right-to-bracket"></i> Sign In</button>';
             } else if (child.status === 'signed_in') {
                 var tIn = fmtTime(child.time_in);
                 statusHtml = '<span class="kiosk-child-card__status kiosk-child-card__status--in">'
                     + 'In at ' + tIn + '</span>';
                 actionHtml = '<button class="kiosk-btn kiosk-btn--danger' + (isSingle ? ' kiosk-btn--lg' : '') + '" data-child="'+child.id+'" data-mode="out">'
-                    + '<i class="fa-solid fa-right-from-bracket"></i> Queue Sign Out</button>';
+                    + '<i class="fa-solid fa-right-from-bracket"></i> Sign Out</button>';
             }
 
             card.innerHTML = '<div class="kiosk-child-card__info">'

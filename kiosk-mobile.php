@@ -16,7 +16,7 @@ $csrfToken = csrf_token();
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <meta name="theme-color" content="#881b12">
-    <title>BBCC — Sign In / Sign Out</title>
+    <title>Bhutanese Language and Culture School</title>
     <link rel="icon" type="image/jpeg" href="bbccassests/img/logo/logo5.jpg">
     <link rel="apple-touch-icon" href="bbccassests/img/logo/logo5.jpg">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -31,7 +31,7 @@ $csrfToken = csrf_token();
     <header class="km-header">
         <img src="bbccassests/img/logo/logo5.jpg" alt="BBCC" class="km-header__logo" onerror="this.style.display='none'">
         <div>
-            <div class="km-header__title">BBCC Sign In/Out</div>
+            <div class="km-header__title">Bhutanese Language and Culture School</div>
             <div class="km-header__sub">Bhutanese Buddhist &amp; Cultural Centre</div>
         </div>
     </header>
@@ -82,6 +82,11 @@ $csrfToken = csrf_token();
             <button class="km-btn km-btn--primary km-btn--block" id="mVerifyBtn" type="button">
                 <i class="fa-solid fa-arrow-right-to-bracket"></i> Verify &amp; Continue
             </button>
+            <div style="text-align:center; margin-top:10px;">
+                <a href="forgotKioskPin" target="_blank" rel="noopener" style="font-size:0.86rem; color:#9a3412; text-decoration:underline;">
+                    Forgot PIN? Reset with phone number
+                </a>
+            </div>
 
             <div class="km-spinner" id="mAuthSpinner"></div>
         </div>

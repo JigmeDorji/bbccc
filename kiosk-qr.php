@@ -23,9 +23,9 @@ $mobileBaseUrl = "{$protocol}://{$host}{$path}/kiosk-mobile.php";
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="BBCC QR">
+    <meta name="apple-mobile-web-app-title" content="Bhutanese Language and Culture School">
     <meta name="theme-color" content="#881b12">
-    <title>BBCC — Scan to Sign In/Out</title>
+    <title>Bhutanese Language and Culture School</title>
     <link rel="icon" type="image/jpeg" href="bbccassests/img/logo/logo5.jpg">
     <link rel="apple-touch-icon" href="bbccassests/img/logo/logo5.jpg">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -197,7 +197,7 @@ $mobileBaseUrl = "{$protocol}://{$host}{$path}/kiosk-mobile.php";
         <div class="kiosk-header__brand">
             <img src="bbccassests/img/logo/logo5.jpg" alt="BBCC" class="kiosk-header__logo" onerror="this.style.display='none'">
             <div>
-                <div class="kiosk-header__title">BBCC Kiosk</div>
+                <div class="kiosk-header__title">Bhutanese Language and Culture School</div>
                 <div class="kiosk-header__subtitle">Bhutanese Buddhist &amp; Cultural Centre</div>
             </div>
         </div>

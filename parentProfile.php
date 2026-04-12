@@ -12,6 +12,8 @@ if ($role !== 'parent') {
 
 $message = "";
 $errors = [];
+$pinErrors = [];
+$pinMessage = "";
 
 // ---------------- DB CONNECTION ----------------
 try {
@@ -36,6 +38,7 @@ if ($loginEmail === '') {
 
 // View/Edit mode (edit only when ?edit=1)
 $isEditMode = (isset($_GET['edit']) && $_GET['edit'] == '1');
+$postAction = $_POST['action'] ?? 'update_profile';
 
 // Fetch parent profile by email (case-insensitive)
 $stmt = $pdo->prepare("SELECT * FROM parents WHERE LOWER(email) = LOWER(:e) LIMIT 1");
@@ -65,8 +68,80 @@ function get_user_hash(PDO $pdo, string $username): string {
     return $row['password'] ?? '';
 }
 
+/**
+ * Verify password against hashed or legacy plain-text value.
+ */
+function bbcc_verify_password_value(string $plain, string $stored): bool {
+    if ($stored === '') return false;
+    $isHashed = (bool)preg_match('/^\$2[ayb]\$|\$argon2/', $stored);
+    if ($isHashed) {
+        return password_verify($plain, $stored);
+    }
+    return hash_equals($stored, $plain);
+}
+
+/**
+ * Whether parents table has pin_hash column.
+ */
+function bbcc_has_parent_pin_hash(PDO $pdo): bool {
+    static $cached = null;
+    if ($cached !== null) return $cached;
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM parents LIKE 'pin_hash'");
+        $cached = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        $cached = false;
+    }
+    return $cached;
+}
+
+// ---------------- Handle kiosk PIN reset ----------------
+if ($isEditMode && $_SERVER['REQUEST_METHOD'] === 'POST' && $postAction === 'reset_kiosk_pin') {
+    $accountPassword = (string)($_POST['account_password'] ?? '');
+    $kioskPin = preg_replace('/\D+/', '', (string)($_POST['kiosk_pin'] ?? ''));
+    $kioskPinConfirm = preg_replace('/\D+/', '', (string)($_POST['kiosk_pin_confirm'] ?? ''));
+
+    if (!bbcc_has_parent_pin_hash($pdo)) {
+        $pinErrors[] = "Kiosk PIN is not available yet. Please ask admin to run the latest migration.";
+    }
+    if ($accountPassword === '') $pinErrors[] = "Account password is required.";
+    if (!preg_match('/^\d{4,6}$/', $kioskPin)) $pinErrors[] = "Kiosk PIN must be 4 to 6 digits.";
+    if ($kioskPin !== $kioskPinConfirm) $pinErrors[] = "Kiosk PIN and confirm PIN do not match.";
+
+    if (empty($pinErrors)) {
+        $parentsHash = (string)($parent['password'] ?? '');
+        $userHash = get_user_hash($pdo, $loginEmail);
+        $okPassword =
+            bbcc_verify_password_value($accountPassword, $parentsHash) ||
+            bbcc_verify_password_value($accountPassword, $userHash);
+
+        if (!$okPassword) {
+            $pinErrors[] = "Account password is incorrect.";
+        } else {
+            try {
+                $pinHash = password_hash($kioskPin, PASSWORD_DEFAULT);
+                $pdo->prepare("UPDATE parents SET pin_hash = :pin WHERE id = :id")
+                    ->execute([':pin' => $pinHash, ':id' => $parentId]);
+
+                bbcc_notify_username(
+                    $pdo,
+                    $email,
+                    'Kiosk PIN Updated',
+                    'Your kiosk PIN has been reset successfully.',
+                    'parentProfile'
+                );
+
+                header("Location: parentProfile?edit=1&pin_updated=1#kiosk-pin");
+                exit;
+            } catch (Throwable $e) {
+                $pinErrors[] = "Could not reset kiosk PIN right now. Please try again.";
+            }
+        }
+    }
+}
+
 // ---------------- Handle update (only in edit mode + POST) ----------------
-if ($isEditMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($isEditMode && $_SERVER['REQUEST_METHOD'] === 'POST' && $postAction === 'update_profile') {
     $full_name = trim($_POST['full_name'] ?? '');
     $gender    = trim($_POST['gender'] ?? '');
     $email     = trim($_POST['email'] ?? '');
@@ -104,8 +179,8 @@ if ($isEditMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $userHash = get_user_hash($pdo, $loginEmail);
 
             $okOld =
-                ($parentsHash && password_verify($old_password, $parentsHash)) ||
-                ($userHash && password_verify($old_password, $userHash));
+                ($parentsHash && bbcc_verify_password_value($old_password, $parentsHash)) ||
+                ($userHash && bbcc_verify_password_value($old_password, $userHash));
 
             if (!$okOld) {
                 $errors[] = "Old password is incorrect.";
@@ -230,6 +305,9 @@ if ($isEditMode && $_SERVER['REQUEST_METHOD'] === 'POST') {
 if (isset($_GET['updated']) && $_GET['updated'] == '1') {
     $message = "Profile updated successfully.";
 }
+if (isset($_GET['pin_updated']) && $_GET['pin_updated'] == '1') {
+    $pinMessage = "Kiosk PIN updated successfully.";
+}
 
 // Reload parent data
 $stmt = $pdo->prepare("SELECT * FROM parents WHERE id = :id LIMIT 1");
@@ -284,6 +362,13 @@ $address   = $parent['address'] ?? '';
                     <script>
                     document.addEventListener('DOMContentLoaded', () => {
                         Swal.fire({icon:'success', title:'Profile Updated!', text:'Your changes have been saved.', timer:2000, showConfirmButton:false, confirmButtonColor:'#881b12'});
+                    });
+                    </script>
+                <?php endif; ?>
+                <?php if (!empty($pinMessage)): ?>
+                    <script>
+                    document.addEventListener('DOMContentLoaded', () => {
+                        Swal.fire({icon:'success', title:'Kiosk PIN Updated!', text:'Your kiosk PIN has been reset.', timer:2000, showConfirmButton:false, confirmButtonColor:'#881b12'});
                     });
                     </script>
                 <?php endif; ?>
@@ -342,6 +427,19 @@ $address   = $parent['address'] ?? '';
                         </div>
                     </div>
 
+                    <div class="card shadow mb-4">
+                        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-key mr-1"></i> Kiosk PIN</h6>
+                            <span class="badge badge-light">For Kiosk Sign In/Out</span>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-2">Forgot your kiosk PIN? You can reset it from your parent portal.</p>
+                            <a href="parentProfile?edit=1#kiosk-pin" class="btn btn-outline-primary btn-sm">
+                                <i class="fas fa-redo-alt mr-1"></i> Reset Kiosk PIN
+                            </a>
+                        </div>
+                    </div>
+
                 <?php else: ?>
                     <!-- EDIT MODE -->
                     <div class="card shadow mb-4">
@@ -352,6 +450,7 @@ $address   = $parent['address'] ?? '';
 
                         <div class="card-body">
                             <form method="POST" action="parentProfile?edit=1" id="profileForm">
+                                <input type="hidden" name="action" value="update_profile">
 
                                 <div class="row">
                                     <div class="col-md-6">
@@ -463,6 +562,52 @@ $address   = $parent['address'] ?? '';
                                     <a class="btn btn-secondary ml-2" href="parentProfile">Cancel</a>
                                 </div>
 
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card shadow mb-4" id="kiosk-pin">
+                        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+                            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-key mr-1"></i> Reset Kiosk PIN</h6>
+                            <span class="badge badge-info">4 to 6 digits</span>
+                        </div>
+                        <div class="card-body">
+                            <?php if (!empty($pinErrors)): ?>
+                                <div class="alert alert-danger">
+                                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                                    <ul class="mb-0 d-inline">
+                                        <?php foreach ($pinErrors as $er): ?>
+                                            <li><?= htmlspecialchars($er) ?></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                </div>
+                            <?php endif; ?>
+
+                            <form method="POST" action="parentProfile?edit=1#kiosk-pin" id="pinResetForm">
+                                <input type="hidden" name="action" value="reset_kiosk_pin">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label><i class="fas fa-shield-alt mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Account Password <span class="text-danger">*</span></label>
+                                            <input type="password" class="form-control" name="account_password" autocomplete="current-password" required>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label><i class="fas fa-key mr-1" style="color:var(--brand);font-size:0.7rem;"></i> New Kiosk PIN <span class="text-danger">*</span></label>
+                                            <input type="password" class="form-control" name="kiosk_pin" pattern="\d{4,6}" maxlength="6" inputmode="numeric" required placeholder="4-6 digits">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="form-group">
+                                            <label><i class="fas fa-check mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Confirm PIN <span class="text-danger">*</span></label>
+                                            <input type="password" class="form-control" name="kiosk_pin_confirm" pattern="\d{4,6}" maxlength="6" inputmode="numeric" required placeholder="Re-enter PIN">
+                                        </div>
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary" type="submit">
+                                    <i class="fas fa-save mr-1"></i> Update Kiosk PIN
+                                </button>
                             </form>
                         </div>
                     </div>
