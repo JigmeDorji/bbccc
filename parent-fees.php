@@ -21,12 +21,16 @@ $ok       = false;
 
 // ── Bank details from fees_settings (single source of truth) ──
 $_fs = $pdo->query("SELECT bank_name, account_name, bsb, account_number, bank_notes FROM fees_settings WHERE id=1 LIMIT 1")->fetch(PDO::FETCH_ASSOC);
-$banks = (!empty($_fs['bank_name'])) ? [[
-    'bank_name'      => $_fs['bank_name'],
-    'account_name'   => $_fs['account_name'],
-    'bsb'            => $_fs['bsb'],
-    'account_number' => $_fs['account_number'],
-    'reference_hint' => $_fs['bank_notes'],
+$hasBankCore =
+    !empty(trim((string)($_fs['account_name'] ?? ''))) ||
+    !empty(trim((string)($_fs['bsb'] ?? ''))) ||
+    !empty(trim((string)($_fs['account_number'] ?? '')));
+$banks = $hasBankCore ? [[
+    'bank_name'      => trim((string)($_fs['bank_name'] ?? '')) !== '' ? $_fs['bank_name'] : 'Bank Transfer',
+    'account_name'   => $_fs['account_name'] ?? '',
+    'bsb'            => $_fs['bsb'] ?? '',
+    'account_number' => $_fs['account_number'] ?? '',
+    'reference_hint' => $_fs['bank_notes'] ?? '',
 ]] : [];
 
 // ── POST: upload proof for a specific instalment ──
@@ -224,7 +228,17 @@ document.addEventListener('DOMContentLoaded',()=>{
                     <td>$<?= number_format($f['due_amount'],2) ?></td>
                     <td>$<?= number_format($f['paid_amount'],2) ?></td>
                     <td><?= h($f['payment_ref'] ?? '—') ?></td>
-                    <td><?= $f['proof_path'] ? '<a href="'.h($f['proof_path']).'" target="_blank">View</a>' : '—' ?></td>
+                    <td>
+                        <?php if (!empty($f['proof_path'])): ?>
+                            <button type="button"
+                                    class="btn btn-link btn-sm p-0 btn-view-proof"
+                                    data-proof="<?= h((string)$f['proof_path']) ?>">
+                                View
+                            </button>
+                        <?php else: ?>
+                            —
+                        <?php endif; ?>
+                    </td>
                     <td><span class="badge badge-<?= pcm_badge($f['status']) ?>"><?= h($f['status']) ?></span>
                         <?php if ($f['status'] === 'Rejected' && $f['reject_reason']): ?>
                             <br><small class="text-danger"><?= h($f['reject_reason']) ?></small>
@@ -237,84 +251,9 @@ document.addEventListener('DOMContentLoaded',()=>{
                             $nameCompact = preg_replace('/[^A-Za-z0-9]/', '', (string)$en['student_name']);
                             $suggestRef = $nameCompact . '_' . $planShort;
                         ?>
-                        <button class="btn btn-primary btn-sm"
-                                data-toggle="modal"
-                                data-target="#uploadModal<?= $f['id'] ?>"
-                                data-ref="<?= h($suggestRef) ?>"
-                                data-due="<?= number_format((float)$f['due_amount'], 2, '.', '') ?>"
-                                data-plan="<?= h($en['fee_plan']) ?>"
-                                data-campus="<?= h($en['campus_name'] ?? 'Main Campus') ?>">
+                        <a class="btn btn-primary btn-sm" href="parent-fees-pay?fee_id=<?= (int)$f['id'] ?>">
                             <i class="fas fa-upload mr-1"></i>Pay
-                        </button>
-
-                        <!-- Upload Modal -->
-                        <div class="modal fade" id="uploadModal<?= $f['id'] ?>" tabindex="-1">
-                            <div class="modal-dialog"><div class="modal-content">
-                                <form method="POST" enctype="multipart/form-data">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="action" value="upload_proof">
-                                    <input type="hidden" name="fee_id" value="<?= $f['id'] ?>">
-                                    <div class="modal-header">
-                                        <h5 class="modal-title"><i class="fas fa-upload mr-2" style="color:var(--brand);"></i>Upload Proof — <?= h($f['instalment_label']) ?></h5>
-                                        <button type="button" class="close" data-dismiss="modal">&times;</button>
-                                    </div>
-                                    <div class="modal-body">
-                                        <div class="info-box">
-                                            <i class="fas fa-dollar-sign"></i>
-                                            Amount due: <strong>$<?= number_format($f['due_amount'],2) ?></strong>
-                                        </div>
-                                        <div class="form-group">
-                                            <label><i class="fas fa-map-marker-alt mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Campus</label>
-                                            <input type="text" class="form-control" value="<?= h($en['campus_name'] ?? 'Main Campus') ?>" readonly>
-                                        </div>
-                                        <div class="form-group">
-                                            <label><i class="fas fa-school mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Campus Preference (select one or both)</label>
-                                            <?php $selectedCampus = pcm_normalize_campus_selection((string)($en['campus_preference'] ?? '')); ?>
-                                            <div class="custom-control custom-checkbox mb-1">
-                                                <input type="checkbox" class="custom-control-input" id="campusC1<?= $f['id'] ?>" name="campus_choice[]" value="c1" <?= in_array('c1', $selectedCampus, true) ? 'checked' : '' ?>>
-                                                <label class="custom-control-label" for="campusC1<?= $f['id'] ?>"><?= h($campusOneName) ?></label>
-                                            </div>
-                                            <div class="custom-control custom-checkbox">
-                                                <input type="checkbox" class="custom-control-input" id="campusC2<?= $f['id'] ?>" name="campus_choice[]" value="c2" <?= in_array('c2', $selectedCampus, true) ? 'checked' : '' ?>>
-                                                <label class="custom-control-label" for="campusC2<?= $f['id'] ?>"><?= h($campusTwoName) ?></label>
-                                            </div>
-                                            <small class="text-muted">You can choose one campus or both campuses.</small>
-                                        </div>
-                                        <div class="form-group">
-                                            <label><i class="fas fa-tags mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Fee Plan</label>
-                                            <input type="text" class="form-control" value="<?= h($en['fee_plan']) ?>" readonly>
-                                        </div>
-                                        <div class="form-group">
-                                            <label><i class="fas fa-hashtag mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Payment Reference</label>
-                                            <div class="input-group">
-                                                <input type="text" name="payment_ref" class="form-control ref-auto-field" maxlength="150" value="<?= h($suggestRef) ?>" placeholder="Bank transfer reference number">
-                                                <div class="input-group-append">
-                                                    <button type="button" class="btn btn-outline-secondary btn-copy-ref">Copy</button>
-                                                </div>
-                                            </div>
-                                            <small class="text-muted">Suggested format: ChildName + plan code (e.g. TenzinWangmo_hy or TenzinWangmo_y)</small>
-                                        </div>
-                                        <div class="form-group">
-                                            <label><i class="fas fa-file-upload mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Proof File <span class="text-danger">*</span></label>
-                                            <input type="file" name="proof" class="form-control-file" accept=".jpg,.jpeg,.png,.pdf" required>
-                                            <small class="text-muted">JPG / PNG / PDF — max 5 MB</small>
-                                        </div>
-                                        <div class="form-group mb-0">
-                                            <div class="custom-control custom-checkbox">
-                                                <input type="checkbox" class="custom-control-input" id="confirmPaid<?= $f['id'] ?>" name="confirm_paid" value="1" required>
-                                                <label class="custom-control-label" for="confirmPaid<?= $f['id'] ?>">
-                                                    I confirm I have paid <strong>$<?= number_format($f['due_amount'],2) ?></strong> based on this payment plan.
-                                                </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="modal-footer">
-                                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                                        <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane mr-1"></i>Submit Payment</button>
-                                    </div>
-                                </form>
-                            </div></div>
-                        </div>
+                        </a>
                         <?php elseif ($f['status'] === 'Pending'): ?>
                             <span class="text-muted small">Awaiting review</span>
                         <?php else: ?>
@@ -336,15 +275,35 @@ document.addEventListener('DOMContentLoaded',()=>{
 <?php include 'include/admin-footer.php'; ?>
 </div>
 </div>
+<div class="modal fade" id="proofModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Payment Proof</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body p-2" style="min-height:65vh;">
+                <iframe id="proofFrame" src="" style="width:100%;height:62vh;border:0;" title="Payment proof preview"></iframe>
+            </div>
+            <div class="modal-footer">
+                <a id="proofOpenNewTab" href="#" target="_blank" class="btn btn-outline-secondary">Open in New Tab</a>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 <script>
-document.addEventListener('click', function(e){
-    if (e.target.classList.contains('btn-copy-ref')) {
-        const modal = e.target.closest('.modal-content');
-        const input = modal ? modal.querySelector('.ref-auto-field') : null;
-        if (!input) return;
-        navigator.clipboard.writeText(input.value || '').then(() => {
-            Swal.fire({icon:'success', title:'Reference copied', timer:900, showConfirmButton:false});
-        });
+document.addEventListener('click', function (e) {
+    if (e.target.classList.contains('btn-view-proof')) {
+        const proofPath = e.target.getAttribute('data-proof') || '';
+        if (!proofPath) return;
+        const frame = document.getElementById('proofFrame');
+        const openBtn = document.getElementById('proofOpenNewTab');
+        frame.src = proofPath;
+        openBtn.href = proofPath;
+        $('#proofModal').modal('show');
     }
 });
 </script>

@@ -93,6 +93,7 @@ function bbcc_acl_page_rules(): array {
         // Shared authenticated landing/profile pages
         'index-admin' => ['authenticated'],
         'notifications' => ['authenticated'],
+        'switch-portal' => ['authenticated'],
         'adminprofile' => ['admin', 'teacher', 'patron'],
         'teacherprofile' => ['admin', 'teacher'],
 
@@ -108,6 +109,7 @@ function bbcc_acl_page_rules(): array {
         'admin-parent-pins' => ['admin'],
         'admin-bank-settings' => ['admin'],
         'mail-test' => ['admin'],
+        'run-migration' => ['admin'],
         'parent-email' => ['admin', 'teacher'],
         'dzongkha-classroom' => ['admin', 'teacher', 'parent'],
         'admin-student-approvals' => ['admin'],
@@ -126,6 +128,7 @@ function bbcc_acl_page_rules(): array {
         'parentprofile' => ['parent'],
         'children-enrollment' => ['parent'],
         'parent-fees' => ['parent'],
+        'parent-fees-pay' => ['parent'],
         'parentfeespayment' => ['parent'],
         'parent-payments' => ['parent'],
         'parent-students' => ['parent'],

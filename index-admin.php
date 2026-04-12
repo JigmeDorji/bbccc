@@ -19,6 +19,7 @@ $filterCompanyID = $_SESSION['companyID'] ?? null;
 $filterProjectID = $_SESSION['projectID'] ?? null;
 
 $role = strtolower($_SESSION['role'] ?? '');
+$dashboardRole = $role;
 if ($role === 'patron') {
     header('Location: patron-dashboard');
     exit;
@@ -52,7 +53,7 @@ $parentChildTermProgress = [];
 $parentTermTotals = [1 => 0, 2 => 0, 3 => 0, 4 => 0];
 $recentClassroomActivity = [];
 $dashboardTeacherId = 0;
-$parentHasTeacherProfile = false;
+$teacherAssignedClassNames = [];
 
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
@@ -67,8 +68,33 @@ try {
     );
     bbcc_ensure_term_class_total_columns($pdo);
 
+    $sessionUsername = (string)($_SESSION['username'] ?? '');
+    $sessionUserId = (string)($_SESSION['userid'] ?? '');
+    $activePortal = strtolower(trim((string)($_SESSION['active_portal'] ?? '')));
+    $hasParentProfile = false;
+    $hasTeacherProfile = false;
+
+    if ($sessionUsername !== '') {
+        $stmtHasParent = $pdo->prepare("SELECT id FROM parents WHERE username = :u LIMIT 1");
+        $stmtHasParent->execute([':u' => $sessionUsername]);
+        $hasParentProfile = (bool)$stmtHasParent->fetch(PDO::FETCH_ASSOC);
+    }
+    $stmtHasTeacher = $pdo->prepare("
+        SELECT id
+        FROM teachers
+        WHERE (user_id = :uid AND :uid <> '')
+           OR LOWER(email) = LOWER(:em)
+        LIMIT 1
+    ");
+    $stmtHasTeacher->execute([':uid' => $sessionUserId, ':em' => $sessionUsername]);
+    $hasTeacherProfile = (bool)$stmtHasTeacher->fetch(PDO::FETCH_ASSOC);
+
+    if ($hasParentProfile && $hasTeacherProfile && in_array($activePortal, ['parent', 'teacher'], true)) {
+        $dashboardRole = $activePortal;
+    }
+
     /* ═══ PARENT DASHBOARD ═══ */
-    if ($role === 'parent') {
+    if ($dashboardRole === 'parent') {
         $sessionUsername = $_SESSION['username'] ?? '';
         $sessionUserId = (string)($_SESSION['userid'] ?? '');
         if ($sessionUsername === '') {
@@ -144,19 +170,10 @@ try {
             ];
         }
 
-        $stmtParentTeacher = $pdo->prepare("
-            SELECT id
-            FROM teachers
-            WHERE (user_id = :uid AND :uid <> '')
-               OR LOWER(email) = LOWER(:em)
-            LIMIT 1
-        ");
-        $stmtParentTeacher->execute([':uid' => $sessionUserId, ':em' => $sessionUsername]);
-        $parentHasTeacherProfile = (bool)$stmtParentTeacher->fetch(PDO::FETCH_ASSOC);
     }
 
     /* ═══ ADMIN DASHBOARD STATS ═══ */
-    if ($role !== 'parent') {
+    if ($dashboardRole !== 'parent') {
         // Students
         $totalStudents   = (int)$pdo->query("SELECT COUNT(*) FROM students")->fetchColumn();
         $pendingStudents = (int)$pdo->query("SELECT COUNT(*) FROM students WHERE approval_status='Pending'")->fetchColumn();
@@ -191,7 +208,7 @@ try {
         // Contact messages
         $contactMessages = (int)$pdo->query("SELECT COUNT(*) FROM contact")->fetchColumn();
 
-        if ($role === 'teacher') {
+        if ($dashboardRole === 'teacher') {
             $sessionUserId = (string)($_SESSION['userid'] ?? '');
             $sessionUsername = (string)($_SESSION['username'] ?? '');
 
@@ -209,6 +226,34 @@ try {
             $dashboardTeacherId = $teacherId;
 
             if ($teacherId > 0) {
+                $stmtTeacherClassNames = $pdo->prepare("
+                    SELECT DISTINCT c.class_name
+                    FROM classes c
+                    WHERE c.teacher_id = :teacher_id
+                    ORDER BY c.class_name ASC
+                ");
+                $stmtTeacherClassNames->execute([':teacher_id' => $teacherId]);
+                $teacherAssignedClassNames = array_values(array_filter(array_map(
+                    static fn($r) => trim((string)($r['class_name'] ?? '')),
+                    $stmtTeacherClassNames->fetchAll(PDO::FETCH_ASSOC)
+                )));
+
+                $stmtTeacherStudentStats = $pdo->prepare("
+                    SELECT
+                        COUNT(DISTINCT s.id) AS total_students,
+                        COUNT(DISTINCT CASE WHEN LOWER(COALESCE(s.approval_status,'')) = 'approved' THEN s.id END) AS approved_students,
+                        COUNT(DISTINCT CASE WHEN LOWER(COALESCE(s.approval_status,'')) = 'pending' THEN s.id END) AS pending_students
+                    FROM classes c
+                    INNER JOIN class_assignments ca ON ca.class_id = c.id
+                    INNER JOIN students s ON s.id = ca.student_id
+                    WHERE c.teacher_id = :teacher_id
+                ");
+                $stmtTeacherStudentStats->execute([':teacher_id' => $teacherId]);
+                $teacherStudentStats = $stmtTeacherStudentStats->fetch(PDO::FETCH_ASSOC) ?: [];
+                $totalStudents = (int)($teacherStudentStats['total_students'] ?? 0);
+                $approvedStudents = (int)($teacherStudentStats['approved_students'] ?? 0);
+                $pendingStudents = (int)($teacherStudentStats['pending_students'] ?? 0);
+
                 $stmtTeacherAttendance = $pdo->prepare("
                     SELECT a.attendance_date, s.student_name, s.student_id, c.class_name, a.status
                     FROM attendance a
@@ -220,6 +265,10 @@ try {
                 ");
                 $stmtTeacherAttendance->execute([':teacher_id' => $teacherId]);
                 $dashboardAttendance = $stmtTeacherAttendance->fetchAll(PDO::FETCH_ASSOC);
+            } else {
+                $totalStudents = 0;
+                $approvedStudents = 0;
+                $pendingStudents = 0;
             }
             $attendanceTitle = 'My Class Attendance Records';
             $attendanceViewLink = 'teacher-attendance';
@@ -248,7 +297,7 @@ try {
     $todaySignOuts   = 0;
     $totalClasses    = 0;
 
-    if ($role !== 'parent') {
+    if ($dashboardRole !== 'parent') {
         // Fee collection stats
         $stmtFees = $pdo->query("SELECT
             COALESCE(SUM(due_amount), 0) AS total_due,
@@ -296,7 +345,7 @@ try {
             ];
         };
 
-        if ($role === 'parent' && (int)$parentDbId > 0) {
+        if ($dashboardRole === 'parent' && (int)$parentDbId > 0) {
             $stmtA = $pdo->prepare("
                 SELECT a.created_at, a.title, a.category
                 FROM classroom_announcements a
@@ -341,14 +390,13 @@ try {
                     'dzongkha-classroom?tab=reports&as=parent'
                 );
             }
-        } elseif ($role === 'teacher' && $dashboardTeacherId > 0) {
+        } elseif ($dashboardRole === 'teacher' && $dashboardTeacherId > 0) {
             $stmtA = $pdo->prepare("
                 SELECT DISTINCT a.created_at, a.title, a.category
                 FROM classroom_announcements a
-                LEFT JOIN classroom_announcement_classes ac ON ac.announcement_id = a.id
-                LEFT JOIN classes c ON c.id = ac.class_id
-                WHERE a.scope_type = 'all_classes'
-                   OR c.teacher_id = :tid
+                INNER JOIN classroom_announcement_classes ac ON ac.announcement_id = a.id
+                INNER JOIN classes c ON c.id = ac.class_id
+                WHERE c.teacher_id = :tid
                 ORDER BY a.created_at DESC
                 LIMIT 6
             ");
@@ -403,7 +451,7 @@ try {
                     'dzongkha-classroom?tab=reports&as=teacher'
                 );
             }
-        } elseif ($role !== 'parent') {
+        } elseif ($dashboardRole !== 'parent') {
             $rowsA = $pdo->query("SELECT created_at, title, category FROM classroom_announcements ORDER BY created_at DESC LIMIT 8")->fetchAll(PDO::FETCH_ASSOC);
             foreach ($rowsA as $row) {
                 $appendActivity(
@@ -814,7 +862,7 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
 
             <div class="container-fluid">
 
-            <?php if ($role === 'parent'): ?>
+            <?php if ($dashboardRole === 'parent'): ?>
                 <!-- ═══════════════════════════════════════════ -->
                 <!-- ═══ PARENT DASHBOARD ═══ -->
                 <!-- ═══════════════════════════════════════════ -->
@@ -825,11 +873,6 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                     <p>Manage your children's enrollments, track attendance, and make fee payments from your dashboard.</p>
                     <div class="quick-actions">
                         <a href="mark-absenteeism"><i class="fas fa-clipboard-check"></i> Mark Absenteeism</a>
-                        <?php if ($parentHasTeacherProfile): ?>
-                            <a href="teacher-attendance" style="background:#1cc88a;border-color:#1cc88a;">
-                                <i class="fas fa-clipboard-list"></i> Take Attendance
-                            </a>
-                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -1048,10 +1091,19 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                     <h2>Welcome back, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Admin'); ?>!</h2>
                     <p>Here's an overview of your community centre. Today is <?php echo date('l, d F Y'); ?>.</p>
                     <div class="quick-actions">
-                        <a href="dzoClassManagement"><i class="fas fa-user-graduate"></i> Enrollments</a>
-                        <a href="eventManagement"><i class="fas fa-calendar-alt"></i> Events</a>
-                        <a href="bookingManagement"><i class="fas fa-bookmark"></i> Bookings</a>
-                        <a href="admin-attendance"><i class="fas fa-clipboard-check"></i> Attendance</a>
+                        <?php if ($dashboardRole === 'teacher'): ?>
+                            <a href="teacher-attendance" style="background:#1cc88a;border-color:#1cc88a;">
+                                <i class="fas fa-clipboard-list"></i> Take Attendance
+                            </a>
+                            <a href="attendance-records?as=teacher"><i class="fas fa-table"></i> Attendance Records</a>
+                            <a href="dzongkha-classroom?as=teacher"><i class="fas fa-bullhorn"></i> Dzongkha Classroom</a>
+                            <a href="parent-email"><i class="fas fa-envelope-open-text"></i> Send Parent Email</a>
+                        <?php else: ?>
+                            <a href="dzoClassManagement"><i class="fas fa-user-graduate"></i> Enrollments</a>
+                            <a href="eventManagement"><i class="fas fa-calendar-alt"></i> Events</a>
+                            <a href="bookingManagement"><i class="fas fa-bookmark"></i> Bookings</a>
+                            <a href="admin-attendance"><i class="fas fa-clipboard-check"></i> Attendance</a>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -1065,14 +1117,23 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                                 <div class="stat-label">Total Students</div>
                                 <div class="stat-value"><?php echo $totalStudents; ?></div>
                                 <div class="stat-footer">
-                                    <span style="color:#1cc88a;"><i class="fas fa-check-circle"></i> <?php echo $approvedStudents; ?> approved</span>
-                                    &nbsp;&middot;&nbsp;
-                                    <span style="color:#f6c23e;"><i class="fas fa-clock"></i> <?php echo $pendingStudents; ?> pending</span>
+                                    <?php if ($dashboardRole === 'teacher'): ?>
+                                        <?php if (!empty($teacherAssignedClassNames)): ?>
+                                            <span style="color:#4e73df;"><i class="fas fa-chalkboard"></i> <?php echo htmlspecialchars(implode(', ', $teacherAssignedClassNames)); ?></span>
+                                        <?php else: ?>
+                                            <span style="color:#8c8c9e;"><i class="fas fa-info-circle"></i> No class assigned yet</span>
+                                        <?php endif; ?>
+                                    <?php else: ?>
+                                        <span style="color:#1cc88a;"><i class="fas fa-check-circle"></i> <?php echo $approvedStudents; ?> approved</span>
+                                        &nbsp;&middot;&nbsp;
+                                        <span style="color:#f6c23e;"><i class="fas fa-clock"></i> <?php echo $pendingStudents; ?> pending</span>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>
                     </div>
 
+                    <?php if ($dashboardRole !== 'teacher'): ?>
                     <!-- Registered Parents -->
                     <div class="col-xl-3 col-md-6 mb-4">
                         <div class="card dash-card shadow">
@@ -1120,6 +1181,7 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                             </div>
                         </div>
                     </div>
+                    <?php endif; ?>
                     <div class="col-xl-3 col-md-6 mb-4">
                         <div class="card dash-card shadow">
                             <div class="dash-stat-card">
@@ -1134,6 +1196,7 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                     </div>
                 </div>
 
+                <?php if ($dashboardRole !== 'teacher'): ?>
                 <!-- ── Row 2: Upcoming Events + Finance ── -->
                 <div class="row mb-2">
                     <!-- Upcoming Events -->
@@ -1229,7 +1292,9 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                         </div>
                     </div>
                 </div>
+                <?php endif; ?>
 
+                <?php if ($dashboardRole !== 'teacher'): ?>
                 <!-- ── Row 3: Recent Students + Recent Bookings ── -->
                 <div class="row mb-2">
                     <!-- Recent Students -->
@@ -1309,7 +1374,9 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                         </div>
                     </div>
                 </div>
+                <?php endif; ?>
 
+                <?php if ($dashboardRole !== 'teacher'): ?>
                 <div class="card dash-card shadow mb-4">
                     <div class="card-body p-0">
                         <div class="p-3">
@@ -1356,13 +1423,14 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                         <?php endif; ?>
                     </div>
                 </div>
+                <?php endif; ?>
 
                 <div class="card dash-card shadow mb-4">
                     <div class="card-body p-0">
                         <div class="p-3">
                             <div class="section-title mb-0">
                                 <span><i class="fas fa-stream mr-2" style="color:#4e73df;"></i>Recent Classroom Activity</span>
-                                <a href="<?= $role === 'teacher' ? 'dzongkha-classroom?as=teacher' : 'dzongkha-classroom'; ?>">Open Classroom</a>
+                                <a href="<?= $dashboardRole === 'teacher' ? 'dzongkha-classroom?as=teacher' : 'dzongkha-classroom'; ?>">Open Classroom</a>
                             </div>
                         </div>
                         <?php if (empty($recentClassroomActivity)): ?>
@@ -1414,6 +1482,7 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                             </div>
                         </div>
                     </div>
+                    <?php if ($dashboardRole !== 'teacher'): ?>
                     <div class="col-md-4 mb-3">
                         <div class="card dash-card shadow">
                             <div class="dash-stat-card" style="padding: 20px 24px;">
@@ -1434,6 +1503,7 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                             </div>
                         </div>
                     </div>
+                    <?php endif; ?>
                 </div>
 
             <?php endif; ?>

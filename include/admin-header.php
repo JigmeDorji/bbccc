@@ -3,6 +3,7 @@
 require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/notifications.php";
+require_once "include/csrf.php";
 require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
@@ -11,6 +12,9 @@ $profileUrl = ($role === 'parent')
     : (($role === 'teacher') ? 'teacherProfile.php' : 'adminProfile.php');
 $notificationsUrl = 'notifications.php';
 $unreadNotifications = 0;
+$hasParentProfileForSwitch = false;
+$hasTeacherProfileForSwitch = false;
+$activePortalMode = strtolower(trim((string)($_SESSION['active_portal'] ?? '')));
 try {
     global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
     $hdrPdo = new PDO(
@@ -24,8 +28,47 @@ try {
         (string)($_SESSION['username'] ?? ''),
         (string)($_SESSION['role'] ?? '')
     );
+
+    $sessionUsername = (string)($_SESSION['username'] ?? '');
+    $sessionUserId = (string)($_SESSION['userid'] ?? '');
+
+    if ($sessionUsername !== '') {
+        $stmtP = $hdrPdo->prepare("SELECT id FROM parents WHERE username = :u LIMIT 1");
+        $stmtP->execute([':u' => $sessionUsername]);
+        $hasParentProfileForSwitch = (bool)$stmtP->fetch(PDO::FETCH_ASSOC);
+    }
+    $stmtT = $hdrPdo->prepare("
+        SELECT id
+        FROM teachers
+        WHERE (user_id = :uid AND :uid <> '')
+           OR LOWER(email) = LOWER(:em)
+        LIMIT 1
+    ");
+    $stmtT->execute([':uid' => $sessionUserId, ':em' => $sessionUsername]);
+    $hasTeacherProfileForSwitch = (bool)$stmtT->fetch(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     $unreadNotifications = 0;
+}
+
+if (is_parent_role()) {
+    $hasParentProfileForSwitch = true;
+}
+if (is_teacher_role()) {
+    $hasTeacherProfileForSwitch = true;
+}
+
+$isMixedPortalUser = $hasParentProfileForSwitch && $hasTeacherProfileForSwitch;
+if ($isMixedPortalUser) {
+    if (!in_array($activePortalMode, ['parent', 'teacher'], true)) {
+        $activePortalMode = is_teacher_role() ? 'teacher' : 'parent';
+        $_SESSION['active_portal'] = $activePortalMode;
+    }
+} else {
+    if ($hasTeacherProfileForSwitch) {
+        $activePortalMode = 'teacher';
+    } elseif ($hasParentProfileForSwitch) {
+        $activePortalMode = 'parent';
+    }
 }
 
 // ── Derive display name & initials ──
@@ -58,6 +101,7 @@ $_pageTitles = [
     'parent-email'         => 'Parent Email',
     'acl-debug'            => 'ACL Debug',
     'audit-logs'           => 'Audit Logs',
+    'run-migration'        => 'Run Migrations',
     'createAccHead'        => 'Account Heads',
     'createSubAccHead'     => 'Sub Account Heads',
     'createJournalEntry'   => 'Journal Entry',
@@ -75,6 +119,7 @@ $_pageTitles = [
     'children-enrollment'  => 'Enrolment',
     'notifications'        => 'Notifications',
     'parent-fees'          => 'Fees & Payments',
+    'parent-fees-pay'      => 'Submit Fee Payment',
     'parent-attendance'    => 'Mark Absenteeism',
     'mark-absenteeism'     => 'Mark Absenteeism',
     'admin-enrolments'     => 'Enrollment',
@@ -232,6 +277,16 @@ h1, h6 { font-size: 1rem !important; }
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
+}
+.portal-switch-form { margin: 0; }
+.portal-switch {
+    border: 1px solid #dcdfe6;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 0.78rem;
+    color: #1a1a2e;
+    background: #fff;
+    min-width: 140px;
 }
 
 /* Date/Time badge */
@@ -487,6 +542,17 @@ h1, h6 { font-size: 1rem !important; }
 
     <!-- Right: Actions -->
     <div class="topbar-right">
+        <?php if ($isMixedPortalUser): ?>
+            <form method="POST" action="switch-portal" class="portal-switch-form" aria-label="Switch active portal">
+                <?= csrf_field() ?>
+                <input type="hidden" name="return_to" value="<?php echo htmlspecialchars((string)($_SERVER['REQUEST_URI'] ?? 'index-admin'), ENT_QUOTES, 'UTF-8'); ?>">
+                <select name="portal" class="portal-switch" onchange="this.form.submit()">
+                    <option value="parent" <?= $activePortalMode === 'parent' ? 'selected' : '' ?>>Parent Portal</option>
+                    <option value="teacher" <?= $activePortalMode === 'teacher' ? 'selected' : '' ?>>Teacher Portal</option>
+                </select>
+            </form>
+        <?php endif; ?>
+
         <!-- Date -->
         <div class="topbar-date" aria-label="Today's date">
             <i class="fas fa-calendar-day" aria-hidden="true"></i>

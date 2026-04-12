@@ -47,7 +47,7 @@ $parentChildren = [];
 $canEdit = false;
 $viewMode = 'none';
 $currentRole = strtolower(trim((string)($_SESSION['role'] ?? '')));
-$requestedAs = strtolower(trim((string)($_GET['as'] ?? '')));
+$requestedAs = strtolower(trim((string)($_GET['as'] ?? ($_SESSION['active_portal'] ?? ''))));
 
 // Determine mode by active role first.
 if ($isAdmin) {
@@ -102,6 +102,10 @@ if ($requestedAs === 'parent') {
 if ($viewMode === 'none' || is_patron_role()) {
     header("Location: unauthorized");
     exit;
+}
+
+if (in_array($viewMode, ['teacher', 'parent'], true)) {
+    $_SESSION['active_portal'] = $viewMode;
 }
 
 if ($viewMode === 'parent') {

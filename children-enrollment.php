@@ -23,12 +23,16 @@ $ok       = false;
 
 // ── Bank details from fees_settings (single source of truth) ──
 $_fs = $pdo->query("SELECT bank_name, account_name, bsb, account_number, bank_notes FROM fees_settings WHERE id=1 LIMIT 1")->fetch(PDO::FETCH_ASSOC);
-$banks = (!empty($_fs['bank_name'])) ? [[
-    'bank_name'      => $_fs['bank_name'],
-    'account_name'   => $_fs['account_name'],
-    'bsb'            => $_fs['bsb'],
-    'account_number' => $_fs['account_number'],
-    'reference_hint' => $_fs['bank_notes'],
+$hasBankCore =
+    !empty(trim((string)($_fs['account_name'] ?? ''))) ||
+    !empty(trim((string)($_fs['bsb'] ?? ''))) ||
+    !empty(trim((string)($_fs['account_number'] ?? '')));
+$banks = $hasBankCore ? [[
+    'bank_name'      => trim((string)($_fs['bank_name'] ?? '')) !== '' ? $_fs['bank_name'] : 'Bank Transfer',
+    'account_name'   => $_fs['account_name'] ?? '',
+    'bsb'            => $_fs['bsb'] ?? '',
+    'account_number' => $_fs['account_number'] ?? '',
+    'reference_hint' => $_fs['bank_notes'] ?? '',
 ]] : [];
 
 // ── POST ACTIONS ──
@@ -179,9 +183,6 @@ $enrolments = $pdo->prepare("
 $enrolments->execute([':pid'=>$parentId]);
 $enrolments = $enrolments->fetchAll();
 
-$childCount = count($children);
-$enrolCount = count($enrolments);
-$eligibleCount = count($eligible);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -194,27 +195,6 @@ $eligibleCount = count($eligible);
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         :root { --brand:#881b12; --brand-light:#a82218; }
-
-        /* Summary Cards */
-        .summary-card {
-            border-radius: 12px;
-            padding: 18px 20px;
-            color: #fff;
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            transition: transform .2s, box-shadow .2s;
-        }
-        .summary-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
-        .summary-card .icon { font-size: 1.8rem; opacity: 0.8; }
-        .summary-card .info { line-height: 1.3; }
-        .summary-card .info .count { font-size: 1.5rem; font-weight: 700; }
-        .summary-card .info .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: .5px; opacity: 0.85; }
-
-        .bg-grad-primary { background: linear-gradient(135deg, #4e73df, #224abe); }
-        .bg-grad-success { background: linear-gradient(135deg, #1cc88a, #17a673); }
-        .bg-grad-warning { background: linear-gradient(135deg, #f6c23e, #dda20a); }
-        .bg-grad-info { background: linear-gradient(135deg, #36b9cc, #258391); }
 
         /* Section */
         .section-title {
@@ -304,9 +284,6 @@ $eligibleCount = count($eligible);
         @media (max-width: 768px) {
             .plan-card { padding: 14px 10px; }
             .plan-card .plan-price { font-size: 1.2rem; }
-            .summary-card { padding: 14px 16px; }
-            .summary-card .icon { font-size: 1.4rem; }
-            .summary-card .info .count { font-size: 1.2rem; }
         }
     </style>
 </head>
@@ -328,46 +305,6 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 </script>
 <?php endif; ?>
-
-<!-- ═══ SUMMARY CARDS ═══ -->
-<div class="row mb-4">
-    <div class="col-xl-3 col-md-6 mb-3">
-        <div class="summary-card bg-grad-primary shadow">
-            <div class="icon"><i class="fas fa-child"></i></div>
-            <div class="info">
-                <div class="count"><?= $childCount ?></div>
-                <div class="label">Children</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-3 col-md-6 mb-3">
-        <div class="summary-card bg-grad-warning shadow">
-            <div class="icon"><i class="fas fa-user-plus"></i></div>
-            <div class="info">
-                <div class="count"><?= $eligibleCount ?></div>
-                <div class="label">Ready to Enrol</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-3 col-md-6 mb-3">
-        <div class="summary-card bg-grad-success shadow">
-            <div class="icon"><i class="fas fa-file-signature"></i></div>
-            <div class="info">
-                <div class="count"><?= $enrolCount ?></div>
-                <div class="label">Enrolments</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-3 col-md-6 mb-3">
-        <div class="summary-card bg-grad-info shadow">
-            <div class="icon"><i class="fas fa-university"></i></div>
-            <div class="info">
-                <div class="count"><?= count($banks) ?></div>
-                <div class="label">Payment Methods</div>
-            </div>
-        </div>
-    </div>
-</div>
 
 <div class="row">
 

@@ -9,8 +9,31 @@ $currentPage = (str_ends_with($_uriBase, '.php') ? $_uriBase : $_uriBase . '.php
 
 function isSystemOwner() { return ($_SESSION['role'] ?? '') === 'Administrator'; }
 function isCompanyAdmin() { return ($_SESSION['role'] ?? '') === 'company_admin'; }
-function isParent() { return strtolower($_SESSION['role'] ?? '') === 'parent'; }
-function isTeacher() {
+function hasParentProfile() {
+    if (strtolower($_SESSION['role'] ?? '') === 'parent') return true;
+    static $checkedParent = null;
+    if ($checkedParent !== null) return $checkedParent;
+    $checkedParent = false;
+    try {
+        global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
+        $pdo = new PDO(
+            "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
+            $DB_USER,
+            $DB_PASSWORD,
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+        );
+        $uname = (string)($_SESSION['username'] ?? '');
+        if ($uname !== '') {
+            $stmt = $pdo->prepare("SELECT id FROM parents WHERE username = :u LIMIT 1");
+            $stmt->execute([':u' => $uname]);
+            $checkedParent = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+        }
+    } catch (Throwable $e) {
+        $checkedParent = false;
+    }
+    return $checkedParent;
+}
+function hasTeacherProfile() {
     if (strtolower($_SESSION['role'] ?? '') === 'teacher') return true;
     static $checked = null;
     if ($checked !== null) return $checked;
@@ -39,7 +62,25 @@ function isTeacher() {
     }
     return $checked;
 }
+function isParent() { return hasParentProfile(); }
+function isTeacher() { return hasTeacherProfile(); }
 function isPatron() { return strtolower($_SESSION['role'] ?? '') === 'patron'; }
+
+$hasParentProfile = hasParentProfile();
+$hasTeacherProfile = hasTeacherProfile();
+$isMixedPortal = $hasParentProfile && $hasTeacherProfile;
+$activePortal = strtolower(trim((string)($_SESSION['active_portal'] ?? '')));
+if ($isMixedPortal && !in_array($activePortal, ['parent', 'teacher'], true)) {
+    $activePortal = strtolower(trim((string)($_SESSION['role'] ?? ''))) === 'teacher' ? 'teacher' : 'parent';
+    $_SESSION['active_portal'] = $activePortal;
+}
+if (!$isMixedPortal) {
+    if ($hasTeacherProfile) $activePortal = 'teacher';
+    if ($hasParentProfile) $activePortal = 'parent';
+}
+$portalMode = strtolower(trim((string)($_GET['as'] ?? $activePortal)));
+$showTeacherPortal = $hasTeacherProfile && (!$isMixedPortal || $activePortal === 'teacher');
+$showParentPortal = $hasParentProfile && (!$isMixedPortal || $activePortal === 'parent');
 ?>
 
 <style>
@@ -396,12 +437,13 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                 <i class="fas fa-user-cog"></i>
                 <span>Admin Settings</span>
             </a>
-            <div id="collapseAdmin" class="collapse <?= in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php','audit-logs.php']) ? 'show' : '' ?>">
+            <div id="collapseAdmin" class="collapse <?= in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php','audit-logs.php','run-migration.php']) ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <a class="collapse-item <?= ($currentPage == 'userSetup.php') ? 'active' : '' ?>" href="userSetup"><i class="fas fa-users-cog fa-sm mr-1 text-muted"></i> User Management</a>
                     <a class="collapse-item <?= ($currentPage == 'adminProfile.php') ? 'active' : '' ?>" href="adminProfile"><i class="fas fa-id-badge fa-sm mr-1 text-muted"></i> My Profile</a>
                     <a class="collapse-item <?= ($currentPage == 'audit-logs.php') ? 'active' : '' ?>" href="audit-logs"><i class="fas fa-clipboard-list fa-sm mr-1 text-muted"></i> Audit Logs</a>
                     <a class="collapse-item <?= ($currentPage == 'acl-debug.php') ? 'active' : '' ?>" href="acl-debug"><i class="fas fa-shield-alt fa-sm mr-1 text-muted"></i> ACL Debug</a>
+                    <a class="collapse-item <?= ($currentPage == 'run-migration.php') ? 'active' : '' ?>" href="run-migration"><i class="fas fa-database fa-sm mr-1 text-muted"></i> Run Migrations</a>
                 </div>
             </div>
         </li>
@@ -429,7 +471,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
     <?php } ?>
 
     <!-- Teacher-only menu -->
-    <?php if (isTeacher()) { ?>
+    <?php if ($showTeacherPortal) { ?>
         <hr class="sidebar-divider">
         <div class="sidebar-heading">Teacher Portal</div>
 
@@ -440,8 +482,8 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
             </a>
         </li>
 
-        <li class="nav-item <?= ($currentPage == 'attendance-records.php' && (($_GET['as'] ?? '') === 'teacher')) ? 'active' : '' ?>">
-            <a class="nav-link <?= ($currentPage == 'attendance-records.php' && (($_GET['as'] ?? '') === 'teacher')) ? 'active' : '' ?>" href="attendance-records?as=teacher">
+        <li class="nav-item <?= ($currentPage == 'attendance-records.php' && $portalMode === 'teacher') ? 'active' : '' ?>">
+            <a class="nav-link <?= ($currentPage == 'attendance-records.php' && $portalMode === 'teacher') ? 'active' : '' ?>" href="attendance-records?as=teacher">
                 <i class="fas fa-table"></i>
                 <span>Attendance Records</span>
             </a>
@@ -454,7 +496,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
             </a>
         </li>
 
-        <li class="nav-item <?= ($currentPage == 'dzongkha-classroom.php' && (($_GET['as'] ?? '') !== 'parent')) ? 'active' : '' ?>">
+        <li class="nav-item <?= ($currentPage == 'dzongkha-classroom.php' && $portalMode !== 'parent') ? 'active' : '' ?>">
             <a class="nav-link" href="dzongkha-classroom?as=teacher">
                 <i class="fas fa-bullhorn"></i>
                 <span>Dzongkha Classroom</span>
@@ -470,7 +512,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
     <?php } ?>
 
     <!-- Parent-only menu -->
-    <?php if (isParent()) { ?>
+    <?php if ($showParentPortal) { ?>
         <hr class="sidebar-divider">
         <div class="sidebar-heading">Parent Portal</div>
 
@@ -509,14 +551,14 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
             </a>
         </li>
 
-        <li class="nav-item <?= ($currentPage == 'attendance-records.php' && (($_GET['as'] ?? '') !== 'teacher')) ? 'active' : '' ?>">
-            <a class="nav-link <?= ($currentPage == 'attendance-records.php' && (($_GET['as'] ?? '') !== 'teacher')) ? 'active' : '' ?>" href="attendance-records?as=parent">
+        <li class="nav-item <?= ($currentPage == 'attendance-records.php' && $portalMode !== 'teacher') ? 'active' : '' ?>">
+            <a class="nav-link <?= ($currentPage == 'attendance-records.php' && $portalMode !== 'teacher') ? 'active' : '' ?>" href="attendance-records?as=parent">
                 <i class="fas fa-table"></i>
                 <span>Student Attendance Record</span>
             </a>
         </li>
 
-        <li class="nav-item <?= ($currentPage == 'dzongkha-classroom.php' && (($_GET['as'] ?? '') !== 'teacher')) ? 'active' : '' ?>">
+        <li class="nav-item <?= ($currentPage == 'dzongkha-classroom.php' && $portalMode !== 'teacher') ? 'active' : '' ?>">
             <a class="nav-link" href="dzongkha-classroom?as=parent">
                 <i class="fas fa-bullhorn"></i>
                 <span>Dzongkha Classroom</span>

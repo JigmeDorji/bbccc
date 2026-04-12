@@ -70,6 +70,7 @@ function n_h(string $v): string {
     <title>Notifications</title>
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         .notif-card { border-radius: 12px; border: 1px solid #e6e6e6; }
         .notif-item { border: 1px solid #ececec; border-radius: 10px; padding: 14px; margin-bottom: 10px; }
@@ -127,7 +128,7 @@ function n_h(string $v): string {
                                             <?php else: ?>
                                                 <span class="badge badge-light">Read</span>
                                             <?php endif; ?>
-                                            <form method="POST" class="d-inline ml-1" onsubmit="return confirm('Delete this notification?');">
+                                            <form method="POST" class="d-inline ml-1 js-delete-notification-form">
                                                 <?= csrf_field() ?>
                                                 <input type="hidden" name="action" value="delete">
                                                 <input type="hidden" name="notification_id" value="<?= (int)($n['id'] ?? 0) ?>">
@@ -145,5 +146,28 @@ function n_h(string $v): string {
         <?php include 'include/admin-footer.php'; ?>
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.js-delete-notification-form').forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            Swal.fire({
+                title: 'Delete notification?',
+                text: 'This action cannot be undone.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Yes, delete',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#e74a3b',
+                reverseButtons: true
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    form.submit();
+                }
+            });
+        });
+    });
+});
+</script>
 </body>
 </html>

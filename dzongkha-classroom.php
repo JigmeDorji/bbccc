@@ -151,7 +151,7 @@ $parentId = (int)($parent['id'] ?? 0);
 $parentName = trim((string)($parent['full_name'] ?? ''));
 $hasTeacherProfile = $teacherId > 0;
 $hasParentProfile = is_parent_role() || $parentId > 0;
-$requestedAs = strtolower(trim((string)($_GET['as'] ?? '')));
+$requestedAs = strtolower(trim((string)($_GET['as'] ?? ($_SESSION['active_portal'] ?? ''))));
 $currentRole = strtolower(trim((string)($_SESSION['role'] ?? '')));
 
 $viewMode = 'none';
@@ -184,6 +184,10 @@ if (!in_array($tab, ['announcements', 'reports'], true)) {
 if (!$isAdmin && $hasTeacherProfile && $hasParentProfile && !in_array($requestedAs, ['teacher', 'parent'], true)) {
     header("Location: dzongkha-classroom?tab=" . urlencode($tab) . "&as=" . urlencode($viewMode));
     exit;
+}
+
+if (!$isAdmin && $hasTeacherProfile && $hasParentProfile && in_array($viewMode, ['teacher', 'parent'], true)) {
+    $_SESSION['active_portal'] = $viewMode;
 }
 
 $modeQuery = ($viewMode === 'teacher' || $viewMode === 'parent') ? '&as=' . $viewMode : '';
@@ -711,19 +715,6 @@ if ($reportIds) {
                         </a>
                     </li>
                 </ul>
-                <?php if ($hasTeacherProfile && $hasParentProfile && !$isAdmin): ?>
-                    <div class="mb-3">
-                        <a href="dzongkha-classroom?tab=<?= dc_h($tab) ?>&as=teacher"
-                           class="btn btn-sm <?= $viewMode === 'teacher' ? 'btn-primary' : 'btn-outline-primary' ?>">
-                            Teacher View
-                        </a>
-                        <a href="dzongkha-classroom?tab=<?= dc_h($tab) ?>&as=parent"
-                           class="btn btn-sm <?= $viewMode === 'parent' ? 'btn-primary' : 'btn-outline-primary' ?>">
-                            Parent View
-                        </a>
-                    </div>
-                <?php endif; ?>
-
                 <?php if ($tab === 'announcements'): ?>
                     <?php if (in_array($viewMode, ['admin', 'teacher'], true)): ?>
                         <div class="card shadow mb-3">
