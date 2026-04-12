@@ -83,7 +83,7 @@ $scheme = $isHttps ? 'https' : 'http';
 $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
 $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/\\');
 $origin = $scheme . '://' . $host . ($basePath === '' || $basePath === '.' ? '' : $basePath);
-$doorKioskUrl = $origin . '/kiosk';
+$doorKioskUrl = $origin . '/kiosk-access';
 $qrDisplayUrl = $origin . '/kiosk-qr';
 $mobileKioskUrl = $origin . '/kiosk-mobile';
 
@@ -155,7 +155,7 @@ document.addEventListener('DOMContentLoaded',()=>{
             Copy and paste these links on your iPads/devices.
         </p>
         <div class="mb-3">
-            <label class="font-weight-bold mb-1">Door Kiosk (iPad at entrance)</label>
+            <label class="font-weight-bold mb-1">Kiosk Access (login or QR)</label>
             <div class="input-group">
                 <input type="text" class="form-control" id="doorKioskUrl" value="<?= h($doorKioskUrl) ?>" readonly>
                 <div class="input-group-append">

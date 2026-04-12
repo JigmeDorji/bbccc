@@ -11,6 +11,11 @@
 require_once "include/config.php";
 require_once "include/csrf.php";
 $csrfToken = csrf_token();
+
+$protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host     = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$path     = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/');
+$mobileBaseUrl = "{$protocol}://{$host}{$path}/kiosk-mobile.php";
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -27,6 +32,7 @@ $csrfToken = csrf_token();
     <link rel="apple-touch-icon" href="bbccassests/img/logo/logo5.jpg">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="css/kiosk.css">
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -65,6 +71,12 @@ $csrfToken = csrf_token();
         <!-- SCREEN 2: Phone + PIN (both visible) -->
         <div class="kiosk-screen" id="screenAuth">
             <div class="kiosk-panel">
+                <div style="display:flex;justify-content:center;margin-bottom:10px;">
+                    <div style="text-align:center;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+                        <div style="font-size:.72rem;color:#6b7280;margin-bottom:6px;">Scan QR instead</div>
+                        <div id="authMiniQr" style="width:84px;height:84px;margin:0 auto;"></div>
+                    </div>
+                </div>
                 <h2 class="kiosk-panel__heading">Enter your details</h2>
 
                 <!-- Phone field -->
@@ -183,6 +195,7 @@ $csrfToken = csrf_token();
     var PHONE_MAX = 15;
     var PIN_MIN  = 4;
     var PIN_MAX  = 6;
+    var QR_ROTATE_SEC = 120;
 
     // State
     var csrf       = <?= json_encode($csrfToken) ?>;
@@ -194,6 +207,8 @@ $csrfToken = csrf_token();
     var timerSec   = 0;
     var submitting = false;
     var pendingActions = {}; // { childId: 'in' | 'out' }
+    var mobileBaseUrl = <?= json_encode($mobileBaseUrl) ?>;
+    var miniQrTimerId = null;
 
     function $(s) { return document.querySelector(s); }
     function $$(s) { return document.querySelectorAll(s); }
@@ -225,6 +240,7 @@ $csrfToken = csrf_token();
         requestAnimationFrame(function(){ screens[name].classList.add('active'); });
         $('#kioskFooter').style.display = (name === 'idle') ? 'none' : 'flex';
         if (name === 'idle') stopTimer(); else startTimer();
+        if (name === 'auth') startMiniQrRefresh();
     }
 
     // ═══ TIMER ═══
@@ -532,6 +548,34 @@ $csrfToken = csrf_token();
             .catch(function(){ return {ok:false, message:'Connection error.'}; });
     }
 
+    // ═══ MINI QR ON AUTH SCREEN ═══
+    function renderMiniQr(url) {
+        var node = $('#authMiniQr');
+        if (!node || typeof QRCode === 'undefined') return;
+        node.innerHTML = '';
+        new QRCode(node, {
+            text: url,
+            width: 84,
+            height: 84,
+            colorDark: '#1f2937',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    }
+
+    function refreshMiniQr() {
+        api({ action: 'generate_token' }).then(function(r) {
+            if (!r || !r.ok || !r.token) return;
+            renderMiniQr(mobileBaseUrl + '?t=' + encodeURIComponent(r.token));
+        });
+    }
+
+    function startMiniQrRefresh() {
+        refreshMiniQr();
+        if (miniQrTimerId) return;
+        miniQrTimerId = setInterval(refreshMiniQr, QR_ROTATE_SEC * 1000);
+    }
+
     // ═══ HELPERS ═══
     function fmtTime(t) {
         if (!t) return '';
@@ -562,6 +606,9 @@ $csrfToken = csrf_token();
             else if (e.key === 'Escape') { idle(); }
         }
     });
+
+    // Preload mini QR once on page load.
+    startMiniQrRefresh();
 
 })();
 </script>
