@@ -88,15 +88,26 @@ require_once "include/config.php";
 
 <section class="bbcc-cta">
     <div class="bbcc-container" style="position:relative;z-index:1;">
-        <h2>Ready to Get Started?</h2>
-        <p>Join our services and programs to stay connected with faith, culture and community.</p>
-        <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
-            <a href="parentAccountSetup" class="bbcc-btn bbcc-btn--white">
-                <i class="fa-solid fa-user-plus"></i> Register Now
-            </a>
-            <a href="contact-us" class="bbcc-btn bbcc-btn--outline" style="border-color:rgba(255,255,255,.4);color:#fff;">
-                Contact Us <i class="fa-solid fa-arrow-right"></i>
-            </a>
+        <div class="bbcc-cta-grid">
+            <div class="bbcc-cta-col">
+                <h2>Register for Dzongkha class</h2>
+                <p>Register your children for Dzongkha classes and join services that support culture, language, and community wellbeing.</p>
+                <div class="bbcc-cta-actions">
+                    <a href="parentAccountSetup" class="bbcc-btn bbcc-btn--white">
+                        <i class="fa-solid fa-user-plus"></i> Register Now
+                    </a>
+                    <a href="contact-us" class="bbcc-btn bbcc-btn--outline" style="border-color:rgba(255,255,255,.4);color:#fff;">
+                        Contact Us <i class="fa-solid fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="bbcc-cta-col bbcc-cta-col--patron">
+                <h3><i class="fa-solid fa-hands-holding-circle"></i> Become a Patron</h3>
+                <p>Support the Bhutanese Buddhist and Cultural Centre Canberra as a patron and help sustain spiritual and cultural activities for our community.</p>
+                <a href="patronRegistration" class="bbcc-btn bbcc-btn--white">
+                    <i class="fa-solid fa-heart"></i> Join as Patron
+                </a>
+            </div>
         </div>
     </div>
 </section>

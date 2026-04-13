@@ -31,7 +31,12 @@ try {
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
     <title>Bhutanese Buddhist &amp; Cultural Centre — Canberra</title>
-    <meta name="description" content="BBCC provides spiritual services, cultural programs, and community engagement for Bhutanese residents in Canberra.">
+    <meta name="description" content="Bhutanese Buddhist and Cultural Centre Canberra (BBCC): a Buddhist Centre and Bhutanese Centre supporting spiritual services, language, culture and community in Canberra.">
+    <meta name="keywords" content="Buddhist Centre, Bhutanese Centre, Bhutanese Buddhist and Cultural Centre Canberra, Buddhist Canberra, Bhutanese in Canberra">
+    <meta property="og:title" content="Bhutanese Buddhist &amp; Cultural Centre — Canberra">
+    <meta property="og:description" content="Buddhist Centre and Bhutanese Centre in Canberra offering spiritual guidance, cultural preservation and community services.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://www.bhutanesecentre.org/">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <?php include_once 'include/global_css.php'; ?>
 </head>
@@ -50,9 +55,6 @@ try {
                 <h1><?= htmlspecialchars($banner['title']) ?></h1>
                 <p><?= htmlspecialchars($banner['subtitle']) ?></p>
                 <div class="bbcc-hero__actions">
-                    <a href="parentAccountSetup" class="bbcc-btn bbcc-btn--primary">
-                        <i class="fa-solid fa-user-plus"></i> Register Now
-                    </a>
                     <a href="about-us" class="bbcc-btn bbcc-btn--outline">
                         Learn More <i class="fa-solid fa-arrow-right"></i>
                     </a>
@@ -179,15 +181,26 @@ try {
 <!-- ═══ CTA ═══ -->
 <section class="bbcc-cta">
     <div class="bbcc-container" style="position:relative;z-index:1;">
-        <h2>Join Our Community</h2>
-        <p>Register for Dzongkha classes, cultural programs, and spiritual services offered by BBCC in Canberra.</p>
-        <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;">
-            <a href="parentAccountSetup" class="bbcc-btn bbcc-btn--white">
-                <i class="fa-solid fa-user-plus"></i> Register Now
-            </a>
-            <a href="contact-us" class="bbcc-btn bbcc-btn--outline" style="border-color:rgba(255,255,255,.4);color:#fff;">
-                Contact Us <i class="fa-solid fa-arrow-right"></i>
-            </a>
+        <div class="bbcc-cta-grid">
+            <div class="bbcc-cta-col">
+                <h2>Register for Dzongkha class</h2>
+                <p>Register for Dzongkha classes, cultural programs, and spiritual services offered by BBCC in Canberra.</p>
+                <div class="bbcc-cta-actions">
+                    <a href="parentAccountSetup" class="bbcc-btn bbcc-btn--white">
+                        <i class="fa-solid fa-user-plus"></i> Register Now
+                    </a>
+                    <a href="contact-us" class="bbcc-btn bbcc-btn--outline" style="border-color:rgba(255,255,255,.4);color:#fff;">
+                        Contact Us <i class="fa-solid fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="bbcc-cta-col bbcc-cta-col--patron">
+                <h3><i class="fa-solid fa-hands-holding-circle"></i> Become a Patron</h3>
+                <p>Support the Bhutanese Buddhist and Cultural Centre Canberra as a patron and help sustain spiritual and cultural activities for our community.</p>
+                <a href="patronRegistration" class="bbcc-btn bbcc-btn--white">
+                    <i class="fa-solid fa-heart"></i> Join as Patron
+                </a>
+            </div>
         </div>
     </div>
 </section>
@@ -222,11 +235,6 @@ try {
 
 </body>
 </html>
-
-
-
-
-
 
 
 

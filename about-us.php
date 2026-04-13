@@ -3,6 +3,8 @@ require_once "include/config.php";
 
 $aboutData = [];
 $teamData = [];
+$boardMembers = [];
+$executiveMembers = [];
 
 try {
     $pdo = new PDO("mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME . ";charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
@@ -17,6 +19,15 @@ try {
     $stmt = $pdo->prepare("SELECT * FROM ourteam");
     $stmt->execute();
     $teamData = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    foreach ($teamData as $member) {
+        $type = strtolower(trim((string)($member['member_type'] ?? 'executive')));
+        if ($type === 'board') {
+            $boardMembers[] = $member;
+        } else {
+            $executiveMembers[] = $member;
+        }
+    }
 
 } catch (Exception $e) {
     // silent
@@ -84,39 +95,88 @@ try {
     </div>
 </section>
 
-<!-- Team Section -->
-<?php if (!empty($teamData)): ?>
+<!-- Team Section: Board Members -->
 <section class="bbcc-section bbcc-section--gray">
     <div class="bbcc-container">
         <div class="section-header fade-up">
             <span class="section-badge"><i class="fa-solid fa-users"></i> Our Team</span>
-            <h2>Executive <span>Members</span></h2>
-            <p>The BBCC is guided by dedicated executive members committed to serving the spiritual, cultural, and community needs of Bhutanese residents in Canberra and nearby regions.</p>
+            <h2>Board <span>Members</span></h2>
+            <p>The BBCC board members provide governance and strategic direction to strengthen spiritual, cultural, and community outcomes.</p>
         </div>
-        <div class="bbcc-team-grid">
-            <?php foreach ($teamData as $member): ?>
-            <div class="bbcc-team-card fade-up">
-                <div class="bbcc-team-card__photo">
-                    <img src="<?= htmlspecialchars($member['imgUrl']) ?>" alt="<?= htmlspecialchars($member['Name']) ?>">
+        <?php if (!empty($boardMembers)): ?>
+            <div class="bbcc-team-grid">
+                <?php foreach ($boardMembers as $member): ?>
+                <div class="bbcc-team-card fade-up">
+                    <div class="bbcc-team-card__photo">
+                        <img src="<?= htmlspecialchars($member['imgUrl']) ?>" alt="<?= htmlspecialchars($member['Name']) ?>">
+                    </div>
+                    <h4 class="bbcc-team-card__name"><?= htmlspecialchars($member['Name']) ?></h4>
+                    <span class="bbcc-team-card__role"><?= htmlspecialchars($member['designation']) ?></span>
+                    <div class="bbcc-team-card__accent"></div>
                 </div>
-                <h4 class="bbcc-team-card__name"><?= htmlspecialchars($member['Name']) ?></h4>
-                <span class="bbcc-team-card__role"><?= htmlspecialchars($member['designation']) ?></span>
-                <div class="bbcc-team-card__accent"></div>
+                <?php endforeach; ?>
             </div>
-            <?php endforeach; ?>
-        </div>
+        <?php else: ?>
+            <div class="fade-up" style="max-width:760px;margin:0 auto;text-align:center;background:#fff;border:1px dashed #d1d5db;border-radius:14px;padding:22px;color:#6b7280;">
+                Board members will be displayed here.
+            </div>
+        <?php endif; ?>
     </div>
 </section>
-<?php endif; ?>
+
+<!-- Team Section: Executive Members -->
+<section class="bbcc-section">
+    <div class="bbcc-container">
+        <div class="section-header fade-up">
+            <span class="section-badge"><i class="fa-solid fa-users"></i> Our Team</span>
+            <h2>Executive <span>Members</span></h2>
+            <p>The BBCC executive members are committed to delivering spiritual services, cultural programs, and community support.</p>
+        </div>
+        <?php if (!empty($executiveMembers)): ?>
+            <div class="bbcc-team-grid">
+                <?php foreach ($executiveMembers as $member): ?>
+                <div class="bbcc-team-card fade-up">
+                    <div class="bbcc-team-card__photo">
+                        <img src="<?= htmlspecialchars($member['imgUrl']) ?>" alt="<?= htmlspecialchars($member['Name']) ?>">
+                    </div>
+                    <h4 class="bbcc-team-card__name"><?= htmlspecialchars($member['Name']) ?></h4>
+                    <span class="bbcc-team-card__role"><?= htmlspecialchars($member['designation']) ?></span>
+                    <div class="bbcc-team-card__accent"></div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        <?php else: ?>
+            <div class="fade-up" style="max-width:760px;margin:0 auto;text-align:center;background:#fff;border:1px dashed #d1d5db;border-radius:14px;padding:22px;color:#6b7280;">
+                Executive members will be displayed here.
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
 
 <!-- CTA -->
 <section class="bbcc-cta">
     <div class="bbcc-container" style="position:relative;z-index:1;">
-        <h2>Get Involved</h2>
-        <p>Join our community programs, volunteer, or support BBCC in preserving Bhutanese culture in Canberra.</p>
-        <a href="contact-us" class="bbcc-btn bbcc-btn--white">
-            <i class="fa-solid fa-envelope"></i> Contact Us
-        </a>
+        <div class="bbcc-cta-grid">
+            <div class="bbcc-cta-col">
+                <h2>Register for Dzongkha class</h2>
+                <p>Register your children for Dzongkha classes and stay connected with culture, language, and spiritual values in Canberra.</p>
+                <div class="bbcc-cta-actions">
+                    <a href="parentAccountSetup" class="bbcc-btn bbcc-btn--white">
+                        <i class="fa-solid fa-user-plus"></i> Register Now
+                    </a>
+                    <a href="contact-us" class="bbcc-btn bbcc-btn--outline" style="border-color:rgba(255,255,255,.4);color:#fff;">
+                        Contact Us <i class="fa-solid fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+            <div class="bbcc-cta-col bbcc-cta-col--patron">
+                <h3><i class="fa-solid fa-hands-holding-circle"></i> Become a Patron</h3>
+                <p>Support the Bhutanese Buddhist and Cultural Centre Canberra as a patron and help sustain spiritual and cultural activities for our community.</p>
+                <a href="patronRegistration" class="bbcc-btn bbcc-btn--white">
+                    <i class="fa-solid fa-heart"></i> Join as Patron
+                </a>
+            </div>
+        </div>
     </div>
 </section>
 

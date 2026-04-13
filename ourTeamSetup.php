@@ -5,11 +5,33 @@ $message = "";
 $msgType = "success";
 $reloadPage = false;
 
+function bbcc_team_upload_error_text(int $code): string {
+    switch ($code) {
+        case UPLOAD_ERR_OK: return 'OK';
+        case UPLOAD_ERR_INI_SIZE: return 'File exceeds upload_max_filesize in php.ini.';
+        case UPLOAD_ERR_FORM_SIZE: return 'File exceeds MAX_FILE_SIZE from form.';
+        case UPLOAD_ERR_PARTIAL: return 'File was only partially uploaded.';
+        case UPLOAD_ERR_NO_FILE: return 'No file was uploaded.';
+        case UPLOAD_ERR_NO_TMP_DIR: return 'Missing temporary upload folder.';
+        case UPLOAD_ERR_CANT_WRITE: return 'Failed to write file to disk.';
+        case UPLOAD_ERR_EXTENSION: return 'A PHP extension stopped the upload.';
+        default: return 'Unknown upload error.';
+    }
+}
+
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
+
+    // Backward-compatible schema update
+    try {
+        $col = $pdo->query("SHOW COLUMNS FROM ourteam LIKE 'member_type'")->fetch(PDO::FETCH_ASSOC);
+        if (!$col) {
+            $pdo->exec("ALTER TABLE ourteam ADD COLUMN member_type VARCHAR(30) NOT NULL DEFAULT 'executive' AFTER designation");
+        }
+    } catch (Throwable $ignoreSchema) {}
 
     // DELETE
     if (isset($_GET['delete'])) {
@@ -23,6 +45,10 @@ try {
     if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $name        = trim($_POST['Name'] ?? '');
         $designation = trim($_POST['designation'] ?? '');
+        $memberType  = strtolower(trim($_POST['member_type'] ?? 'executive'));
+        if (!in_array($memberType, ['board', 'executive'], true)) {
+            $memberType = 'executive';
+        }
         $edit_id     = $_POST['edit_id'] ?? '';
 
         // Existing image for edit
@@ -34,7 +60,10 @@ try {
         }
 
         // Image handling
-        if (isset($_FILES['team_image']) && $_FILES['team_image']['error'] === 0) {
+        $fileProvided = isset($_FILES['team_image']) && is_array($_FILES['team_image']);
+        $fileError = $fileProvided ? (int)($_FILES['team_image']['error'] ?? UPLOAD_ERR_NO_FILE) : UPLOAD_ERR_NO_FILE;
+
+        if ($fileProvided && $fileError === UPLOAD_ERR_OK) {
             $image_name = $_FILES['team_image']['name'];
             $image_size = $_FILES['team_image']['size'];
             $image_tmp  = $_FILES['team_image']['tmp_name'];
@@ -43,27 +72,36 @@ try {
             $ext = strtolower(pathinfo($image_name, PATHINFO_EXTENSION));
             if (!in_array($ext, $allowed)) throw new Exception("Only JPG, JPEG, PNG, GIF allowed.");
             $safeName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $image_name);
-            $upload_path = "uploads/ourteam/" . $safeName;
-            if (!move_uploaded_file($image_tmp, $upload_path)) throw new Exception("Failed to upload image.");
-            $imgUrl = $upload_path;
+            $upload_dir_abs = __DIR__ . "/uploads/ourteam";
+            if (!is_dir($upload_dir_abs) && !mkdir($upload_dir_abs, 0775, true)) {
+                throw new Exception("Unable to create team upload folder.");
+            }
+            if (!is_writable($upload_dir_abs)) {
+                throw new Exception("Team upload folder is not writable.");
+            }
+            $upload_path_abs = $upload_dir_abs . "/" . $safeName;
+            if (!move_uploaded_file($image_tmp, $upload_path_abs)) throw new Exception("Failed to upload image.");
+            $imgUrl = "uploads/ourteam/" . $safeName;
+        } elseif ($fileError !== UPLOAD_ERR_NO_FILE) {
+            throw new Exception("Team photo upload failed: " . bbcc_team_upload_error_text($fileError));
         } else {
             $imgUrl = $existing_img;
         }
 
         if ($edit_id !== '') {
-            $stmt = $pdo->prepare("UPDATE ourteam SET Name=:n, designation=:d, imgUrl=:i WHERE id=:id");
-            $stmt->execute([':n'=>$name, ':d'=>$designation, ':i'=>$imgUrl, ':id'=>(int)$edit_id]);
+            $stmt = $pdo->prepare("UPDATE ourteam SET Name=:n, designation=:d, member_type=:mt, imgUrl=:i WHERE id=:id");
+            $stmt->execute([':n'=>$name, ':d'=>$designation, ':mt'=>$memberType, ':i'=>$imgUrl, ':id'=>(int)$edit_id]);
             $message = "Team member updated successfully.";
         } else {
-            $stmt = $pdo->prepare("INSERT INTO ourteam (Name, designation, imgUrl) VALUES (:n,:d,:i)");
-            $stmt->execute([':n'=>$name, ':d'=>$designation, ':i'=>$imgUrl]);
+            $stmt = $pdo->prepare("INSERT INTO ourteam (Name, designation, member_type, imgUrl) VALUES (:n,:d,:mt,:i)");
+            $stmt->execute([':n'=>$name, ':d'=>$designation, ':mt'=>$memberType, ':i'=>$imgUrl]);
             $message = "Team member added successfully.";
         }
         $reloadPage = true;
     }
 
     // Fetch all
-    $teams = $pdo->query("SELECT * FROM ourteam ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $teams = $pdo->query("SELECT * FROM ourteam ORDER BY CASE WHEN member_type='board' THEN 0 ELSE 1 END, id ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (Exception $e) {
     $message = $e->getMessage();
@@ -76,7 +114,7 @@ try {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Team Setup</title>
+    <title>Executive &amp; Board Members</title>
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
     <style>
@@ -116,13 +154,13 @@ try {
 
 <div class="container-fluid">
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
-        <h1 class="h3 mb-0 text-gray-800">Team Setup</h1>
+        <h1 class="h3 mb-0 text-gray-800">Executive &amp; Board Members</h1>
     </div>
 
     <!-- TEAM TABLE -->
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex justify-content-between align-items-center">
-            <h6 class="m-0 font-weight-bold text-primary">Team Members</h6>
+            <h6 class="m-0 font-weight-bold text-primary">Members</h6>
             <button type="button" class="btn btn-sm btn-new-item" id="btnNewTeam" aria-label="Add a new team member">
                 <i class="fas fa-plus-circle mr-1" aria-hidden="true"></i> Add Member
             </button>
@@ -131,7 +169,7 @@ try {
             <div class="table-responsive">
                 <table class="table table-bordered table-hover" width="100%">
                     <thead class="thead-light">
-                        <tr><th>#</th><th>Photo</th><th>Name</th><th>Designation</th><th style="min-width:120px">Actions</th></tr>
+                        <tr><th>#</th><th>Photo</th><th>Name</th><th>Designation</th><th>Type</th><th style="min-width:120px">Actions</th></tr>
                     </thead>
                     <tbody>
                     <?php foreach ($teams as $i => $t): ?>
@@ -147,10 +185,19 @@ try {
                             <td><?= htmlspecialchars($t['Name']) ?></td>
                             <td><?= htmlspecialchars($t['designation']) ?></td>
                             <td>
+                                <?php $mt = strtolower((string)($t['member_type'] ?? 'executive')); ?>
+                                <?php if ($mt === 'board'): ?>
+                                    <span class="badge badge-primary">Board Member</span>
+                                <?php else: ?>
+                                    <span class="badge badge-info">Executive Member</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
                                 <button type="button" class="btn btn-primary btn-sm edit-team-btn"
                                     data-id="<?= $t['id'] ?>"
                                     data-name="<?= htmlspecialchars($t['Name']) ?>"
                                     data-designation="<?= htmlspecialchars($t['designation']) ?>"
+                                    data-member-type="<?= htmlspecialchars($mt) ?>"
                                     data-img="<?= htmlspecialchars($t['imgUrl'] ?? '') ?>"
                                     title="Edit member" aria-label="Edit team member <?= htmlspecialchars($t['Name']) ?>"><i class="fas fa-edit" aria-hidden="true"></i></button>
                                 <a href="#" class="btn btn-danger btn-sm delete-team-btn" data-id="<?= $t['id'] ?>" title="Delete member" aria-label="Delete team member <?= htmlspecialchars($t['Name']) ?>"><i class="fas fa-trash" aria-hidden="true"></i></a>
@@ -184,6 +231,13 @@ try {
                     <div class="form-group">
                         <label>Designation / Role</label>
                         <textarea name="designation" id="t_designation" class="form-control" rows="2" placeholder="e.g. President, Committee Member"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Member Type <span class="text-danger">*</span></label>
+                        <select name="member_type" id="t_member_type" class="form-control" required>
+                            <option value="executive">Executive Member</option>
+                            <option value="board">Board Member</option>
+                        </select>
                     </div>
 
                     <div class="section-divider"><i class="fas fa-camera mr-1"></i> Profile Photo</div>
@@ -219,6 +273,7 @@ $(document).ready(function(){
         $('#t_edit_id').val('');
         $('#t_name').val('');
         $('#t_designation').val('');
+        $('#t_member_type').val('executive');
         $('#t_img_preview_wrap').hide();
         $('#tModalTitle').text('Add Team Member');
         $('#tModalIcon').attr('class','fas fa-user-plus');
@@ -233,6 +288,7 @@ $(document).ready(function(){
         $('#t_edit_id').val(btn.data('id'));
         $('#t_name').val(btn.data('name'));
         $('#t_designation').val(btn.data('designation'));
+        $('#t_member_type').val(btn.data('member-type') || 'executive');
         if (btn.data('img')) {
             $('#t_img_preview').attr('src', btn.data('img'));
             $('#t_img_preview_wrap').show();

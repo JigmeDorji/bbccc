@@ -415,7 +415,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                     <a class="collapse-item <?= ($currentPage == 'bannerSetup.php') ? 'active' : '' ?>" href="bannerSetup"><i class="fas fa-image fa-sm mr-1 text-muted"></i> Setup Banner</a>
                     <a class="collapse-item <?= ($currentPage == 'aboutPageSetup.php') ? 'active' : '' ?>" href="aboutPageSetup"><i class="fas fa-info-circle fa-sm mr-1 text-muted"></i> Setup About Page</a>
                     <a class="collapse-item <?= ($currentPage == 'serviceSetup.php') ? 'active' : '' ?>" href="serviceSetup"><i class="fas fa-bullhorn fa-sm mr-1 text-muted"></i> Post Event</a>
-                    <a class="collapse-item <?= ($currentPage == 'ourTeamSetup.php') ? 'active' : '' ?>" href="ourTeamSetup"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Team Setup</a>
+                    <a class="collapse-item <?= ($currentPage == 'ourTeamSetup.php') ? 'active' : '' ?>" href="ourTeamSetup"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Executive &amp; Board Members</a>
                     <a class="collapse-item <?= ($currentPage == 'viewFeedback.php') ? 'active' : '' ?>" href="viewFeedback"><i class="fas fa-envelope fa-sm mr-1 text-muted"></i> Contact Messages</a>
                 </div>
             </div>

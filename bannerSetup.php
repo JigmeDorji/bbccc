@@ -6,6 +6,20 @@ $message = "";
 $msgType = "success";
 $reloadPage = false;
 
+function bbcc_upload_error_text(int $code): string {
+    switch ($code) {
+        case UPLOAD_ERR_OK: return 'OK';
+        case UPLOAD_ERR_INI_SIZE: return 'File exceeds upload_max_filesize in php.ini.';
+        case UPLOAD_ERR_FORM_SIZE: return 'File exceeds MAX_FILE_SIZE from form.';
+        case UPLOAD_ERR_PARTIAL: return 'File was only partially uploaded.';
+        case UPLOAD_ERR_NO_FILE: return 'No file was uploaded.';
+        case UPLOAD_ERR_NO_TMP_DIR: return 'Missing temporary upload folder.';
+        case UPLOAD_ERR_CANT_WRITE: return 'Failed to write file to disk.';
+        case UPLOAD_ERR_EXTENSION: return 'A PHP extension stopped the upload.';
+        default: return 'Unknown upload error.';
+    }
+}
+
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -35,7 +49,11 @@ try {
         }
 
         // Image handling
-        if (isset($_FILES['banner_image']) && $_FILES['banner_image']['error'] === 0) {
+        $fileProvided = isset($_FILES['banner_image']) && is_array($_FILES['banner_image']);
+        $fileError = $fileProvided ? (int)($_FILES['banner_image']['error'] ?? UPLOAD_ERR_NO_FILE) : UPLOAD_ERR_NO_FILE;
+        $isCreate = ($edit_id === '');
+
+        if ($fileProvided && $fileError === UPLOAD_ERR_OK) {
             $image_name = $_FILES['banner_image']['name'];
             $image_size = $_FILES['banner_image']['size'];
             $image_tmp  = $_FILES['banner_image']['tmp_name'];
@@ -44,9 +62,20 @@ try {
             $ext = strtolower(pathinfo($image_name, PATHINFO_EXTENSION));
             if (!in_array($ext, $allowed)) throw new Exception("Only JPG, JPEG, PNG, GIF allowed.");
             $safeName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $image_name);
-            $upload_path = "uploads/banner/" . $safeName;
-            if (!move_uploaded_file($image_tmp, $upload_path)) throw new Exception("Failed to upload image.");
-            $imgUrl = $upload_path;
+            $upload_dir_abs = __DIR__ . "/uploads/banner";
+            if (!is_dir($upload_dir_abs) && !mkdir($upload_dir_abs, 0775, true)) {
+                throw new Exception("Unable to create banner upload folder.");
+            }
+            if (!is_writable($upload_dir_abs)) {
+                throw new Exception("Banner upload folder is not writable.");
+            }
+            $upload_path_abs = $upload_dir_abs . "/" . $safeName;
+            if (!move_uploaded_file($image_tmp, $upload_path_abs)) throw new Exception("Failed to upload image.");
+            $imgUrl = "uploads/banner/" . $safeName;
+        } elseif ($isCreate && $fileError === UPLOAD_ERR_NO_FILE) {
+            throw new Exception("Please select a banner image before saving.");
+        } elseif ($fileError !== UPLOAD_ERR_NO_FILE) {
+            throw new Exception("Banner upload failed: " . bbcc_upload_error_text($fileError));
         } else {
             $imgUrl = $existing_imgUrl;
         }

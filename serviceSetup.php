@@ -40,9 +40,18 @@ try {
             $image_name = $_FILES['menu_image']['name'];
             $image_tmp  = $_FILES['menu_image']['tmp_name'];
             $safeName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $image_name);
-            $upload_path = "uploads/menu/" . $safeName;
-            move_uploaded_file($image_tmp, $upload_path);
-            $menuImgUrl = $upload_path;
+            $upload_dir_abs = __DIR__ . "/uploads/menu";
+            if (!is_dir($upload_dir_abs) && !mkdir($upload_dir_abs, 0775, true)) {
+                throw new Exception("Unable to create event upload folder.");
+            }
+            if (!is_writable($upload_dir_abs)) {
+                throw new Exception("Event upload folder is not writable.");
+            }
+            $upload_path_abs = $upload_dir_abs . "/" . $safeName;
+            if (!move_uploaded_file($image_tmp, $upload_path_abs)) {
+                throw new Exception("Failed to upload event image.");
+            }
+            $menuImgUrl = "uploads/menu/" . $safeName;
         } else {
             $menuImgUrl = $existing_img;
         }
