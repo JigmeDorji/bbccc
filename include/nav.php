@@ -6,8 +6,11 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 <div class="bbcc-topbar">
     <div class="bbcc-container bbcc-topbar__inner">
         <div class="bbcc-topbar__info">
-            <span><i class="fa-solid fa-envelope"></i> bhutanesecentrecanberra@gmail.com</span>
-            <span><i class="fa-solid fa-phone"></i> 0434 522 720</span>
+            <span class="bbcc-topbar__email"><i class="fa-solid fa-envelope"></i> bhutanesecentrecanberra@gmail.com</span>
+            <span class="bbcc-topbar__phone"><i class="fa-solid fa-phone"></i> 0434 522 720</span>
+            <a href="patronRegistration" class="bbcc-topbar__patron-btn" aria-label="Donate">
+                <i class="fa-solid fa-heart"></i> Donate
+            </a>
         </div>
         <div class="bbcc-topbar__social">
             <a href="https://www.facebook.com/profile?id=100084018901076" aria-label="Facebook"><i class="fa-brands fa-facebook-f"></i></a>

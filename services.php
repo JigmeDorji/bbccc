@@ -6,8 +6,8 @@ require_once "include/config.php";
 <head>
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <title>Services — BBCC</title>
-    <meta name="description" content="Spiritual services, cultural preservation, pastoral support and community events offered by BBCC Canberra.">
+    <title>Services — Buddhist Temple Canberra | BBCC</title>
+    <meta name="description" content="Spiritual services, pastoral care, cultural preservation and community events offered by BBCC, a Buddhist temple in Canberra.">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <?php include_once 'include/global_css.php'; ?>
 </head>

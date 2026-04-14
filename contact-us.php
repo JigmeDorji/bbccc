@@ -36,8 +36,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Contact Us — BBCC</title>
-    <meta name="description" content="Get in touch with the Bhutanese Buddhist and Cultural Centre in Canberra.">
+    <title>Contact Us — Buddhist Temple Canberra | BBCC</title>
+    <meta name="description" content="Contact BBCC, a Bhutanese Buddhist temple in Canberra, for spiritual services, Dzongkha classes and community support.">
     <?php include_once 'include/global_css.php'; ?>
 </head>
 <body class="bbcc-public">

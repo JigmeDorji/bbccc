@@ -30,14 +30,25 @@ try {
 <head>
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <title>Bhutanese Buddhist &amp; Cultural Centre — Canberra</title>
-    <meta name="description" content="Bhutanese Buddhist and Cultural Centre Canberra (BBCC): a Buddhist Centre and Bhutanese Centre supporting spiritual services, language, culture and community in Canberra.">
-    <meta name="keywords" content="Buddhist Centre, Bhutanese Centre, Bhutanese Buddhist and Cultural Centre Canberra, Buddhist Canberra, Bhutanese in Canberra">
-    <meta property="og:title" content="Bhutanese Buddhist &amp; Cultural Centre — Canberra">
-    <meta property="og:description" content="Buddhist Centre and Bhutanese Centre in Canberra offering spiritual guidance, cultural preservation and community services.">
+    <title>Buddhist Temple Canberra | Bhutanese Buddhist &amp; Cultural Centre</title>
+    <meta name="description" content="Bhutanese Buddhist and Cultural Centre Canberra (BBCC), a Buddhist temple in Canberra offering spiritual services, Dzongkha classes, cultural programs and community support.">
+    <meta name="keywords" content="Buddhist Temple Canberra, Buddhist Centre, Bhutanese Centre, Bhutanese Buddhist and Cultural Centre Canberra, Buddhist Canberra, Bhutanese in Canberra">
+    <meta property="og:title" content="Buddhist Temple Canberra | Bhutanese Buddhist &amp; Cultural Centre">
+    <meta property="og:description" content="Buddhist temple and Bhutanese Buddhist centre in Canberra offering spiritual guidance, cultural preservation and community services.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://www.bhutanesecentre.org/">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BuddhistTemple",
+      "name": "Bhutanese Buddhist and Cultural Centre Canberra",
+      "alternateName": "BBCC",
+      "url": "https://www.bhutanesecentre.org/",
+      "description": "Buddhist temple in Canberra offering spiritual services, Dzongkha classes and Bhutanese cultural programs.",
+      "areaServed": "Canberra, ACT"
+    }
+    </script>
     <?php include_once 'include/global_css.php'; ?>
 </head>
 <body class="bbcc-public">
@@ -235,7 +246,6 @@ try {
 
 </body>
 </html>
-
 
 
 

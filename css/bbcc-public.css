@@ -117,6 +117,25 @@ body.bbcc-public {
 .bbcc-topbar__info { display: flex; gap: 24px; align-items: center; }
 .bbcc-topbar__info span { display: flex; align-items: center; gap: 6px; }
 .bbcc-topbar__info i { color: var(--gold); font-size: .7rem; }
+.bbcc-topbar__info .bbcc-topbar__patron-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 30px;
+    border-radius: var(--radius-full);
+    padding: 0 12px;
+    background: rgba(255,255,255,.14);
+    color: #fff;
+    font-size: .76rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: var(--transition-fast);
+}
+.bbcc-topbar__info .bbcc-topbar__patron-btn:hover {
+    background: var(--brand);
+    color: #fff;
+    transform: translateY(-1px);
+}
 .bbcc-topbar__social { display: flex; gap: 8px; }
 .bbcc-topbar__social a {
     width: 30px; height: 30px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
@@ -182,6 +201,7 @@ body.bbcc-public {
 
 @media (max-width: 991px) {
     .bbcc-topbar__info { gap: 12px; font-size: .76rem; }
+    .bbcc-topbar__info .bbcc-topbar__patron-btn { padding: 0 10px; font-size: .72rem; }
     .bbcc-navbar__toggle { display: flex; }
     .bbcc-nav {
         display: none; position: absolute; top: 80px; left: 0; right: 0;
@@ -194,7 +214,22 @@ body.bbcc-public {
     .bbcc-nav__login { margin-top: 8px; justify-content: center; }
 }
 @media (max-width: 576px) {
-    .bbcc-topbar { display: none; }
+    .bbcc-topbar { display: block; padding: 6px 0; }
+    .bbcc-topbar__inner { justify-content: center; gap: 10px; }
+    .bbcc-topbar__info { display: flex; gap: 8px; font-size: .72rem; align-items: center; }
+    .bbcc-topbar__email { display: none !important; }
+    .bbcc-topbar__social { gap: 6px; }
+    .bbcc-topbar__info .bbcc-topbar__patron-btn {
+        height: 28px;
+        padding: 0 9px;
+        font-size: .7rem;
+        font-weight: 800;
+    }
+    .bbcc-topbar__social a {
+        width: 28px;
+        height: 28px;
+        font-size: .7rem;
+    }
     .bbcc-navbar__inner { height: 68px; }
     .bbcc-navbar__brand img { width: 42px; height: 42px; }
     .bbcc-navbar__brand-text { font-size: 1rem; }

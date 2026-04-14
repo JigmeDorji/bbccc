@@ -38,8 +38,8 @@ try {
 <head>
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <title>About Us — BBCC</title>
-    <meta name="description" content="Learn about the Bhutanese Buddhist and Cultural Centre in Canberra.">
+    <title>About Us — Buddhist Temple Canberra | BBCC</title>
+    <meta name="description" content="Learn about BBCC, a Bhutanese Buddhist temple in Canberra dedicated to spiritual guidance, Dzongkha language and cultural preservation.">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <?php include_once 'include/global_css.php'; ?>
 </head>
