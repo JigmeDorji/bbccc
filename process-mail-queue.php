@@ -8,6 +8,16 @@
 require_once __DIR__ . '/include/config.php';
 require_once __DIR__ . '/include/mail_queue.php';
 
+if (PHP_SAPI !== 'cli') {
+    require_once __DIR__ . '/include/auth.php';
+    require_once __DIR__ . '/include/role_helpers.php';
+    require_login();
+    if (!is_admin_role()) {
+        header('Location: unauthorized');
+        exit;
+    }
+}
+
 $limit = 20;
 if (PHP_SAPI === 'cli' && !empty($argv)) {
     foreach ($argv as $arg) {
@@ -29,4 +39,3 @@ if (PHP_SAPI === 'cli') {
 
 header('Content-Type: application/json');
 echo json_encode($stats);
-
