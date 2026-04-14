@@ -198,7 +198,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
     display: flex !important;
     align-items: center !important;
     gap: 8px;
-    padding: 11px 20px 11px 52px !important;
+    padding: 11px 18px 11px 22px !important;
     font-size: 0.82rem !important;
     font-weight: 500;
     color: rgba(255,255,255,0.72) !important;
@@ -215,7 +215,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
 #accordionSidebar .collapse-item i,
 #accordionSidebar .collapse-item i[class*="fa-"] { color: rgba(255,255,255,0.55) !important; font-size: 0.78rem !important; visibility: visible !important; display: inline-block !important; }
 #accordionSidebar .collapse-header {
-    padding: 10px 20px 3px 52px !important;
+    padding: 10px 18px 3px 22px !important;
     color: rgba(255,255,255,0.38) !important;
     font-size: 0.68rem !important;
     letter-spacing: 0.09em;
@@ -401,16 +401,22 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
     </li>
 
     <?php if (!isParent() && !isTeacher() && !isPatron()) { ?>
+        <?php
+            $websiteActive = in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','serviceSetup.php','ourTeamSetup.php','viewFeedback.php'], true);
+            $dzoActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php'], true);
+            $eventsActive = in_array($currentPage, ['eventManagement.php','bookingManagement.php'], true);
+            $adminSettingsActive = in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php','audit-logs.php','run-migration.php'], true);
+        ?>
 
         <hr class="sidebar-divider">
 
         <li class="nav-item">
-            <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseWebsite"
-               aria-expanded="true" aria-controls="collapseWebsite">
+            <a class="nav-link <?= $websiteActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseWebsite"
+               aria-expanded="<?= $websiteActive ? 'true' : 'false' ?>" aria-controls="collapseWebsite">
                 <i class="fas fa-cogs"></i>
                 <span>Website Settings</span>
             </a>
-            <div id="collapseWebsite" class="collapse <?= in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','serviceSetup.php','ourTeamSetup.php','viewFeedback.php']) ? 'show' : '' ?>">
+            <div id="collapseWebsite" class="collapse <?= $websiteActive ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <a class="collapse-item <?= ($currentPage == 'bannerSetup.php') ? 'active' : '' ?>" href="bannerSetup"><i class="fas fa-image fa-sm mr-1 text-muted"></i> Setup Banner</a>
                     <a class="collapse-item <?= ($currentPage == 'aboutPageSetup.php') ? 'active' : '' ?>" href="aboutPageSetup"><i class="fas fa-info-circle fa-sm mr-1 text-muted"></i> Setup About Page</a>
@@ -423,13 +429,13 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
 
         <!-- Dzo Class Management -->
         <li class="nav-item">
-            <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseOrders"
-               aria-expanded="true" aria-controls="collapseOrders">
+            <a class="nav-link <?= $dzoActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseOrders"
+               aria-expanded="<?= $dzoActive ? 'true' : 'false' ?>" aria-controls="collapseOrders">
                 <i class="fas fa-graduation-cap"></i>
                 <span>Dzo Class Mgmt</span>
             </a>
 
-            <div id="collapseOrders" class="collapse <?= in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php']) ? 'show' : '' ?>">
+            <div id="collapseOrders" class="collapse <?= $dzoActive ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <?php
                         $dzoEnrollActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','admin-fee-verification.php','admin-assign-class.php'], true);
@@ -471,12 +477,12 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
 
         <!-- Event Management -->
         <li class="nav-item">
-            <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseEvents"
-               aria-expanded="true" aria-controls="collapseEvents">
+            <a class="nav-link <?= $eventsActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseEvents"
+               aria-expanded="<?= $eventsActive ? 'true' : 'false' ?>" aria-controls="collapseEvents">
                 <i class="fas fa-calendar-alt"></i>
                 <span>Event Management</span>
             </a>
-            <div id="collapseEvents" class="collapse <?= in_array($currentPage, ['eventManagement.php','bookingManagement.php']) ? 'show' : '' ?>">
+            <div id="collapseEvents" class="collapse <?= $eventsActive ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <a class="collapse-item <?= ($currentPage == 'eventManagement.php') ? 'active' : '' ?>" href="eventManagement"><i class="fas fa-calendar-plus fa-sm mr-1 text-muted"></i> Manage Events</a>
                     <a class="collapse-item <?= ($currentPage == 'bookingManagement.php') ? 'active' : '' ?>" href="bookingManagement"><i class="fas fa-ticket-alt fa-sm mr-1 text-muted"></i> Booking Requests</a>
@@ -486,12 +492,12 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
 
         <!-- Admin Settings -->
         <li class="nav-item">
-            <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseAdmin"
-               aria-expanded="true" aria-controls="collapseAdmin">
+            <a class="nav-link <?= $adminSettingsActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseAdmin"
+               aria-expanded="<?= $adminSettingsActive ? 'true' : 'false' ?>" aria-controls="collapseAdmin">
                 <i class="fas fa-user-cog"></i>
                 <span>Admin Settings</span>
             </a>
-            <div id="collapseAdmin" class="collapse <?= in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php','audit-logs.php','run-migration.php']) ? 'show' : '' ?>">
+            <div id="collapseAdmin" class="collapse <?= $adminSettingsActive ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <a class="collapse-item <?= ($currentPage == 'userSetup.php') ? 'active' : '' ?>" href="userSetup"><i class="fas fa-users-cog fa-sm mr-1 text-muted"></i> User Management</a>
                     <a class="collapse-item <?= ($currentPage == 'adminProfile.php') ? 'active' : '' ?>" href="adminProfile"><i class="fas fa-id-badge fa-sm mr-1 text-muted"></i> My Profile</a>
