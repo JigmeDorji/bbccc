@@ -75,14 +75,39 @@ function bbcc_acl_detect_teacher_profile(): bool {
     return $cached;
 }
 
+function bbcc_acl_is_mixed_profile_user(): bool {
+    return bbcc_acl_detect_parent_profile() && bbcc_acl_detect_teacher_profile();
+}
+
+function bbcc_acl_active_portal(): string {
+    $portal = strtolower(trim((string)($_SESSION['active_portal'] ?? '')));
+    if (in_array($portal, ['parent', 'teacher'], true)) {
+        return $portal;
+    }
+    // Backward-compatible default for mixed accounts.
+    return 'teacher';
+}
+
 function bbcc_acl_has_capability(string $cap): bool {
     $cap = strtolower(trim($cap));
     $role = bbcc_acl_role();
+    $isMixed = bbcc_acl_is_mixed_profile_user();
+    $activePortal = bbcc_acl_active_portal();
 
     if ($cap === 'authenticated') return isset($_SESSION['userid']);
     if ($cap === 'admin') return is_admin_role();
-    if ($cap === 'parent') return is_parent_role() || bbcc_acl_detect_parent_profile();
-    if ($cap === 'teacher') return is_teacher_role() || bbcc_acl_detect_teacher_profile();
+    if ($cap === 'parent') {
+        $hasParent = is_parent_role() || bbcc_acl_detect_parent_profile();
+        if (!$hasParent) return false;
+        if ($isMixed && $activePortal !== 'parent') return false;
+        return true;
+    }
+    if ($cap === 'teacher') {
+        $hasTeacher = is_teacher_role() || bbcc_acl_detect_teacher_profile();
+        if (!$hasTeacher) return false;
+        if ($isMixed && $activePortal !== 'teacher') return false;
+        return true;
+    }
     if ($cap === 'patron') return $role === 'patron';
 
     return false;

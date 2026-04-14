@@ -13,11 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 verify_csrf();
 
 $portal = strtolower(trim((string)($_POST['portal'] ?? '')));
-$returnTo = (string)($_POST['return_to'] ?? 'index-admin');
-
-if ($returnTo === '' || preg_match('/^https?:\/\//i', $returnTo) || str_contains($returnTo, "\n") || str_contains($returnTo, "\r")) {
-    $returnTo = 'index-admin';
-}
+$returnTo = 'index-admin';
 
 try {
     $pdo = new PDO(
@@ -66,4 +62,3 @@ if ($hasParent && $hasTeacher && in_array($portal, ['parent', 'teacher'], true))
 
 header('Location: ' . $returnTo);
 exit;
-
