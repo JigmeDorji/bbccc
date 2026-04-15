@@ -277,8 +277,9 @@ body {
 .idle-front-instruction span {
     display: block;
     margin-top: 2px;
-    color: var(--gray-600);
-    font-weight: 500;
+    color: var(--success-dark);
+    font-weight: 800;
+    font-size: 1.14rem;
 }
 
 @keyframes idleBounce {
