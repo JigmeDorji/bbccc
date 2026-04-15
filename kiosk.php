@@ -16,6 +16,10 @@ $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https'
 $host     = $_SERVER['HTTP_HOST'] ?? 'localhost';
 $path     = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/');
 $mobileBaseUrl = "{$protocol}://{$host}{$path}/kiosk-mobile.php";
+$kioskCssVersion = @filemtime(__DIR__ . '/css/kiosk.css');
+if (!$kioskCssVersion) {
+    $kioskCssVersion = time();
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -31,7 +35,7 @@ $mobileBaseUrl = "{$protocol}://{$host}{$path}/kiosk-mobile.php";
     <link rel="icon" type="image/jpeg" href="bbccassests/img/logo/logo5.jpg">
     <link rel="apple-touch-icon" href="bbccassests/img/logo/logo5.jpg">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="css/kiosk.css">
+    <link rel="stylesheet" href="css/kiosk.css?v=<?= (int)$kioskCssVersion ?>">
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 </head>
 <body>
@@ -61,6 +65,7 @@ $mobileBaseUrl = "{$protocol}://{$host}{$path}/kiosk-mobile.php";
             <div class="idle-content" id="idleTap">
                 <div class="idle-front-card">
                     <img src="bbccassests/img/logo/logo5.jpg" alt="BBCC" class="idle-front-logo" onerror="this.style.display='none'">
+                    <div class="idle-front-title">Bhutanese Language and Culture School</div>
                     <h1 class="idle-content__heading">Welcome</h1>
                     <div class="idle-front-qr-wrap">
                         <div id="idleBigQr" class="idle-front-qr"></div>

@@ -233,6 +233,16 @@ body {
     display: block;
 }
 
+.idle-front-title {
+    font-family: var(--font-display);
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--brand);
+    text-align: center;
+    line-height: 1.25;
+    margin: 0 0 8px;
+}
+
 .idle-front-qr-wrap {
     width: fit-content;
     margin: 6px auto 12px;
@@ -910,6 +920,7 @@ body {
     .idle-front-qr img,
     .idle-front-qr canvas { width: 210px !important; height: 210px !important; }
     .idle-front-instruction { font-size: .92rem; }
+    .idle-front-title { font-size: 1.05rem; }
 }
 
 /* ── Prevent overscroll / pull-to-refresh on iOS ── */
