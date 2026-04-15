@@ -101,6 +101,7 @@ $_pageTitles = [
     'parent-email'         => 'Parent Email',
     'acl-debug'            => 'ACL Debug',
     'audit-logs'           => 'Audit Logs',
+    'module-access'        => 'Module Access',
     'run-migration'        => 'Run Migrations',
     'createAccHead'        => 'Account Heads',
     'createSubAccHead'     => 'Sub Account Heads',

@@ -112,7 +112,12 @@ try {
             <tr><td style='{$tdLabel}'>Message</td><td style='{$tdValue}'>{$sMsg}</td></tr>
         </table>
         <p style='margin:0;'>Please log in to the admin panel to approve or reject this booking.</p>");
-        send_mail(MAIL_FROM_EMAIL, MAIL_FROM_NAME, "New Booking Request – " . $event['title'], $adminBody);
+        $adminEmail = trim((string)pcm_website_notify_email());
+        if ($adminEmail !== '' && filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+            pcm_send_notification_mail($adminEmail, 'Admin', "New Booking Request – " . $event['title'], $adminBody);
+        } else {
+            bbcc_mail_log('BOOKING ADMIN MAIL SKIP: WEBSITE_NOTIFY_EMAIL is missing/invalid for event ' . ($event['title'] ?? 'unknown'));
+        }
 
         // User confirmation
         $userBody = pcm_email_wrap('Booking Request Received', "

@@ -405,11 +405,20 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
             $websiteActive = in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','serviceSetup.php','ourTeamSetup.php','viewFeedback.php'], true);
             $dzoActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php'], true);
             $eventsActive = in_array($currentPage, ['eventManagement.php','bookingManagement.php'], true);
-            $adminSettingsActive = in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php','audit-logs.php','run-migration.php'], true);
+            $adminSettingsActive = in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php','audit-logs.php','run-migration.php','module-access.php'], true);
+            $canWebsiteManage = function_exists('bbcc_can') ? bbcc_can('website', 'manage') : false;
+            $canClassesManage = function_exists('bbcc_can') ? bbcc_can('classes_attendance', 'manage') : false;
+            $canEnrollmentApprove = function_exists('bbcc_can') ? bbcc_can('enrollment', 'approve') : false;
+            $canFeesManage = function_exists('bbcc_can') ? bbcc_can('fees_payments', 'manage') : false;
+            $canCommunicationManage = function_exists('bbcc_can') ? bbcc_can('communication', 'manage') : false;
+            $canKioskManage = function_exists('bbcc_can') ? bbcc_can('kiosk', 'manage') : false;
+            $canUsersManage = function_exists('bbcc_can') ? bbcc_can('users_access', 'manage') : false;
+            $showDzoMgmtSection = ($canClassesManage || $canEnrollmentApprove || $canFeesManage || $canCommunicationManage || $canKioskManage);
         ?>
 
         <hr class="sidebar-divider">
 
+        <?php if ($canWebsiteManage): ?>
         <li class="nav-item">
             <a class="nav-link <?= $websiteActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseWebsite"
                aria-expanded="<?= $websiteActive ? 'true' : 'false' ?>" aria-controls="collapseWebsite">
@@ -426,8 +435,10 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                 </div>
             </div>
         </li>
+        <?php endif; ?>
 
         <!-- Dzo Class Management -->
+        <?php if ($showDzoMgmtSection): ?>
         <li class="nav-item">
             <a class="nav-link <?= $dzoActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseOrders"
                aria-expanded="<?= $dzoActive ? 'true' : 'false' ?>" aria-controls="collapseOrders">
@@ -472,10 +483,12 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                 </div>
             </div>
         </li>
+        <?php endif; ?>
 
 
 
         <!-- Event Management -->
+        <?php if ($canWebsiteManage): ?>
         <li class="nav-item">
             <a class="nav-link <?= $eventsActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseEvents"
                aria-expanded="<?= $eventsActive ? 'true' : 'false' ?>" aria-controls="collapseEvents">
@@ -489,8 +502,10 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                 </div>
             </div>
         </li>
+        <?php endif; ?>
 
         <!-- Admin Settings -->
+        <?php if ($canUsersManage): ?>
         <li class="nav-item">
             <a class="nav-link <?= $adminSettingsActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseAdmin"
                aria-expanded="<?= $adminSettingsActive ? 'true' : 'false' ?>" aria-controls="collapseAdmin">
@@ -504,9 +519,13 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                     <a class="collapse-item <?= ($currentPage == 'audit-logs.php') ? 'active' : '' ?>" href="audit-logs"><i class="fas fa-clipboard-list fa-sm mr-1 text-muted"></i> Audit Logs</a>
                     <a class="collapse-item <?= ($currentPage == 'acl-debug.php') ? 'active' : '' ?>" href="acl-debug"><i class="fas fa-shield-alt fa-sm mr-1 text-muted"></i> ACL Debug</a>
                     <a class="collapse-item <?= ($currentPage == 'run-migration.php') ? 'active' : '' ?>" href="run-migration"><i class="fas fa-database fa-sm mr-1 text-muted"></i> Run Migrations</a>
+                    <?php if (function_exists('bbcc_is_superadmin_role') && bbcc_is_superadmin_role()): ?>
+                        <a class="collapse-item <?= ($currentPage == 'module-access.php') ? 'active' : '' ?>" href="module-access"><i class="fas fa-user-lock fa-sm mr-1 text-muted"></i> Module Access</a>
+                    <?php endif; ?>
                 </div>
             </div>
         </li>
+        <?php endif; ?>
 
     <?php } ?>
 

@@ -2,6 +2,8 @@
 require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/notifications.php";
+require_once "include/module_access.php";
+require_once "include/pcm_helpers.php";
 require_once "include/csrf.php";
 require_login();
 
@@ -23,6 +25,7 @@ try {
 }
 
 $sessionUsername = logged_in_username();
+$isSuperAdmin = function_exists('bbcc_is_superadmin_role') ? bbcc_is_superadmin_role($role) : false;
 
 function ap_ensure_profile_table(PDO $pdo): void {
     static $done = false;
@@ -53,6 +56,30 @@ if (!empty($userRow['userid'])) {
     $profStmt->execute([':uid' => (string)$userRow['userid']]);
     $p = $profStmt->fetch();
     if ($p) $profile = array_merge($profile, $p);
+}
+
+$websiteNotifyEmail = '';
+$classNotifyEmail = '';
+if ($isSuperAdmin) {
+    try {
+        pcm_ensure_notify_email_columns($pdo);
+        $stmtSettings = $pdo->query("SELECT website_notify_email, class_notify_email FROM fees_settings WHERE id = 1 LIMIT 1");
+        $settingsRow = $stmtSettings ? ($stmtSettings->fetch() ?: []) : [];
+        $websiteNotifyEmail = trim((string)($settingsRow['website_notify_email'] ?? ''));
+        $classNotifyEmail = trim((string)($settingsRow['class_notify_email'] ?? ''));
+
+        $fallbacks = pcm_notification_emails();
+        if ($websiteNotifyEmail === '') {
+            $websiteNotifyEmail = trim((string)($fallbacks['website'] ?? ''));
+        }
+        if ($classNotifyEmail === '') {
+            $classNotifyEmail = trim((string)($fallbacks['class'] ?? ''));
+        }
+    } catch (Throwable $e) {
+        $fallbacks = pcm_notification_emails();
+        $websiteNotifyEmail = trim((string)($fallbacks['website'] ?? ''));
+        $classNotifyEmail = trim((string)($fallbacks['class'] ?? ''));
+    }
 }
 
 // ── POST handlers ───────────────────────────────────────────────
@@ -89,6 +116,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
             $status = 'success';
             $msg = 'Profile details updated successfully.';
+        } elseif ($action === 'update_notify_emails') {
+            if (!$isSuperAdmin) {
+                throw new Exception("Only super admin can update notification routing.");
+            }
+
+            $websiteNotify = trim((string)($_POST['website_notify_email'] ?? ''));
+            $classNotify = trim((string)($_POST['class_notify_email'] ?? ''));
+
+            if ($websiteNotify !== '' && !filter_var($websiteNotify, FILTER_VALIDATE_EMAIL)) {
+                throw new Exception("Website Notify Email is not a valid email address.");
+            }
+            if ($classNotify !== '' && !filter_var($classNotify, FILTER_VALIDATE_EMAIL)) {
+                throw new Exception("Class Notify Email is not a valid email address.");
+            }
+
+            pcm_ensure_notify_email_columns($pdo);
+            $stmtUp = $pdo->prepare("
+                INSERT INTO fees_settings (id, website_notify_email, class_notify_email)
+                VALUES (1, :website_notify_email, :class_notify_email)
+                ON DUPLICATE KEY UPDATE
+                    website_notify_email = VALUES(website_notify_email),
+                    class_notify_email = VALUES(class_notify_email)
+            ");
+            $stmtUp->execute([
+                ':website_notify_email' => $websiteNotify !== '' ? $websiteNotify : null,
+                ':class_notify_email' => $classNotify !== '' ? $classNotify : null,
+            ]);
+
+            $status = 'success';
+            $msg = 'Notification routing emails updated successfully.';
         } else {
             $currentPwd = $_POST['current_password'] ?? '';
             $newPwd     = $_POST['new_password'] ?? '';
@@ -140,6 +197,29 @@ if (!empty($userRow['userid'])) {
     $profStmt->execute([':uid' => (string)$userRow['userid']]);
     $p = $profStmt->fetch();
     if ($p) $profile = array_merge($profile, $p);
+}
+$websiteNotifyEmail = '';
+$classNotifyEmail = '';
+if ($isSuperAdmin) {
+    try {
+        pcm_ensure_notify_email_columns($pdo);
+        $stmtSettings = $pdo->query("SELECT website_notify_email, class_notify_email FROM fees_settings WHERE id = 1 LIMIT 1");
+        $settingsRow = $stmtSettings ? ($stmtSettings->fetch() ?: []) : [];
+        $websiteNotifyEmail = trim((string)($settingsRow['website_notify_email'] ?? ''));
+        $classNotifyEmail = trim((string)($settingsRow['class_notify_email'] ?? ''));
+
+        $fallbacks = pcm_notification_emails();
+        if ($websiteNotifyEmail === '') {
+            $websiteNotifyEmail = trim((string)($fallbacks['website'] ?? ''));
+        }
+        if ($classNotifyEmail === '') {
+            $classNotifyEmail = trim((string)($fallbacks['class'] ?? ''));
+        }
+    } catch (Throwable $e) {
+        $fallbacks = pcm_notification_emails();
+        $websiteNotifyEmail = trim((string)($fallbacks['website'] ?? ''));
+        $classNotifyEmail = trim((string)($fallbacks['class'] ?? ''));
+    }
 }
 $displayName = trim((string)($profile['full_name'] ?? ''));
 if ($displayName === '') $displayName = (string)$sessionUsername;
@@ -294,6 +374,33 @@ if ($displayName === '') $displayName = (string)$sessionUsername;
 
                         <div class="card shadow">
                             <div class="card-body p-4">
+                                <?php if ($isSuperAdmin): ?>
+                                <h5 class="font-weight-bold mb-1" style="color:var(--brand);">
+                                    <i class="fas fa-envelope-open-text mr-2"></i>Notification Routing
+                                </h5>
+                                <p class="text-muted mb-4" style="font-size:.85rem;">Set separate emails for website updates and class-related workflows.</p>
+                                <form method="POST" class="mb-4">
+                                    <?= csrf_field() ?>
+                                    <input type="hidden" name="action" value="update_notify_emails">
+                                    <div class="form-row">
+                                        <div class="form-group col-md-6">
+                                            <label style="font-size:.88rem;font-weight:600;">Website Notify Email</label>
+                                            <input type="email" class="form-control" name="website_notify_email" value="<?= htmlspecialchars($websiteNotifyEmail) ?>" placeholder="website-notify@example.com">
+                                            <small class="form-text text-muted">Used for contact queries and event bookings.</small>
+                                        </div>
+                                        <div class="form-group col-md-6">
+                                            <label style="font-size:.88rem;font-weight:600;">Class Notify Email</label>
+                                            <input type="email" class="form-control" name="class_notify_email" value="<?= htmlspecialchars($classNotifyEmail) ?>" placeholder="class-notify@example.com">
+                                            <small class="form-text text-muted">Used for registrations, enrollments, and class process alerts.</small>
+                                        </div>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary mb-2" style="border-radius:10px;min-width:220px;">
+                                        <i class="fas fa-save mr-1"></i> Save Notification Routing
+                                    </button>
+                                    <hr>
+                                </form>
+                                <?php endif; ?>
+
                                 <h5 class="font-weight-bold mb-1" style="color:var(--brand);">
                                     <i class="fas fa-key mr-2"></i>Change Password
                                 </h5>

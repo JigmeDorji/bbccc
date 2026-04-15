@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/acl.php';
 require_once __DIR__ . '/audit_log.php';
+require_once __DIR__ . '/module_access.php';
 
 /**
  * Log in a particular user and store extra info

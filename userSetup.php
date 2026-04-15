@@ -3,6 +3,7 @@ require_once "include/config.php";
 require_once "include/auth.php";
 require_once "access_control.php";
 require_once "include/role_helpers.php";
+require_once "include/module_access.php";
 require_login();
 allowRoles(['Administrator', 'Admin', 'Company Admin', 'System_owner']);
 
@@ -34,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $fullName = trim($_POST['full_name'] ?? '');
             if ($username === '' || $password === '') throw new Exception("Username and password are required.");
             if (!filter_var($username, FILTER_VALIDATE_EMAIL)) throw new Exception("Username must be a valid email address.");
-            if (!in_array($role, ['Admin', 'teacher'])) throw new Exception("Invalid role.");
+            if (!in_array($role, ['Admin', 'teacher', 'Website Admin'], true)) throw new Exception("Invalid role.");
             if ($role === 'teacher' && $fullName === '') throw new Exception("Full name is required for Teacher accounts.");
 
             $chk = $pdo->prepare("SELECT userid FROM user WHERE username = :u");
@@ -55,7 +56,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $pdo->commit();
 
-            $msg = ($role === 'teacher' ? "Teacher" : "Admin") . " account '{$username}' created successfully.";
+            $roleLabel = ($role === 'teacher') ? 'Teacher' : (($role === 'Website Admin') ? 'Website Admin' : 'Admin');
+            $msg = $roleLabel . " account '{$username}' created successfully.";
 
         // ── Edit user ────────────────────────────────────
         } elseif ($action === 'edit_user') {
@@ -120,7 +122,7 @@ $flash = $_SESSION['user_flash'] ?? null;
 unset($_SESSION['user_flash']);
 
 // ─── Admin roles (in user table) ─────────────────────────
-$adminRoles = ['Admin', 'Company Admin', 'Staff', 'System_owner', 'Administrator'];
+$adminRoles = ['Admin', 'Company Admin', 'Staff', 'System_owner', 'Administrator', 'Website Admin'];
 $adminRolePlaceholders = implode(',', array_fill(0, count($adminRoles), '?'));
 
 // ─── Data ────────────────────────────────────────────────
@@ -130,7 +132,7 @@ $allUsers = $pdo->query(
 
 $adminUsers = $pdo->query(
     "SELECT userid, username, role, createdDate FROM user
-     WHERE role IN ('Admin','Company Admin','Staff','System_owner','Administrator')
+     WHERE role IN ('Admin','Company Admin','Staff','System_owner','Administrator','Website Admin')
      ORDER BY role, username"
 )->fetchAll();
 
@@ -145,6 +147,90 @@ $teacherUsers = $pdo->query(
 $parentUsers = $pdo->query(
     "SELECT id, full_name, email, phone, username, status, created_at FROM parents ORDER BY full_name"
 )->fetchAll();
+
+// ─── Module access summary (defaults + overrides) ────────
+function us_user_key(string $userId, string $username): string {
+    return $userId . '|' . strtolower(trim($username));
+}
+
+function us_profile_from_role(string $role): string {
+    $r = bbcc_normalize_role_key($role);
+    if (in_array($r, ['website admin', 'website_admin'], true)) return 'website_admin';
+    if (in_array($r, ['parent', 'teacher', 'patron'], true)) return $r;
+    if (bbcc_is_superadmin_role($role)) return 'superadmin';
+    if (in_array($r, ['administrator', 'admin', 'company admin', 'company_admin', 'system owner', 'system_owner', 'staff'], true)) {
+        return 'admin';
+    }
+    return 'guest';
+}
+
+function us_effective_actions_for_module(string $profile, string $moduleKey, array $moduleActions, array $defaults, array $userOverrides): array {
+    $allowed = [];
+    $defaultActions = array_map('strtolower', (array)($defaults[$profile][$moduleKey] ?? []));
+    $hasAllDefault = in_array('*', $defaultActions, true);
+
+    foreach ($moduleActions as $action) {
+        $a = strtolower((string)$action);
+        $isAllowed = $hasAllDefault || in_array($a, $defaultActions, true);
+        $override = $userOverrides[$moduleKey][$a] ?? $userOverrides[$moduleKey]['*'] ?? null;
+        if ($override === 'grant') $isAllowed = true;
+        if ($override === 'revoke') $isAllowed = false;
+        if ($isAllowed) $allowed[] = $a;
+    }
+    return $allowed;
+}
+
+$moduleCatalog = bbcc_module_catalog();
+$moduleDefaults = bbcc_role_default_module_access();
+$overridesByUser = [];
+try {
+    $hasOverrideTable = (bool)$pdo->query("SHOW TABLES LIKE 'user_module_access_overrides'")->fetch(PDO::FETCH_NUM);
+    if ($hasOverrideTable) {
+        $ovRows = $pdo->query("
+            SELECT id, user_id, username, module_key, action_key, effect
+            FROM user_module_access_overrides
+            WHERE is_active = 1
+            ORDER BY id DESC
+        ")->fetchAll();
+        foreach ($ovRows as $ov) {
+            $uid = trim((string)($ov['user_id'] ?? ''));
+            $uname = trim((string)($ov['username'] ?? ''));
+            if ($uid === '' || $uname === '') continue;
+            $uKey = us_user_key($uid, $uname);
+            $mKey = bbcc_normalize_module_key((string)($ov['module_key'] ?? ''));
+            $aKey = strtolower(trim((string)($ov['action_key'] ?? '')));
+            $eff = strtolower(trim((string)($ov['effect'] ?? '')));
+            if ($mKey === '' || $aKey === '' || !in_array($eff, ['grant', 'revoke'], true)) continue;
+            if (!isset($overridesByUser[$uKey][$mKey][$aKey])) {
+                $overridesByUser[$uKey][$mKey][$aKey] = $eff;
+            }
+        }
+    }
+} catch (Throwable $e) {
+    // Keep defaults-only summary when override table is unavailable.
+    $overridesByUser = [];
+}
+
+$moduleSummaryByUser = [];
+foreach ($allUsers as $u) {
+    $uid = (string)($u['userid'] ?? '');
+    $uname = (string)($u['username'] ?? '');
+    $profile = us_profile_from_role((string)($u['role'] ?? ''));
+    $uKey = us_user_key($uid, $uname);
+    $uOverrides = $overridesByUser[$uKey] ?? [];
+    $parts = [];
+    foreach ($moduleCatalog as $moduleKey => $meta) {
+        $actions = (array)($meta['actions'] ?? []);
+        if (empty($actions)) continue;
+        $allowedActions = us_effective_actions_for_module($profile, (string)$moduleKey, $actions, $moduleDefaults, $uOverrides);
+        if (empty($allowedActions)) continue;
+        $parts[] = [
+            'label' => (string)($meta['label'] ?? $moduleKey),
+            'actions' => $allowedActions,
+        ];
+    }
+    $moduleSummaryByUser[$uKey] = $parts;
+}
 ?>
 
 <!DOCTYPE html>
@@ -164,10 +250,29 @@ $parentUsers = $pdo->query(
         .nav-tabs .nav-link { color:#555; }
         .role-badge { border-radius:10px; padding:3px 10px; font-size:.76rem; font-weight:600; }
         .role-admin    { background:#fef3f2; color:var(--brand); border:1px solid #f7c6c3; }
+        .role-webadmin { background:#fff3cd; color:#7c5c00; border:1px solid #ffe08a; }
         .role-teacher  { background:#e8f4fd; color:#1a6c9c; border:1px solid #b8dcf2; }
         .role-parent   { background:#eafaf1; color:#196f3d; border:1px solid #a9dfbf; }
         .role-staff    { background:#fdf2e9; color:#935116; border:1px solid #f0c07d; }
         .role-system   { background:#f4ecf7; color:#6c3483; border:1px solid #d2b4de; }
+        .module-chip {
+            display:inline-block;
+            font-size:.7rem;
+            font-weight:600;
+            padding:3px 8px;
+            border-radius:999px;
+            border:1px solid #d6deea;
+            background:#f8fbff;
+            color:#355070;
+            margin:2px 4px 2px 0;
+            white-space:nowrap;
+        }
+        .module-cell-wrap {
+            min-width:260px;
+            max-width:420px;
+            white-space:normal;
+            line-height:1.2;
+        }
     </style>
 </head>
 <body id="page-top">
@@ -243,6 +348,7 @@ $parentUsers = $pdo->query(
                                             <th>ID</th>
                                             <th>Username</th>
                                             <th>Role</th>
+                                            <th>Module Access</th>
                                             <th>Created</th>
                                             <th style="width:160px;text-align:center;">Actions</th>
                                         </tr>
@@ -251,6 +357,7 @@ $parentUsers = $pdo->query(
                                         <?php foreach ($allUsers as $u):
                                             $rc = match(true) {
                                                 in_array($u['role'], ['Admin','Company Admin','Administrator','System_owner']) => 'role-admin',
+                                                $u['role'] === 'Website Admin' => 'role-webadmin',
                                                 $u['role'] === 'teacher' => 'role-teacher',
                                                 $u['role'] === 'parent'  => 'role-parent',
                                                 $u['role'] === 'Staff'   => 'role-staff',
@@ -261,6 +368,19 @@ $parentUsers = $pdo->query(
                                                 <td><code><?= htmlspecialchars($u['userid']) ?></code></td>
                                                 <td class="font-weight-bold"><?= htmlspecialchars($u['username']) ?></td>
                                                 <td><span class="role-badge <?= $rc ?>"><?= htmlspecialchars($u['role']) ?></span></td>
+                                                <td class="module-cell-wrap">
+                                                    <?php
+                                                        $mKey = us_user_key((string)$u['userid'], (string)$u['username']);
+                                                        $summary = $moduleSummaryByUser[$mKey] ?? [];
+                                                    ?>
+                                                    <?php if (empty($summary)): ?>
+                                                        <span class="text-muted">No module access</span>
+                                                    <?php else: ?>
+                                                        <?php foreach ($summary as $item): ?>
+                                                            <span class="module-chip"><?= htmlspecialchars((string)$item['label']) ?>: <?= htmlspecialchars(implode('/', (array)$item['actions'])) ?></span>
+                                                        <?php endforeach; ?>
+                                                    <?php endif; ?>
+                                                </td>
                                                 <td style="font-size:.84rem;color:#888;"><?= $u['createdDate'] ? htmlspecialchars(date('d M Y', strtotime($u['createdDate']))) : '—' ?></td>
                                                 <td class="text-center">
                                                     <a
@@ -271,7 +391,7 @@ $parentUsers = $pdo->query(
                                                     >
                                                         <i class="fas fa-eye" style="font-size:.75rem;"></i>
                                                     </a>
-                                                    <?php if (in_array($u['role'], ['Admin','Company Admin','Staff','System_owner','Administrator'])): ?>
+                                                    <?php if (in_array($u['role'], ['Admin','Company Admin','Staff','System_owner','Administrator','Website Admin'], true)): ?>
                                                     <button type="button" class="btn btn-sm btn-outline-primary btn-edit-user"
                                                         data-userid="<?= htmlspecialchars($u['userid'], ENT_QUOTES) ?>"
                                                         data-username="<?= htmlspecialchars($u['username'], ENT_QUOTES) ?>"
@@ -294,7 +414,7 @@ $parentUsers = $pdo->query(
                                             </tr>
                                         <?php endforeach; ?>
                                         <?php if (empty($allUsers)): ?>
-                                            <tr><td colspan="5" class="text-center text-muted py-4"><i class="fas fa-inbox mr-1"></i> No users found.</td></tr>
+                                            <tr><td colspan="6" class="text-center text-muted py-4"><i class="fas fa-inbox mr-1"></i> No users found.</td></tr>
                                         <?php endif; ?>
                                         </tbody>
                                     </table>
@@ -313,6 +433,7 @@ $parentUsers = $pdo->query(
                                         <tr>
                                             <th>Username</th>
                                             <th>Role</th>
+                                            <th>Module Access</th>
                                             <th>Created</th>
                                             <th style="width:160px;text-align:center;">Actions</th>
                                         </tr>
@@ -325,6 +446,19 @@ $parentUsers = $pdo->query(
                                                     <?= htmlspecialchars($u['username']) ?>
                                                 </td>
                                                 <td><span class="role-badge role-admin"><?= htmlspecialchars($u['role']) ?></span></td>
+                                                <td class="module-cell-wrap">
+                                                    <?php
+                                                        $mKey = us_user_key((string)$u['userid'], (string)$u['username']);
+                                                        $summary = $moduleSummaryByUser[$mKey] ?? [];
+                                                    ?>
+                                                    <?php if (empty($summary)): ?>
+                                                        <span class="text-muted">No module access</span>
+                                                    <?php else: ?>
+                                                        <?php foreach ($summary as $item): ?>
+                                                            <span class="module-chip"><?= htmlspecialchars((string)$item['label']) ?>: <?= htmlspecialchars(implode('/', (array)$item['actions'])) ?></span>
+                                                        <?php endforeach; ?>
+                                                    <?php endif; ?>
+                                                </td>
                                                 <td style="font-size:.84rem;color:#888;"><?= $u['createdDate'] ? htmlspecialchars(date('d M Y', strtotime($u['createdDate']))) : '—' ?></td>
                                                 <td class="text-center">
                                                     <a
@@ -356,7 +490,7 @@ $parentUsers = $pdo->query(
                                             </tr>
                                         <?php endforeach; ?>
                                         <?php if (empty($adminUsers)): ?>
-                                            <tr><td colspan="4" class="text-center text-muted py-4"><i class="fas fa-inbox mr-1"></i> No admin users found.</td></tr>
+                                            <tr><td colspan="5" class="text-center text-muted py-4"><i class="fas fa-inbox mr-1"></i> No admin users found.</td></tr>
                                         <?php endif; ?>
                                         </tbody>
                                     </table>
@@ -538,6 +672,7 @@ $parentUsers = $pdo->query(
                         <label><i class="fas fa-user-tag mr-1" style="color:var(--brand);font-size:.75rem;"></i> Role <span class="text-danger">*</span></label>
                         <select class="form-control" name="role" id="createAdminRole" onchange="toggleFullNameField(this.value)">
                             <option value="Admin">Admin</option>
+                            <option value="Website Admin">Website Admin</option>
                             <option value="teacher">Teacher</option>
                         </select>
                     </div>
@@ -577,6 +712,7 @@ $parentUsers = $pdo->query(
                         <label><i class="fas fa-user-tag mr-1" style="color:var(--brand);font-size:.75rem;"></i> Role</label>
                         <select class="form-control" name="role" id="editUserRole">
                             <option value="Admin">Admin</option>
+                            <option value="Website Admin">Website Admin</option>
                             <option value="teacher">Teacher</option>
                         </select>
                     </div>

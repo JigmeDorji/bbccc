@@ -3,6 +3,7 @@
 require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/notifications.php";
+require_once "include/pcm_helpers.php";
 require_login();
 
 function bbcc_table_exists(PDO $pdo, string $table): bool {
@@ -20,6 +21,10 @@ $filterProjectID = $_SESSION['projectID'] ?? null;
 
 $role = strtolower($_SESSION['role'] ?? '');
 $dashboardRole = $role;
+if ($dashboardRole === 'website admin') {
+    $dashboardRole = 'website_admin';
+}
+$isWebsiteAdminDashboard = ($dashboardRole === 'website_admin');
 if ($role === 'patron') {
     header('Location: patron-dashboard');
     exit;
@@ -54,6 +59,18 @@ $parentTermTotals = [1 => 0, 2 => 0, 3 => 0, 4 => 0];
 $recentClassroomActivity = [];
 $dashboardTeacherId = 0;
 $teacherAssignedClassNames = [];
+$campusAttendanceSummary = [];
+$campusAttendanceOverall = ['present' => 0, 'absent' => 0, 'grand' => 0];
+$campusKioskSummary = [];
+$campusKioskOverall = ['registered' => 0, 'sign_in' => 0, 'sign_out' => 0, 'grand' => 0];
+$summaryDate = date('Y-m-d');
+if (isset($_GET['summary_date'])) {
+    $candidateDate = trim((string)$_GET['summary_date']);
+    $dt = DateTime::createFromFormat('Y-m-d', $candidateDate);
+    if ($dt && $dt->format('Y-m-d') === $candidateDate) {
+        $summaryDate = $candidateDate;
+    }
+}
 
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
@@ -67,6 +84,7 @@ try {
         (string)($_SESSION['role'] ?? '')
     );
     bbcc_ensure_term_class_total_columns($pdo);
+    $campusChoiceLabels = pcm_campus_choice_labels();
 
     $sessionUsername = (string)($_SESSION['username'] ?? '');
     $sessionUserId = (string)($_SESSION['userid'] ?? '');
@@ -179,14 +197,6 @@ try {
 
     /* ═══ ADMIN DASHBOARD STATS ═══ */
     if ($dashboardRole !== 'parent') {
-        // Students
-        $totalStudents   = (int)$pdo->query("SELECT COUNT(*) FROM students")->fetchColumn();
-        $pendingStudents = (int)$pdo->query("SELECT COUNT(*) FROM students WHERE approval_status='Pending'")->fetchColumn();
-        $approvedStudents= (int)$pdo->query("SELECT COUNT(*) FROM students WHERE approval_status='Approved'")->fetchColumn();
-
-        // Parents
-        $totalParents = (int)$pdo->query("SELECT COUNT(*) FROM parents")->fetchColumn();
-
         // Events
         $totalEvents    = (int)$pdo->query("SELECT COUNT(*) FROM events")->fetchColumn();
         $bookedEvents   = (int)$pdo->query("SELECT COUNT(*) FROM events WHERE status='Booked'")->fetchColumn();
@@ -212,6 +222,16 @@ try {
 
         // Contact messages
         $contactMessages = (int)$pdo->query("SELECT COUNT(*) FROM contact")->fetchColumn();
+
+        if (!$isWebsiteAdminDashboard) {
+            // Students
+            $totalStudents   = (int)$pdo->query("SELECT COUNT(*) FROM students")->fetchColumn();
+            $pendingStudents = (int)$pdo->query("SELECT COUNT(*) FROM students WHERE approval_status='Pending'")->fetchColumn();
+            $approvedStudents= (int)$pdo->query("SELECT COUNT(*) FROM students WHERE approval_status='Approved'")->fetchColumn();
+
+            // Parents
+            $totalParents = (int)$pdo->query("SELECT COUNT(*) FROM parents")->fetchColumn();
+        }
 
         if ($dashboardRole === 'teacher') {
             $sessionUserId = (string)($_SESSION['userid'] ?? '');
@@ -289,6 +309,124 @@ try {
             $dashboardAttendance = $stmtAdminAttendance->fetchAll(PDO::FETCH_ASSOC);
             $attendanceTitle = 'Recent Attendance Records';
             $attendanceViewLink = 'attendanceManagement';
+
+            // Attendance summary by campus and class (Present / Absent / Grand Total)
+            $campusLabels = $campusChoiceLabels;
+            $campusAttendanceSummary = [
+                'c1' => [
+                    'label' => (string)($campusLabels['c1'] ?? 'Campus 1'),
+                    'rows' => [],
+                    'totals' => ['present' => 0, 'absent' => 0, 'grand' => 0],
+                ],
+                'c2' => [
+                    'label' => (string)($campusLabels['c2'] ?? 'Campus 2'),
+                    'rows' => [],
+                    'totals' => ['present' => 0, 'absent' => 0, 'grand' => 0],
+                ],
+            ];
+
+            $stmtCampusAttendance = $pdo->prepare("
+                SELECT
+                    LOWER(COALESCE(NULLIF(TRIM(c.campus_key), ''), 'c1')) AS campus_key,
+                    COALESCE(NULLIF(TRIM(c.class_name), ''), 'Unassigned Class') AS class_name,
+                    SUM(CASE WHEN LOWER(COALESCE(a.status, '')) = 'present' THEN 1 ELSE 0 END) AS present_count,
+                    SUM(CASE WHEN LOWER(COALESCE(a.status, '')) = 'absent' THEN 1 ELSE 0 END) AS absent_count
+                FROM attendance a
+                LEFT JOIN classes c ON c.id = a.class_id
+                WHERE DATE(a.attendance_date) = :summary_date
+                GROUP BY campus_key, class_name
+                ORDER BY campus_key ASC, class_name ASC
+            ");
+            $stmtCampusAttendance->execute([':summary_date' => $summaryDate]);
+            $campusRows = $stmtCampusAttendance->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($campusRows as $row) {
+                $campusKey = strtolower((string)($row['campus_key'] ?? 'c1'));
+                if (!isset($campusAttendanceSummary[$campusKey])) {
+                    continue;
+                }
+                $present = (int)($row['present_count'] ?? 0);
+                $absent = (int)($row['absent_count'] ?? 0);
+                $grand = $present + $absent;
+
+                $campusAttendanceSummary[$campusKey]['rows'][] = [
+                    'class_name' => (string)($row['class_name'] ?? 'Class'),
+                    'present' => $present,
+                    'absent' => $absent,
+                    'grand' => $grand,
+                ];
+                $campusAttendanceSummary[$campusKey]['totals']['present'] += $present;
+                $campusAttendanceSummary[$campusKey]['totals']['absent'] += $absent;
+                $campusAttendanceSummary[$campusKey]['totals']['grand'] += $grand;
+            }
+
+            foreach ($campusAttendanceSummary as $summary) {
+                $campusAttendanceOverall['present'] += (int)($summary['totals']['present'] ?? 0);
+                $campusAttendanceOverall['absent'] += (int)($summary['totals']['absent'] ?? 0);
+                $campusAttendanceOverall['grand'] += (int)($summary['totals']['grand'] ?? 0);
+            }
+
+            // Kiosk sign-in/out summary by campus and class
+            $campusKioskSummary = [
+                'c1' => [
+                    'label' => (string)($campusLabels['c1'] ?? 'Campus 1'),
+                    'rows' => [],
+                    'totals' => ['registered' => 0, 'sign_in' => 0, 'sign_out' => 0, 'grand' => 0],
+                ],
+                'c2' => [
+                    'label' => (string)($campusLabels['c2'] ?? 'Campus 2'),
+                    'rows' => [],
+                    'totals' => ['registered' => 0, 'sign_in' => 0, 'sign_out' => 0, 'grand' => 0],
+                ],
+            ];
+
+            $stmtCampusKiosk = $pdo->prepare("
+                SELECT
+                    LOWER(COALESCE(NULLIF(TRIM(c.campus_key), ''), 'c1')) AS campus_key,
+                    COALESCE(NULLIF(TRIM(c.class_name), ''), 'Unassigned Class') AS class_name,
+                    COUNT(DISTINCT ca.student_id) AS registered_count,
+                    SUM(CASE WHEN k.time_in IS NOT NULL THEN 1 ELSE 0 END) AS sign_in_count,
+                    SUM(CASE WHEN k.time_out IS NOT NULL THEN 1 ELSE 0 END) AS sign_out_count
+                FROM classes c
+                LEFT JOIN class_assignments ca ON ca.class_id = c.id
+                LEFT JOIN pcm_kiosk_log k
+                    ON k.child_id = ca.student_id
+                   AND k.log_date = :summary_date
+                GROUP BY c.id, campus_key, class_name
+                ORDER BY campus_key ASC, class_name ASC
+            ");
+            $stmtCampusKiosk->execute([':summary_date' => $summaryDate]);
+            $kioskRows = $stmtCampusKiosk->fetchAll(PDO::FETCH_ASSOC);
+
+            foreach ($kioskRows as $row) {
+                $campusKey = strtolower((string)($row['campus_key'] ?? 'c1'));
+                if (!isset($campusKioskSummary[$campusKey])) {
+                    continue;
+                }
+                $registered = (int)($row['registered_count'] ?? 0);
+                $signIn = (int)($row['sign_in_count'] ?? 0);
+                $signOut = (int)($row['sign_out_count'] ?? 0);
+                $grand = $signIn + $signOut;
+
+                $campusKioskSummary[$campusKey]['rows'][] = [
+                    'class_name' => (string)($row['class_name'] ?? 'Class'),
+                    'registered' => $registered,
+                    'sign_in' => $signIn,
+                    'sign_out' => $signOut,
+                    'grand' => $grand,
+                ];
+                $campusKioskSummary[$campusKey]['totals']['registered'] += $registered;
+                $campusKioskSummary[$campusKey]['totals']['sign_in'] += $signIn;
+                $campusKioskSummary[$campusKey]['totals']['sign_out'] += $signOut;
+                $campusKioskSummary[$campusKey]['totals']['grand'] += $grand;
+            }
+
+            foreach ($campusKioskSummary as $summary) {
+                $campusKioskOverall['registered'] += (int)($summary['totals']['registered'] ?? 0);
+                $campusKioskOverall['sign_in'] += (int)($summary['totals']['sign_in'] ?? 0);
+                $campusKioskOverall['sign_out'] += (int)($summary['totals']['sign_out'] ?? 0);
+                $campusKioskOverall['grand'] += (int)($summary['totals']['grand'] ?? 0);
+            }
         }
     }
 
@@ -303,32 +441,34 @@ try {
     $totalClasses    = 0;
 
     if ($dashboardRole !== 'parent') {
-        // Fee collection stats
-        $stmtFees = $pdo->query("SELECT
-            COALESCE(SUM(due_amount), 0) AS total_due,
-            COALESCE(SUM(CASE WHEN status = 'Verified' THEN paid_amount ELSE 0 END), 0) AS collected,
-            COALESCE(SUM(CASE WHEN status IN ('Unpaid','Pending','Rejected') THEN due_amount ELSE 0 END), 0) AS pending,
-            SUM(CASE WHEN status = 'Verified' THEN 1 ELSE 0 END) AS verified_count,
-            SUM(CASE WHEN status IN ('Unpaid','Pending') THEN 1 ELSE 0 END) AS pending_count
-            FROM pcm_fee_payments");
-        $feeRow = $stmtFees->fetch(PDO::FETCH_ASSOC);
-        $feeTotal        = (float)($feeRow['total_due'] ?? 0);
-        $feeCollected    = (float)($feeRow['collected'] ?? 0);
-        $feePending      = (float)($feeRow['pending'] ?? 0);
-        $feeVerifiedCount= (int)($feeRow['verified_count'] ?? 0);
-        $feePendingCount = (int)($feeRow['pending_count'] ?? 0);
+        if (!$isWebsiteAdminDashboard) {
+            // Fee collection stats
+            $stmtFees = $pdo->query("SELECT
+                COALESCE(SUM(due_amount), 0) AS total_due,
+                COALESCE(SUM(CASE WHEN status = 'Verified' THEN paid_amount ELSE 0 END), 0) AS collected,
+                COALESCE(SUM(CASE WHEN status IN ('Unpaid','Pending','Rejected') THEN due_amount ELSE 0 END), 0) AS pending,
+                SUM(CASE WHEN status = 'Verified' THEN 1 ELSE 0 END) AS verified_count,
+                SUM(CASE WHEN status IN ('Unpaid','Pending') THEN 1 ELSE 0 END) AS pending_count
+                FROM pcm_fee_payments");
+            $feeRow = $stmtFees->fetch(PDO::FETCH_ASSOC);
+            $feeTotal        = (float)($feeRow['total_due'] ?? 0);
+            $feeCollected    = (float)($feeRow['collected'] ?? 0);
+            $feePending      = (float)($feeRow['pending'] ?? 0);
+            $feeVerifiedCount= (int)($feeRow['verified_count'] ?? 0);
+            $feePendingCount = (int)($feeRow['pending_count'] ?? 0);
 
-        // Today's kiosk attendance
-        $stmtToday = $pdo->query("SELECT
-            SUM(CASE WHEN time_in IS NOT NULL THEN 1 ELSE 0 END) AS sign_ins,
-            SUM(CASE WHEN time_out IS NOT NULL THEN 1 ELSE 0 END) AS sign_outs
-            FROM pcm_kiosk_log WHERE log_date = CURDATE()");
-        $todayRow = $stmtToday->fetch(PDO::FETCH_ASSOC);
-        $todaySignIns  = (int)($todayRow['sign_ins'] ?? 0);
-        $todaySignOuts = (int)($todayRow['sign_outs'] ?? 0);
+            // Today's kiosk attendance
+            $stmtToday = $pdo->query("SELECT
+                SUM(CASE WHEN time_in IS NOT NULL THEN 1 ELSE 0 END) AS sign_ins,
+                SUM(CASE WHEN time_out IS NOT NULL THEN 1 ELSE 0 END) AS sign_outs
+                FROM pcm_kiosk_log WHERE log_date = CURDATE()");
+            $todayRow = $stmtToday->fetch(PDO::FETCH_ASSOC);
+            $todaySignIns  = (int)($todayRow['sign_ins'] ?? 0);
+            $todaySignOuts = (int)($todayRow['sign_outs'] ?? 0);
 
-        // Total classes
-        $totalClasses = (int)$pdo->query("SELECT COUNT(*) FROM classes")->fetchColumn();
+            // Total classes
+            $totalClasses = (int)$pdo->query("SELECT COUNT(*) FROM classes")->fetchColumn();
+        }
     }
 
     /* ═══ CLASSROOM ACTIVITY FEED (ALL ROLES) ═══ */
@@ -1090,6 +1230,150 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                 <!-- ═══════════════════════════════════════════ -->
                 <!-- ═══ ADMIN DASHBOARD ═══ -->
                 <!-- ═══════════════════════════════════════════ -->
+                <?php if ($isWebsiteAdminDashboard): ?>
+                <div class="welcome-banner">
+                    <h2>Welcome back, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Website Admin'); ?>!</h2>
+                    <p>Here's an overview of your website and event operations. Today is <?php echo date('l, d F Y'); ?>.</p>
+                    <div class="quick-actions">
+                        <a href="ourTeamSetup"><i class="fas fa-users-cog"></i> Team</a>
+                        <a href="eventManagement"><i class="fas fa-calendar-alt"></i> Events</a>
+                        <a href="bookingManagement"><i class="fas fa-bookmark"></i> Bookings</a>
+                        <a href="viewFeedback"><i class="fas fa-envelope"></i> Contact Queries</a>
+                    </div>
+                </div>
+
+                <div class="row mb-2">
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="card dash-card shadow">
+                            <div class="dash-stat-card">
+                                <div class="stat-icon bg-events"><i class="fas fa-calendar-alt"></i></div>
+                                <div class="stat-label">Total Events</div>
+                                <div class="stat-value"><?php echo $totalEvents; ?></div>
+                                <div class="stat-footer">
+                                    <span style="color:#1cc88a;"><i class="fas fa-check"></i> <?php echo $bookedEvents; ?> booked</span>
+                                    &nbsp;&middot;&nbsp;
+                                    <span style="color:#e65100;"><i class="fas fa-clock"></i> <?php echo $availableEvents; ?> available</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="card dash-card shadow">
+                            <div class="dash-stat-card">
+                                <div class="stat-icon bg-bookings"><i class="fas fa-bookmark"></i></div>
+                                <div class="stat-label">Booking Requests</div>
+                                <div class="stat-value"><?php echo $totalBookings; ?></div>
+                                <div class="stat-footer">
+                                    <?php if ($pendingBookings > 0): ?>
+                                        <a href="bookingManagement" style="color:#e74a3b;"><i class="fas fa-exclamation-circle"></i> <?php echo $pendingBookings; ?> pending approval</a>
+                                    <?php else: ?>
+                                        <span style="color:#1cc88a;"><i class="fas fa-check-circle"></i> All handled</span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="card dash-card shadow">
+                            <div class="dash-stat-card">
+                                <div class="stat-icon bg-messages"><i class="fas fa-envelope"></i></div>
+                                <div class="stat-label">Contact Messages</div>
+                                <div class="stat-value"><?php echo $contactMessages; ?></div>
+                                <div class="stat-footer"><a href="viewFeedback">View queries <i class="fas fa-arrow-right"></i></a></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-xl-3 col-md-6 mb-4">
+                        <div class="card dash-card shadow">
+                            <div class="dash-stat-card">
+                                <div class="stat-icon bg-messages"><i class="fas fa-bell"></i></div>
+                                <div class="stat-label">Unread Notifications</div>
+                                <div class="stat-value"><?php echo (int)$unreadNotifications; ?></div>
+                                <div class="stat-footer"><a href="notifications">Open notification center <i class="fas fa-arrow-right"></i></a></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-2">
+                    <div class="col-lg-6 mb-4">
+                        <div class="card dash-card shadow">
+                            <div class="card-body">
+                                <div class="section-title">
+                                    <span><i class="fas fa-calendar-day mr-2" style="color:#4e73df;"></i>Upcoming Events</span>
+                                    <a href="eventManagement">View All</a>
+                                </div>
+                                <?php if (empty($upcomingEvents)): ?>
+                                    <div class="text-center py-4" style="color:#ccc;">
+                                        <i class="fas fa-calendar-times fa-2x mb-2"></i>
+                                        <p class="mb-0" style="font-size:0.85rem;">No upcoming events</p>
+                                    </div>
+                                <?php else: ?>
+                                    <?php foreach ($upcomingEvents as $ev): ?>
+                                        <?php
+                                            $evDate = strtotime($ev['event_date']);
+                                            $evDay  = date('d', $evDate);
+                                            $evMon  = date('M', $evDate);
+                                            $evTime = $ev['start_time'] ? date('g:i A', strtotime($ev['start_time'])) : '';
+                                            $evStatusClass = strtolower($ev['status']) === 'booked' ? 'dot-booked' : (strtolower($ev['status']) === 'available' ? 'dot-available' : 'dot-pending');
+                                        ?>
+                                        <div class="event-list-item">
+                                            <div class="event-date-badge">
+                                                <span class="day"><?php echo $evDay; ?></span>
+                                                <span class="month"><?php echo $evMon; ?></span>
+                                            </div>
+                                            <div class="event-info">
+                                                <p class="title"><?php echo htmlspecialchars($ev['title']); ?></p>
+                                                <p class="meta">
+                                                    <?php if ($evTime): ?><i class="far fa-clock"></i> <?php echo $evTime; ?> &nbsp;<?php endif; ?>
+                                                    <?php if ($ev['location']): ?><i class="fas fa-map-marker-alt"></i> <?php echo htmlspecialchars($ev['location']); ?><?php endif; ?>
+                                                </p>
+                                            </div>
+                                            <span class="event-status-dot <?php echo $evStatusClass; ?>"><?php echo htmlspecialchars($ev['status']); ?></span>
+                                        </div>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6 mb-4">
+                        <div class="card dash-card shadow">
+                            <div class="card-body p-0">
+                                <div class="p-3">
+                                    <div class="section-title mb-0">
+                                        <span><i class="fas fa-bookmark mr-2" style="color:#e74a3b;"></i>Recent Booking Requests</span>
+                                        <a href="bookingManagement">View All</a>
+                                    </div>
+                                </div>
+                                <?php if (empty($recentBookings)): ?>
+                                    <div class="p-4 text-center" style="color:#ccc;">
+                                        <i class="fas fa-inbox fa-2x mb-2"></i>
+                                        <p class="mb-0" style="font-size:0.85rem;">No booking requests yet</p>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="table-responsive">
+                                        <table class="dash-table">
+                                            <thead>
+                                            <tr><th>Name</th><th>Event</th><th>Date</th><th>Status</th></tr>
+                                            </thead>
+                                            <tbody>
+                                            <?php foreach ($recentBookings as $rb): ?>
+                                                <tr>
+                                                    <td><strong><?php echo htmlspecialchars($rb['name'] ?? ''); ?></strong></td>
+                                                    <td><?php echo htmlspecialchars($rb['event_title'] ?? '-'); ?></td>
+                                                    <td><?php echo $rb['created_at'] ? date('d M Y', strtotime($rb['created_at'])) : '-'; ?></td>
+                                                    <td><span class="badge badge-<?php echo badge_class($rb['status']); ?>"><?php echo htmlspecialchars($rb['status'] ?? ''); ?></span></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php else: ?>
 
                 <!-- Welcome Banner -->
                 <div class="welcome-banner">
@@ -1208,6 +1492,151 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                 </div>
 
                 <?php if ($dashboardRole !== 'teacher'): ?>
+                <!-- ── Attendance By Campus & Class ── -->
+                <div class="card dash-card shadow mb-4">
+                    <div class="card-body p-0">
+                        <div class="p-3" style="border-bottom: 1px solid #f0f0f0;">
+                            <div class="section-title mb-1">
+                                <span><i class="fas fa-school mr-2" style="color:#4e73df;"></i>Attendance Summary By Campus</span>
+                                <a href="attendance-records">View Records</a>
+                            </div>
+                            <form method="GET" class="mb-2 d-flex align-items-center" style="gap:8px;">
+                                <label for="summaryDate" class="mb-0" style="font-size:0.78rem;color:#8c8c9e;">Date:</label>
+                                <input type="date" id="summaryDate" name="summary_date" class="form-control form-control-sm" style="max-width:180px;" value="<?= htmlspecialchars($summaryDate, ENT_QUOTES, 'UTF-8') ?>">
+                                <button type="submit" class="btn btn-sm btn-outline-primary">Load</button>
+                            </form>
+                            <div style="font-size:0.78rem;color:#8c8c9e;">
+                                For: <strong><?= date('d M Y', strtotime($summaryDate)) ?></strong>
+                                &nbsp;&middot;&nbsp;
+                                Grand Total: <strong><?= (int)$campusAttendanceOverall['grand'] ?></strong>
+                                &nbsp;&middot;&nbsp;
+                                Present: <strong style="color:#1cc88a;"><?= (int)$campusAttendanceOverall['present'] ?></strong>
+                                &nbsp;&middot;&nbsp;
+                                Absent: <strong style="color:#e74a3b;"><?= (int)$campusAttendanceOverall['absent'] ?></strong>
+                            </div>
+                        </div>
+
+                        <div class="row no-gutters">
+                            <?php foreach (['c1', 'c2'] as $campusKey): ?>
+                                <?php $summary = $campusAttendanceSummary[$campusKey] ?? ['label' => 'Campus', 'rows' => [], 'totals' => ['present' => 0, 'absent' => 0, 'grand' => 0]]; ?>
+                                <div class="col-lg-6" style="border-right: <?= $campusKey === 'c1' ? '1px solid #f0f0f0' : 'none' ?>;">
+                                    <div class="p-3">
+                                        <div style="font-size:0.86rem;font-weight:700;color:#1a1a2e;margin-bottom:10px;">
+                                            <?= htmlspecialchars((string)$summary['label']) ?>
+                                        </div>
+                                        <div class="table-responsive">
+                                            <table class="dash-table mb-0">
+                                                <thead>
+                                                <tr>
+                                                    <th>Class</th>
+                                                    <th>Present</th>
+                                                    <th>Absent</th>
+                                                    <th>Grand Total</th>
+                                                </tr>
+                                                </thead>
+                                                <tbody>
+                                                <?php if (empty($summary['rows'])): ?>
+                                                    <tr>
+                                                        <td colspan="4" class="text-muted">No attendance records yet.</td>
+                                                    </tr>
+                                                <?php else: ?>
+                                                    <?php foreach ($summary['rows'] as $row): ?>
+                                                        <tr>
+                                                            <td><strong><?= htmlspecialchars((string)$row['class_name']) ?></strong></td>
+                                                            <td><span style="color:#1cc88a;font-weight:700;"><?= (int)$row['present'] ?></span></td>
+                                                            <td><span style="color:#e74a3b;font-weight:700;"><?= (int)$row['absent'] ?></span></td>
+                                                            <td><strong><?= (int)$row['grand'] ?></strong></td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                    <tr style="background:#fafbff;">
+                                                        <td><strong>Total</strong></td>
+                                                        <td><strong style="color:#1cc88a;"><?= (int)$summary['totals']['present'] ?></strong></td>
+                                                        <td><strong style="color:#e74a3b;"><?= (int)$summary['totals']['absent'] ?></strong></td>
+                                                        <td><strong><?= (int)$summary['totals']['grand'] ?></strong></td>
+                                                    </tr>
+                                                <?php endif; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card dash-card shadow mb-4">
+                    <div class="card-body p-0">
+                        <div class="p-3" style="border-bottom: 1px solid #f0f0f0;">
+                            <div class="section-title mb-1">
+                                <span><i class="fas fa-door-open mr-2" style="color:#36b9cc;"></i>Kiosk Sign In/Out Summary By Campus</span>
+                                <a href="admin-attendance?tab=kiosk">View Kiosk Records</a>
+                            </div>
+                            <div style="font-size:0.78rem;color:#8c8c9e;">
+                                For: <strong><?= date('d M Y', strtotime($summaryDate)) ?></strong>
+                                &nbsp;&middot;&nbsp;
+                                Registered: <strong style="color:#4e73df;"><?= (int)$campusKioskOverall['registered'] ?></strong>
+                                &nbsp;&middot;&nbsp;
+                                Grand Total: <strong><?= (int)$campusKioskOverall['grand'] ?></strong>
+                                &nbsp;&middot;&nbsp;
+                                Sign In: <strong style="color:#1cc88a;"><?= (int)$campusKioskOverall['sign_in'] ?></strong>
+                                &nbsp;&middot;&nbsp;
+                                Sign Out: <strong style="color:#e74a3b;"><?= (int)$campusKioskOverall['sign_out'] ?></strong>
+                            </div>
+                        </div>
+
+                        <div class="row no-gutters">
+                            <?php foreach (['c1', 'c2'] as $campusKey): ?>
+                                <?php $summary = $campusKioskSummary[$campusKey] ?? ['label' => 'Campus', 'rows' => [], 'totals' => ['sign_in' => 0, 'sign_out' => 0, 'grand' => 0]]; ?>
+                                <div class="col-lg-6" style="border-right: <?= $campusKey === 'c1' ? '1px solid #f0f0f0' : 'none' ?>;">
+                                    <div class="p-3">
+                                        <div style="font-size:0.86rem;font-weight:700;color:#1a1a2e;margin-bottom:10px;">
+                                            <?= htmlspecialchars((string)$summary['label']) ?>
+                                        </div>
+                                        <div class="table-responsive">
+                                            <table class="dash-table mb-0">
+                                                <thead>
+                                                <tr>
+                                                    <th>Class</th>
+                                                    <th>Registered Students</th>
+                                                    <th>Sign In</th>
+                                                    <th>Sign Out</th>
+                                                    <th>Grand Total</th>
+                                                </tr>
+                                                </thead>
+                                                <tbody>
+                                                <?php if (empty($summary['rows'])): ?>
+                                                    <tr>
+                                                        <td colspan="5" class="text-muted">No class records yet.</td>
+                                                    </tr>
+                                                <?php else: ?>
+                                                    <?php foreach ($summary['rows'] as $row): ?>
+                                                        <tr>
+                                                            <td><strong><?= htmlspecialchars((string)$row['class_name']) ?></strong></td>
+                                                            <td><span style="color:#4e73df;font-weight:700;"><?= (int)$row['registered'] ?></span></td>
+                                                            <td><span style="color:#1cc88a;font-weight:700;"><?= (int)$row['sign_in'] ?></span></td>
+                                                            <td><span style="color:#e74a3b;font-weight:700;"><?= (int)$row['sign_out'] ?></span></td>
+                                                            <td><strong><?= (int)$row['grand'] ?></strong></td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                    <tr style="background:#fafbff;">
+                                                        <td><strong>Total</strong></td>
+                                                        <td><strong style="color:#4e73df;"><?= (int)$summary['totals']['registered'] ?></strong></td>
+                                                        <td><strong style="color:#1cc88a;"><?= (int)$summary['totals']['sign_in'] ?></strong></td>
+                                                        <td><strong style="color:#e74a3b;"><?= (int)$summary['totals']['sign_out'] ?></strong></td>
+                                                        <td><strong><?= (int)$summary['totals']['grand'] ?></strong></td>
+                                                    </tr>
+                                                <?php endif; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- ── Row 2: Upcoming Events + Finance ── -->
                 <div class="row mb-2">
                     <!-- Upcoming Events -->
@@ -1516,6 +1945,7 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                     </div>
                     <?php endif; ?>
                 </div>
+                <?php endif; ?>
 
             <?php endif; ?>
 

@@ -1,5 +1,6 @@
 <?php
 require_once "include/config.php";
+require_once "include/pcm_helpers.php";
 
 $message = "";
 $msgType = "";
@@ -22,6 +23,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $stmt->bindParam(':subject', $subject, PDO::PARAM_STR);
         $stmt->bindParam(':message', $messageContent, PDO::PARAM_STR);
         $stmt->execute();
+
+        $adminEmail = trim((string)pcm_website_notify_email());
+        if ($adminEmail !== '' && filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+            $safeName = htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
+            $safeEmail = htmlspecialchars($email, ENT_QUOTES, 'UTF-8');
+            $safeSubject = htmlspecialchars($subject !== '' ? $subject : 'General Query', ENT_QUOTES, 'UTF-8');
+            $safeMsg = nl2br(htmlspecialchars($messageContent, ENT_QUOTES, 'UTF-8'));
+            $adminBody = "
+                <h3 style='margin:0 0 12px;'>New Contact Query Received</h3>
+                <p style='margin:0 0 10px;'><strong>Name:</strong> {$safeName}</p>
+                <p style='margin:0 0 10px;'><strong>Email:</strong> {$safeEmail}</p>
+                <p style='margin:0 0 10px;'><strong>Subject:</strong> {$safeSubject}</p>
+                <p style='margin:0;'><strong>Message:</strong><br>{$safeMsg}</p>
+            ";
+            pcm_send_notification_mail(
+                $adminEmail,
+                'Admin',
+                'New Website Query - ' . ($subject !== '' ? $subject : 'General'),
+                $adminBody
+            );
+        }
 
         $message = "Thank you for contacting us! We'll be in touch soon.";
         $msgType = "success";

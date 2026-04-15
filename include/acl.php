@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/role_helpers.php';
+require_once __DIR__ . '/module_access.php';
 
 function bbcc_acl_current_route_key(): string {
     $path = (string)parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
@@ -96,6 +97,7 @@ function bbcc_acl_has_capability(string $cap): bool {
 
     if ($cap === 'authenticated') return isset($_SESSION['userid']);
     if ($cap === 'admin') return is_admin_role();
+    if ($cap === 'website_admin') return is_website_admin_role();
     if ($cap === 'parent') {
         $hasParent = is_parent_role() || bbcc_acl_detect_parent_profile();
         if (!$hasParent) return false;
@@ -119,7 +121,7 @@ function bbcc_acl_page_rules(): array {
         'index-admin' => ['authenticated'],
         'notifications' => ['authenticated'],
         'switch-portal' => ['authenticated'],
-        'adminprofile' => ['admin', 'teacher', 'patron'],
+        'adminprofile' => ['admin', 'teacher', 'patron', 'website_admin'],
         'teacherprofile' => ['admin', 'teacher'],
 
         // Admin operations
@@ -135,13 +137,13 @@ function bbcc_acl_page_rules(): array {
         'admin-bank-settings' => ['admin'],
         'mail-test' => ['admin'],
         'run-migration' => ['admin'],
-        'bannersetup' => ['admin'],
-        'aboutpagesetup' => ['admin'],
-        'servicesetup' => ['admin'],
-        'ourteamsetup' => ['admin'],
-        'viewfeedback' => ['admin'],
-        'eventmanagement' => ['admin'],
-        'bookingmanagement' => ['admin'],
+        'bannersetup' => ['admin', 'website_admin'],
+        'aboutpagesetup' => ['admin', 'website_admin'],
+        'servicesetup' => ['admin', 'website_admin'],
+        'ourteamsetup' => ['admin', 'website_admin'],
+        'viewfeedback' => ['admin', 'website_admin'],
+        'eventmanagement' => ['admin', 'website_admin'],
+        'bookingmanagement' => ['admin', 'website_admin'],
         'generatestatement' => ['admin'],
         'companysetup' => ['admin'],
         'projectsetup' => ['admin'],
@@ -153,6 +155,7 @@ function bbcc_acl_page_rules(): array {
         'exportbookings' => ['admin'],
         'acl-debug' => ['admin'],
         'audit-logs' => ['admin'],
+        'module-access' => ['admin'],
 
         // Teacher/admin shared
         'teacher-attendance' => ['admin', 'teacher'],
@@ -182,6 +185,82 @@ function bbcc_acl_page_rules(): array {
     ];
 }
 
+function bbcc_acl_route_module_rules(): array {
+    return [
+        // Shared authenticated pages
+        'index-admin' => ['reports_settings', 'view'],
+        'notifications' => ['communication', 'view'],
+        'switch-portal' => ['reports_settings', 'view'],
+        'adminprofile' => ['reports_settings', 'view'],
+        'teacherprofile' => ['reports_settings', 'view'],
+        'parentprofile' => ['reports_settings', 'view'],
+        'patron-dashboard' => ['reports_settings', 'view'],
+
+        // Website / CMS
+        'bannersetup' => ['website', 'manage'],
+        'aboutpagesetup' => ['website', 'manage'],
+        'servicesetup' => ['website', 'manage'],
+        'ourteamsetup' => ['website', 'manage'],
+        'viewfeedback' => ['website', 'manage'],
+        'eventmanagement' => ['website', 'manage'],
+        'bookingmanagement' => ['website', 'manage'],
+
+        // Users & access
+        'usersetup' => ['users_access', 'manage'],
+        'user-profile-view' => ['users_access', 'manage'],
+        'module-access' => ['users_access', 'manage'],
+
+        // Enrollment flows
+        'dzoclassmanagement' => ['enrollment', 'approve'],
+        'admin-enrolments' => ['enrollment', 'approve'],
+        'admin-student-approvals' => ['enrollment', 'approve'],
+        'children-enrollment' => ['enrollment', 'submit'],
+        'parent-children' => ['enrollment', 'view'],
+        'parent-students' => ['enrollment', 'view'],
+
+        // Classes & attendance
+        'admin-class-setup' => ['classes_attendance', 'manage'],
+        'admin-teacher-setup' => ['classes_attendance', 'manage'],
+        'admin-assign-class' => ['classes_attendance', 'manage'],
+        'teacher-attendance' => ['classes_attendance', 'mark'],
+        'attendancemanagement' => ['classes_attendance', 'edit'],
+        'attendance-records' => ['classes_attendance', 'view'],
+        'mark-absenteeism' => ['classes_attendance', 'mark'],
+        'attendanceparent' => ['classes_attendance', 'mark'],
+        'parent-attendance' => ['classes_attendance', 'mark'],
+
+        // Fees and payments
+        'feessetting' => ['fees_payments', 'manage'],
+        'admin-bank-settings' => ['fees_payments', 'manage'],
+        'admin-fee-verification' => ['fees_payments', 'verify'],
+        'feesmanagement' => ['fees_payments', 'view'],
+        'parent-fees' => ['fees_payments', 'view'],
+        'parent-fees-pay' => ['fees_payments', 'submit'],
+        'parentfeespayment' => ['fees_payments', 'submit'],
+        'parent-payments' => ['fees_payments', 'view'],
+
+        // Communication
+        'parent-email' => ['communication', 'send'],
+        'dzongkha-classroom' => ['communication', 'view'],
+        'mail-test' => ['communication', 'manage'],
+        'process-mail-queue' => ['communication', 'manage'],
+
+        // Kiosk
+        'admin-attendance' => ['kiosk', 'manage'],
+        'admin-parent-pins' => ['kiosk', 'manage'],
+        'parent-signinout' => ['kiosk', 'use'],
+
+        // Reports & system settings
+        'generatestatement' => ['reports_settings', 'manage'],
+        'exportbookings' => ['reports_settings', 'export'],
+        'run-migration' => ['reports_settings', 'manage'],
+        'audit-logs' => ['reports_settings', 'manage'],
+        'acl-debug' => ['reports_settings', 'manage'],
+        'companysetup' => ['reports_settings', 'manage'],
+        'projectsetup' => ['reports_settings', 'manage'],
+    ];
+}
+
 function bbcc_acl_log_denied(string $routeKey, array $allowedCaps): void {
     $line = sprintf(
         "[ACL] DENIED route=%s user=%s role=%s allowed=%s ip=%s\n",
@@ -200,6 +279,26 @@ function bbcc_acl_log_denied(string $routeKey, array $allowedCaps): void {
     }
 }
 
+function bbcc_acl_log_module_denied(string $routeKey, string $moduleKey, string $actionKey): void {
+    $line = sprintf(
+        "[ACL] MODULE_DENIED route=%s user=%s role=%s module=%s action=%s ip=%s\n",
+        $routeKey,
+        (string)($_SESSION['username'] ?? $_SESSION['userid'] ?? 'guest'),
+        (string)($_SESSION['role'] ?? ''),
+        $moduleKey,
+        $actionKey,
+        (string)($_SERVER['REMOTE_ADDR'] ?? '-')
+    );
+    error_log($line);
+    if (function_exists('bbcc_audit_log')) {
+        bbcc_audit_log('acl_module_denied', 'security', [
+            'route' => $routeKey,
+            'module' => $moduleKey,
+            'action' => $actionKey,
+        ], 'warning');
+    }
+}
+
 function bbcc_acl_enforce_current_page(): void {
     if (!isset($_SESSION['userid'])) {
         return;
@@ -214,7 +313,19 @@ function bbcc_acl_enforce_current_page(): void {
     $allowedCaps = (array)$rules[$route];
     foreach ($allowedCaps as $cap) {
         if (bbcc_acl_has_capability($cap)) {
-            return;
+            $moduleRules = bbcc_acl_route_module_rules();
+            if (!isset($moduleRules[$route])) {
+                return;
+            }
+
+            [$moduleKey, $actionKey] = $moduleRules[$route];
+            if (!function_exists('bbcc_can') || bbcc_can((string)$moduleKey, (string)$actionKey)) {
+                return;
+            }
+
+            bbcc_acl_log_module_denied($route, (string)$moduleKey, (string)$actionKey);
+            header("Location: unauthorized");
+            exit;
         }
     }
 

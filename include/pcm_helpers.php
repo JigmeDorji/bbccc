@@ -14,8 +14,76 @@ function pcm_env(string $key, string $default = ''): string {
 }
 
 function pcm_admin_notify_email(): string {
-    $fallback = defined('MAIL_FROM_EMAIL') ? MAIL_FROM_EMAIL : '';
-    return pcm_env('ADMIN_NOTIFY_EMAIL', $fallback);
+    return pcm_class_notify_email();
+}
+
+function pcm_ensure_notify_email_columns(PDO $pdo): void {
+    static $done = false;
+    if ($done) return;
+
+    $tableStmt = $pdo->query("SHOW TABLES LIKE 'fees_settings'");
+    if (!$tableStmt || !$tableStmt->fetch(PDO::FETCH_NUM)) {
+        $done = true;
+        return;
+    }
+
+    $stmt1 = $pdo->query("SHOW COLUMNS FROM fees_settings LIKE 'website_notify_email'");
+    if (!$stmt1 || !$stmt1->fetch(PDO::FETCH_ASSOC)) {
+        $pdo->exec("ALTER TABLE fees_settings ADD COLUMN website_notify_email VARCHAR(190) NULL AFTER campus_two_name");
+    }
+
+    $stmt2 = $pdo->query("SHOW COLUMNS FROM fees_settings LIKE 'class_notify_email'");
+    if (!$stmt2 || !$stmt2->fetch(PDO::FETCH_ASSOC)) {
+        $pdo->exec("ALTER TABLE fees_settings ADD COLUMN class_notify_email VARCHAR(190) NULL AFTER website_notify_email");
+    }
+
+    $done = true;
+}
+
+function pcm_notification_emails(): array {
+    static $cache = null;
+    if (is_array($cache)) {
+        return $cache;
+    }
+
+    $fallback = trim((string)pcm_env('ADMIN_NOTIFY_EMAIL', defined('MAIL_FROM_EMAIL') ? (string)MAIL_FROM_EMAIL : ''));
+    $website = trim((string)pcm_env('WEBSITE_NOTIFY_EMAIL', $fallback));
+    $class = trim((string)pcm_env('CLASS_NOTIFY_EMAIL', $fallback));
+
+    try {
+        $pdo = pcm_pdo();
+        pcm_ensure_notify_email_columns($pdo);
+        $stmt = $pdo->query("SELECT website_notify_email, class_notify_email FROM fees_settings WHERE id = 1 LIMIT 1");
+        $row = $stmt ? ($stmt->fetch(PDO::FETCH_ASSOC) ?: []) : [];
+
+        $dbWebsite = trim((string)($row['website_notify_email'] ?? ''));
+        $dbClass = trim((string)($row['class_notify_email'] ?? ''));
+        if ($dbWebsite !== '' && filter_var($dbWebsite, FILTER_VALIDATE_EMAIL)) {
+            $website = $dbWebsite;
+        }
+        if ($dbClass !== '' && filter_var($dbClass, FILTER_VALIDATE_EMAIL)) {
+            $class = $dbClass;
+        }
+    } catch (Throwable $e) {
+        // Use env fallbacks silently.
+    }
+
+    $cache = [
+        'admin' => $fallback,
+        'website' => $website !== '' ? $website : $fallback,
+        'class' => $class !== '' ? $class : $fallback,
+    ];
+    return $cache;
+}
+
+function pcm_website_notify_email(): string {
+    $all = pcm_notification_emails();
+    return trim((string)($all['website'] ?? ''));
+}
+
+function pcm_class_notify_email(): string {
+    $all = pcm_notification_emails();
+    return trim((string)($all['class'] ?? ''));
 }
 
 function pcm_send_notification_mail(string $toEmail, string $toName, string $subject, string $html, int $timeoutSeconds = 4): bool {
@@ -459,9 +527,9 @@ function pcm_email_wrap(string $title, string $body): string {
 }
 
 function pcm_notify_admin_enrolment(string $childName, string $parentName): void {
-    $adminEmail = pcm_admin_notify_email();
+    $adminEmail = pcm_class_notify_email();
     if ($adminEmail === '') {
-        bbcc_mail_log('ADMIN MAIL SKIP: empty ADMIN_NOTIFY_EMAIL for enrolment ' . $childName);
+        bbcc_mail_log('ADMIN MAIL SKIP: empty CLASS_NOTIFY_EMAIL for enrolment ' . $childName);
         return;
     }
     $portalUrl = htmlspecialchars(pcm_admin_portal_url(), ENT_QUOTES, 'UTF-8');
@@ -483,9 +551,9 @@ function pcm_notify_admin_enrolment(string $childName, string $parentName): void
 }
 
 function pcm_notify_admin_student_registration(string $childName, string $parentName, string $parentEmail, string $studentCode = ''): void {
-    $adminEmail = pcm_admin_notify_email();
+    $adminEmail = pcm_class_notify_email();
     if ($adminEmail === '') {
-        bbcc_mail_log('ADMIN MAIL SKIP: empty ADMIN_NOTIFY_EMAIL for student registration ' . $childName);
+        bbcc_mail_log('ADMIN MAIL SKIP: empty CLASS_NOTIFY_EMAIL for student registration ' . $childName);
         return;
     }
 
@@ -610,9 +678,9 @@ function pcm_notify_parent_payment_required(PDO $pdo, string $toEmail, string $p
 }
 
 function pcm_notify_admin_absence(string $childName, string $parentName, string $date): void {
-    $adminEmail = pcm_admin_notify_email();
+    $adminEmail = pcm_class_notify_email();
     if ($adminEmail === '') {
-        bbcc_mail_log('ADMIN MAIL SKIP: empty ADMIN_NOTIFY_EMAIL for absence ' . $childName);
+        bbcc_mail_log('ADMIN MAIL SKIP: empty CLASS_NOTIFY_EMAIL for absence ' . $childName);
         return;
     }
     $html = pcm_email_wrap('Absence Request', "
