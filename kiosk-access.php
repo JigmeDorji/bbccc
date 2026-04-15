@@ -70,10 +70,10 @@ $mobileBaseUrl = $base . "/kiosk-mobile.php";
             border: 2px solid var(--brand);
             box-shadow: var(--shadow-sm);
         }
-        #qrCode { width: var(--qr-size, 220px); height: var(--qr-size, 220px); }
+        #qrCode { width: var(--qr-size, 250px); height: var(--qr-size, 250px); }
         #qrCode img, #qrCode canvas {
-            width: var(--qr-size, 220px) !important;
-            height: var(--qr-size, 220px) !important;
+            width: var(--qr-size, 250px) !important;
+            height: var(--qr-size, 250px) !important;
             display: block;
         }
         .qr-meta, .qr-url {
@@ -267,10 +267,10 @@ $mobileBaseUrl = $base . "/kiosk-mobile.php";
 
     function getQrSize() {
         var w = Math.max(320, window.innerWidth || 820);
-        if (w <= 480) return 190;
-        if (w <= 760) return 200;
-        if (w <= 1024) return 230; // iPad portrait
-        return 250; // iPad landscape / larger
+        if (w <= 480) return 210;
+        if (w <= 760) return 225;
+        if (w <= 1024) return 260; // iPad portrait
+        return 280; // iPad landscape / larger
     }
 
     function setCountdown(seconds) {

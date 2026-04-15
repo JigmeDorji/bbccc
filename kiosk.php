@@ -59,11 +59,19 @@ $mobileBaseUrl = "{$protocol}://{$host}{$path}/kiosk-mobile.php";
         <!-- SCREEN 1: Welcome (tap anywhere) -->
         <div class="kiosk-screen active" id="screenIdle">
             <div class="idle-content" id="idleTap">
-                <img src="bbccassests/img/logo/logo5.jpg" alt="BBCC" class="idle-content__logo" onerror="this.style.display='none'">
-                <h1 class="idle-content__heading">Welcome</h1>
-                <p class="idle-content__sub">Tap anywhere to sign your child in or out</p>
-                <div class="idle-content__hint">
-                    <i class="fa-solid fa-hand-pointer"></i>
+                <div class="idle-front-card">
+                    <img src="bbccassests/img/logo/logo5.jpg" alt="BBCC" class="idle-front-logo" onerror="this.style.display='none'">
+                    <h1 class="idle-content__heading">Welcome</h1>
+                    <div class="idle-front-qr-wrap">
+                        <div id="idleBigQr" class="idle-front-qr"></div>
+                    </div>
+                    <p class="idle-front-instruction">
+                        Scan this QR code with your phone
+                        <span>or tap anywhere to sign your child in or out</span>
+                    </p>
+                    <div class="idle-content__hint">
+                        <i class="fa-solid fa-hand-pointer"></i>
+                    </div>
                 </div>
             </div>
         </div>
@@ -72,10 +80,7 @@ $mobileBaseUrl = "{$protocol}://{$host}{$path}/kiosk-mobile.php";
         <div class="kiosk-screen" id="screenAuth">
             <div class="kiosk-panel">
                 <div style="display:flex;justify-content:center;margin-bottom:10px;">
-                    <div style="text-align:center;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:8px 10px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
-                        <div style="font-size:.72rem;color:#6b7280;margin-bottom:6px;">Scan QR instead</div>
-                        <div id="authMiniQr" style="width:84px;height:84px;margin:0 auto;"></div>
-                    </div>
+                    <img src="bbccassests/img/logo/logo5.jpg" alt="BBCC" class="idle-content__logo" style="margin:0;" onerror="this.style.display='none'">
                 </div>
                 <h2 class="kiosk-panel__heading">Enter your details</h2>
 
@@ -555,8 +560,22 @@ $mobileBaseUrl = "{$protocol}://{$host}{$path}/kiosk-mobile.php";
         node.innerHTML = '';
         new QRCode(node, {
             text: url,
-            width: 84,
-            height: 84,
+            width: 112,
+            height: 112,
+            colorDark: '#1f2937',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    }
+
+    function renderIdleQr(url) {
+        var node = $('#idleBigQr');
+        if (!node || typeof QRCode === 'undefined') return;
+        node.innerHTML = '';
+        new QRCode(node, {
+            text: url,
+            width: 260,
+            height: 260,
             colorDark: '#1f2937',
             colorLight: '#ffffff',
             correctLevel: QRCode.CorrectLevel.M
@@ -566,7 +585,9 @@ $mobileBaseUrl = "{$protocol}://{$host}{$path}/kiosk-mobile.php";
     function refreshMiniQr() {
         api({ action: 'generate_token' }).then(function(r) {
             if (!r || !r.ok || !r.token) return;
-            renderMiniQr(mobileBaseUrl + '?t=' + encodeURIComponent(r.token));
+            var url = mobileBaseUrl + '?t=' + encodeURIComponent(r.token);
+            renderMiniQr(url);
+            renderIdleQr(url);
         });
     }
 

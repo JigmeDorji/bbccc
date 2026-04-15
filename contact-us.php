@@ -5,6 +5,12 @@ require_once "include/pcm_helpers.php";
 $message = "";
 $msgType = "";
 
+if (!empty($_SESSION['contact_flash']) && is_array($_SESSION['contact_flash'])) {
+    $message = (string)($_SESSION['contact_flash']['message'] ?? '');
+    $msgType = (string)($_SESSION['contact_flash']['type'] ?? '');
+    unset($_SESSION['contact_flash']);
+}
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     try {
         $pdo = new PDO("mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME . ";charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
@@ -60,11 +66,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             bbcc_mail_log('WEBSITE NOTIFY SKIP (contact): invalid/empty recipient=' . $adminEmail);
         }
 
-        $message = "Thank you for contacting us! We'll be in touch soon.";
-        $msgType = "success";
+        $_SESSION['contact_flash'] = [
+            'message' => "Thank you for contacting us! We'll be in touch soon.",
+            'type' => 'success',
+        ];
+        header("Location: contact-us");
+        exit;
     } catch (Exception $e) {
-        $message = "Something went wrong. Please try again.";
-        $msgType = "error";
+        $_SESSION['contact_flash'] = [
+            'message' => "Something went wrong. Please try again.",
+            'type' => 'error',
+        ];
+        header("Location: contact-us");
+        exit;
     }
 }
 ?>

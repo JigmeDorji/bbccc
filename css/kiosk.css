@@ -177,6 +177,9 @@ body {
 .idle-content {
     text-align: center;
     animation: idlePulse 3s ease-in-out infinite;
+    width: 100%;
+    display: flex;
+    justify-content: center;
 }
 
 .idle-content__logo {
@@ -208,6 +211,64 @@ body {
     color: var(--brand);
     margin-top: 24px;
     animation: idleBounce 2s ease-in-out infinite;
+}
+
+.idle-front-card {
+    width: min(92vw, 620px);
+    background: #fff;
+    border: 2px solid rgba(136, 27, 18, 0.25);
+    border-radius: 24px;
+    padding: 18px 18px 16px;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.12);
+}
+
+.idle-front-logo {
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid var(--brand);
+    box-shadow: 0 0 0 8px rgba(136,27,18,.12);
+    margin: 0 auto 10px;
+    display: block;
+}
+
+.idle-front-qr-wrap {
+    width: fit-content;
+    margin: 6px auto 12px;
+    background: #fff;
+    border: 2px solid var(--brand);
+    border-radius: 16px;
+    box-shadow: var(--shadow-sm);
+    padding: 12px;
+}
+
+.idle-front-qr {
+    width: 260px;
+    height: 260px;
+    margin: 0 auto;
+}
+
+.idle-front-qr img,
+.idle-front-qr canvas {
+    width: 260px !important;
+    height: 260px !important;
+    display: block;
+}
+
+.idle-front-instruction {
+    font-size: 1rem;
+    color: var(--gray-700);
+    margin: 0;
+    font-weight: 600;
+    line-height: 1.45;
+}
+
+.idle-front-instruction span {
+    display: block;
+    margin-top: 2px;
+    color: var(--gray-600);
+    font-weight: 500;
 }
 
 @keyframes idleBounce {
@@ -842,6 +903,13 @@ body {
     .kiosk-display { font-size: 1.4rem; letter-spacing: 2px; }
     .kiosk-numpad__key { font-size: 1.2rem; }
     .kiosk-header__title { font-size: 1rem; }
+    .idle-front-card { width: 94vw; padding: 14px 12px; border-radius: 18px; }
+    .idle-front-logo { width: 76px; height: 76px; margin-bottom: 8px; }
+    .idle-front-qr-wrap { padding: 8px; border-radius: 12px; }
+    .idle-front-qr { width: 210px; height: 210px; }
+    .idle-front-qr img,
+    .idle-front-qr canvas { width: 210px !important; height: 210px !important; }
+    .idle-front-instruction { font-size: .92rem; }
 }
 
 /* ── Prevent overscroll / pull-to-refresh on iOS ── */
