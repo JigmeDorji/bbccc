@@ -38,15 +38,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <p style='margin:0;'><strong>Message:</strong><br>{$safeMsg}</p>
             ";
             $subjectLine = 'New Website Query - ' . ($subject !== '' ? $subject : 'General');
+            if (function_exists('bbcc_mail_log')) {
+                bbcc_mail_log('WEBSITE NOTIFY ROUTE (contact): resolved recipient=' . $adminEmail);
+            }
             $sent = send_mail($adminEmail, 'Admin', $subjectLine, $adminBody, 6);
+            if (function_exists('bbcc_mail_log')) {
+                bbcc_mail_log('WEBSITE NOTIFY DIRECT SEND (contact): ' . ($sent ? 'OK' : 'FAILED') . ' to ' . $adminEmail);
+            }
             if (!$sent) {
-                pcm_send_notification_mail(
+                $queuedOrSent = pcm_send_notification_mail(
                     $adminEmail,
                     'Admin',
                     $subjectLine,
                     $adminBody
                 );
+                if (function_exists('bbcc_mail_log')) {
+                    bbcc_mail_log('WEBSITE NOTIFY FALLBACK (contact): ' . ($queuedOrSent ? 'QUEUED_OR_SENT' : 'FAILED') . ' to ' . $adminEmail);
+                }
             }
+        } elseif (function_exists('bbcc_mail_log')) {
+            bbcc_mail_log('WEBSITE NOTIFY SKIP (contact): invalid/empty recipient=' . $adminEmail);
         }
 
         $message = "Thank you for contacting us! We'll be in touch soon.";

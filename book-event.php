@@ -115,9 +115,18 @@ try {
         $adminEmail = trim((string)pcm_website_notify_email());
         if ($adminEmail !== '' && filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
             $subjectLine = "New Booking Request – " . $event['title'];
+            if (function_exists('bbcc_mail_log')) {
+                bbcc_mail_log('WEBSITE NOTIFY ROUTE (booking): resolved recipient=' . $adminEmail . ' for event ' . ($event['title'] ?? 'unknown'));
+            }
             $sent = send_mail($adminEmail, 'Admin', $subjectLine, $adminBody, 6);
+            if (function_exists('bbcc_mail_log')) {
+                bbcc_mail_log('WEBSITE NOTIFY DIRECT SEND (booking): ' . ($sent ? 'OK' : 'FAILED') . ' to ' . $adminEmail);
+            }
             if (!$sent) {
-                pcm_send_notification_mail($adminEmail, 'Admin', $subjectLine, $adminBody);
+                $queuedOrSent = pcm_send_notification_mail($adminEmail, 'Admin', $subjectLine, $adminBody);
+                if (function_exists('bbcc_mail_log')) {
+                    bbcc_mail_log('WEBSITE NOTIFY FALLBACK (booking): ' . ($queuedOrSent ? 'QUEUED_OR_SENT' : 'FAILED') . ' to ' . $adminEmail);
+                }
             }
         } else {
             bbcc_mail_log('BOOKING ADMIN MAIL SKIP: WEBSITE_NOTIFY_EMAIL is missing/invalid for event ' . ($event['title'] ?? 'unknown'));
