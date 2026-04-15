@@ -1,5 +1,6 @@
 <?php
 // include/notifications.php — simple role/user notification helpers
+require_once __DIR__ . '/mailer.php';
 
 function bbcc_notification_role_key(string $role): string {
     $r = strtolower(trim($role));
@@ -56,13 +57,46 @@ function bbcc_create_notification(PDO $pdo, array $data): bool {
 }
 
 function bbcc_notify_admins(PDO $pdo, string $title, string $body = '', string $linkUrl = ''): bool {
-    return bbcc_create_notification($pdo, [
+    $ok = bbcc_create_notification($pdo, [
         'target_role' => 'admin',
         'title' => $title,
         'body' => $body,
         'level' => 'info',
         'link_url' => $linkUrl,
     ]);
+
+    // Also send an admin email notification.
+    try {
+        if (!function_exists('pcm_class_notify_email') && file_exists(__DIR__ . '/pcm_helpers.php')) {
+            require_once __DIR__ . '/pcm_helpers.php';
+        }
+        $fallback = function_exists('bbcc_env')
+            ? bbcc_env('ADMIN_NOTIFY_EMAIL', defined('MAIL_FROM_EMAIL') ? (string)MAIL_FROM_EMAIL : '')
+            : (defined('MAIL_FROM_EMAIL') ? (string)MAIL_FROM_EMAIL : '');
+        $to = trim((string)(function_exists('pcm_class_notify_email')
+            ? pcm_class_notify_email()
+            : (function_exists('bbcc_env') ? bbcc_env('CLASS_NOTIFY_EMAIL', $fallback) : $fallback)));
+
+        if ($to !== '' && filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            $safeTitle = htmlspecialchars($title, ENT_QUOTES, 'UTF-8');
+            $safeBody = nl2br(htmlspecialchars($body, ENT_QUOTES, 'UTF-8'));
+            $safeLink = trim($linkUrl) !== '' ? htmlspecialchars($linkUrl, ENT_QUOTES, 'UTF-8') : '';
+            $html = "
+                <h3 style='margin:0 0 12px;'>Admin Notification</h3>
+                <p style='margin:0 0 10px;'><strong>{$safeTitle}</strong></p>
+                " . ($safeBody !== '' ? "<p style='margin:0 0 10px;'>{$safeBody}</p>" : "") . "
+                " . ($safeLink !== '' ? "<p style='margin:0;'><strong>Link:</strong> {$safeLink}</p>" : "") . "
+            ";
+            @send_mail($to, 'Admin', $title, $html, 4);
+        }
+    } catch (Throwable $e) {
+        // Non-blocking: keep in-app notification working even if mail fails.
+        if (function_exists('bbcc_mail_log')) {
+            bbcc_mail_log('NOTIFY ADMIN MAIL ERROR: ' . $e->getMessage());
+        }
+    }
+
+    return $ok;
 }
 
 function bbcc_notify_username(PDO $pdo, string $username, string $title, string $body = '', string $linkUrl = ''): bool {
