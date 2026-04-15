@@ -37,12 +37,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <p style='margin:0 0 10px;'><strong>Subject:</strong> {$safeSubject}</p>
                 <p style='margin:0;'><strong>Message:</strong><br>{$safeMsg}</p>
             ";
-            pcm_send_notification_mail(
-                $adminEmail,
-                'Admin',
-                'New Website Query - ' . ($subject !== '' ? $subject : 'General'),
-                $adminBody
-            );
+            $subjectLine = 'New Website Query - ' . ($subject !== '' ? $subject : 'General');
+            $sent = send_mail($adminEmail, 'Admin', $subjectLine, $adminBody, 6);
+            if (!$sent) {
+                pcm_send_notification_mail(
+                    $adminEmail,
+                    'Admin',
+                    $subjectLine,
+                    $adminBody
+                );
+            }
         }
 
         $message = "Thank you for contacting us! We'll be in touch soon.";
