@@ -6,6 +6,7 @@ require_once "include/pcm_helpers.php";
 require_once "include/account_activation.php";
 require_once "include/patron_schema.php";
 require_once "include/user_id_helper.php";
+require_once "include/email_verification.php";
 
 $message = "";
 $isSuccess = false;
@@ -50,6 +51,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($address === '') {
             throw new Exception("Address is required.");
+        }
+        $verifiedEmail = strtolower((string)($_SESSION['verified_email'] ?? ''));
+        $verifiedAt = (int)($_SESSION['verified_email_at'] ?? 0);
+        $verifiedPurpose = strtolower((string)($_SESSION['verified_email_purpose'] ?? ''));
+        if ($verifiedEmail !== strtolower($email) || (time() - $verifiedAt) > 1800 || $verifiedPurpose !== 'patron_signup') {
+            throw new Exception("Please verify your email address first.");
         }
         if (strlen($passwordPlain) < 8) {
             throw new Exception("Password must be at least 8 characters long.");
@@ -116,13 +123,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->commit();
 
         $activationLink = bbcc_activation_link($activationToken);
-        $sent = bbcc_send_activation_email($email, $fullName, $activationLink);
+        $sent = bbcc_send_patron_activation_email($email, $fullName, $activationLink);
         if (!$sent) {
             error_log("Patron signup activation email failed for {$email}");
             $message = "Patron account created, but activation email could not be sent. Please contact admin.";
         } else {
             $message = "Patron account created successfully. Please check your inbox for the activation email. If you do not see it, check Spam/Junk and mark it as Not Spam, then open the activation link.";
         }
+        unset($_SESSION['verified_email'], $_SESSION['verified_email_at'], $_SESSION['verified_email_purpose']);
         $isSuccess = true;
         $old = ['full_name' => '', 'email' => '', 'phone' => '', 'address' => ''];
     } catch (Throwable $e) {
@@ -133,6 +141,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $isSuccess = false;
     }
 }
+
+$sessionVerifiedEmail = strtolower((string)($_SESSION['verified_email'] ?? ''));
+$sessionVerifiedAt = (int)($_SESSION['verified_email_at'] ?? 0);
+$sessionVerifiedPurpose = strtolower((string)($_SESSION['verified_email_purpose'] ?? ''));
+$isSessionOtpValid = ($sessionVerifiedEmail !== '' && (time() - $sessionVerifiedAt) <= 1800 && $sessionVerifiedPurpose === 'patron_signup');
+$isPreverifiedEmail = $isSessionOtpValid && !empty($old['email']) && strtolower((string)$old['email']) === $sessionVerifiedEmail;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -170,6 +184,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-weight:600; font-size:0.95rem; padding:12px 28px;
         }
         .btn-brand:hover { background:var(--brand-dark); color:#fff; }
+        .verify-box {
+            background:#fef3f2;
+            border:1px solid #f1d2cf;
+            border-left:4px solid var(--brand);
+            border-radius:12px;
+            padding:14px;
+            margin-bottom:16px;
+        }
+        .verify-badge {
+            display:none;
+            margin-top:10px;
+            padding:8px 12px;
+            border-radius:10px;
+            background:#d4edda;
+            border:1px solid #c3e6cb;
+            color:#155724;
+            font-weight:600;
+            font-size:.86rem;
+        }
     </style>
 </head>
 <body>
@@ -203,6 +236,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <input type="text" class="form-control" id="phone" name="phone" placeholder="Phone" required value="<?= htmlspecialchars($old['phone']) ?>">
                         <label for="phone"><i class="fas fa-phone me-1"></i> Mobile *</label>
                     </div>
+                </div>
+            </div>
+
+            <div class="verify-box">
+                <div style="font-size:.86rem;color:#6b140d;margin-bottom:8px;">
+                    <i class="fas fa-envelope-circle-check me-1"></i> Verify your email before creating patron account.
+                </div>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <button type="button" class="btn btn-brand btn-sm" id="patronSendCodeBtn">
+                        <i class="fas fa-paper-plane me-1"></i> Send Code
+                    </button>
+                    <div id="patronResendTimer" style="font-size:.8rem;color:#777;display:none;">
+                        Resend in <strong id="patronCountdown">60</strong>s
+                    </div>
+                    <button type="button" class="btn btn-link btn-sm p-0" id="patronResendBtn" style="display:none;color:var(--brand);">
+                        <i class="fas fa-redo me-1"></i> Resend
+                    </button>
+                </div>
+                <div class="row g-2 mt-2" id="patronOtpSection" style="display:none;">
+                    <div class="col-8 col-md-6">
+                        <input type="text" class="form-control text-center fw-bold" id="patronOtpCode" maxlength="6" placeholder="Enter 6-digit code" autocomplete="off">
+                    </div>
+                    <div class="col-4 col-md-3">
+                        <button type="button" class="btn btn-outline-secondary w-100" id="patronVerifyCodeBtn">
+                            Verify
+                        </button>
+                    </div>
+                </div>
+                <div class="verify-badge" id="patronVerifiedBadge">
+                    <i class="fas fa-check-circle me-1"></i> Email verified successfully
                 </div>
             </div>
 
@@ -241,15 +304,172 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 document.addEventListener('DOMContentLoaded', function() {
     const message = <?= json_encode($message) ?>;
     const isSuccess = <?= $isSuccess ? 'true' : 'false' ?>;
-    if (!message) return;
-    Swal.fire({
-        icon: isSuccess ? 'success' : 'error',
-        title: isSuccess ? 'Success' : 'Error',
-        text: message,
-        confirmButtonColor: '#881b12'
-    }).then(() => {
-        if (isSuccess) window.location.href = 'login';
+    const csrfToken = document.querySelector('input[name="_csrf"]').value;
+    const emailInput = document.getElementById('email');
+    const sendBtn = document.getElementById('patronSendCodeBtn');
+    const resendBtn = document.getElementById('patronResendBtn');
+    const resendTimer = document.getElementById('patronResendTimer');
+    const countdownEl = document.getElementById('patronCountdown');
+    const otpSection = document.getElementById('patronOtpSection');
+    const otpInput = document.getElementById('patronOtpCode');
+    const verifyBtn = document.getElementById('patronVerifyCodeBtn');
+    const verifiedBadge = document.getElementById('patronVerifiedBadge');
+    const form = document.querySelector('form[method="post"]');
+
+    let emailIsVerified = <?= $isPreverifiedEmail ? 'true' : 'false' ?>;
+    let verifiedEmail = <?= json_encode($sessionVerifiedEmail) ?>;
+    let countdownInterval = null;
+
+    function setVerifyUI() {
+        if (emailIsVerified && verifiedEmail === (emailInput.value || '').trim().toLowerCase()) {
+            verifiedBadge.style.display = 'block';
+            sendBtn.style.display = 'none';
+            otpSection.style.display = 'none';
+            resendBtn.style.display = 'none';
+            resendTimer.style.display = 'none';
+            return;
+        }
+        verifiedBadge.style.display = 'none';
+        sendBtn.style.display = '';
+    }
+
+    function resetVerificationIfEmailChanged() {
+        const current = (emailInput.value || '').trim().toLowerCase();
+        if (current !== verifiedEmail) {
+            emailIsVerified = false;
+            verifiedEmail = '';
+            otpInput.value = '';
+            otpSection.style.display = 'none';
+            resendBtn.style.display = 'none';
+            resendTimer.style.display = 'none';
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+            setVerifyUI();
+        }
+    }
+
+    function startResendCountdown(seconds) {
+        let remaining = seconds;
+        resendTimer.style.display = '';
+        resendBtn.style.display = 'none';
+        countdownEl.textContent = String(remaining);
+        if (countdownInterval) clearInterval(countdownInterval);
+        countdownInterval = setInterval(() => {
+            remaining -= 1;
+            countdownEl.textContent = String(remaining);
+            if (remaining <= 0) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+                resendTimer.style.display = 'none';
+                resendBtn.style.display = '';
+            }
+        }, 1000);
+    }
+
+    function requestCode() {
+        const email = (emailInput.value || '').trim();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            Swal.fire({icon:'warning',title:'Invalid Email',text:'Please enter a valid email first.',confirmButtonColor:'#881b12'});
+            emailInput.focus();
+            return;
+        }
+
+        sendBtn.disabled = true;
+        sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Sending...';
+
+        fetch('verify-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: '_csrf=' + encodeURIComponent(csrfToken) + '&action=send&purpose=patron_signup&email=' + encodeURIComponent(email)
+        }).then(r => r.json()).then(data => {
+            if (data.ok) {
+                otpSection.style.display = '';
+                otpInput.focus();
+                startResendCountdown(60);
+                Swal.fire({icon:'success',title:'Code Sent',text:data.message,confirmButtonColor:'#881b12'});
+            } else {
+                Swal.fire({icon:'error',title:'Error',text:data.message || 'Unable to send code.',confirmButtonColor:'#881b12'});
+            }
+        }).catch(() => {
+            Swal.fire({icon:'error',title:'Error',text:'Network error. Please try again.',confirmButtonColor:'#881b12'});
+        }).finally(() => {
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = '<i class="fas fa-paper-plane me-1"></i> Send Code';
+        });
+    }
+
+    function verifyCode() {
+        const email = (emailInput.value || '').trim();
+        const code = (otpInput.value || '').trim();
+        if (!/^\d{6}$/.test(code)) {
+            Swal.fire({icon:'warning',title:'Invalid Code',text:'Enter the 6-digit code.',confirmButtonColor:'#881b12'});
+            return;
+        }
+        verifyBtn.disabled = true;
+        verifyBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        fetch('verify-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: '_csrf=' + encodeURIComponent(csrfToken) + '&action=verify&purpose=patron_signup&email=' + encodeURIComponent(email) + '&code=' + encodeURIComponent(code)
+        }).then(r => r.json()).then(data => {
+            if (data.ok) {
+                emailIsVerified = true;
+                verifiedEmail = email.toLowerCase();
+                setVerifyUI();
+                Swal.fire({icon:'success',title:'Email Verified',text:'You can now submit the registration.',confirmButtonColor:'#881b12'});
+            } else {
+                Swal.fire({icon:'error',title:'Verification Failed',text:data.message || 'Incorrect code.',confirmButtonColor:'#881b12'});
+            }
+        }).catch(() => {
+            Swal.fire({icon:'error',title:'Error',text:'Network error. Please try again.',confirmButtonColor:'#881b12'});
+        }).finally(() => {
+            verifyBtn.disabled = false;
+            verifyBtn.innerHTML = 'Verify';
+        });
+    }
+
+    sendBtn.addEventListener('click', requestCode);
+    resendBtn.addEventListener('click', requestCode);
+    verifyBtn.addEventListener('click', verifyCode);
+    otpInput.addEventListener('input', function() {
+        this.value = this.value.replace(/[^0-9]/g, '').slice(0, 6);
     });
+    otpInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            verifyCode();
+        }
+    });
+    emailInput.addEventListener('input', resetVerificationIfEmailChanged);
+
+    form.addEventListener('submit', function(e) {
+        const email = (emailInput.value || '').trim().toLowerCase();
+        if (!emailIsVerified || email !== verifiedEmail) {
+            e.preventDefault();
+            Swal.fire({
+                icon:'warning',
+                title:'Email Not Verified',
+                text:'Please verify your email address before creating patron account.',
+                confirmButtonColor:'#881b12'
+            });
+            return;
+        }
+    });
+
+    setVerifyUI();
+
+    if (message) {
+        Swal.fire({
+            icon: isSuccess ? 'success' : 'error',
+            title: isSuccess ? 'Success' : 'Error',
+            text: message,
+            confirmButtonColor: '#881b12'
+        }).then(() => {
+            if (isSuccess) window.location.href = 'login';
+        });
+    }
 });
 </script>
 </body>

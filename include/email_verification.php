@@ -86,7 +86,7 @@ function bbcc_send_verification_code(PDO $pdo, string $email, string $purpose = 
 
     // ── Send the email ──────────────────────────────────────
     $safeName = htmlspecialchars($email, ENT_QUOTES, 'UTF-8');
-    $subject  = "Your Verification Code — Bhutanese Centre Canberra";
+    $subject  = "Your Verification Code for Parent Portal, Bhutanese Language and Culture School";
 
     if (function_exists('pcm_email_wrap')) {
         $body = pcm_email_wrap('Email Verification', "

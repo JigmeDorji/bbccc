@@ -98,6 +98,34 @@ function bbcc_send_activation_email(string $toEmail, string $toName, string $act
     return send_mail($toEmail, $toName, 'Activate your account — Bhutanese Centre Canberra', $body);
 }
 
+function bbcc_send_patron_activation_email(string $toEmail, string $toName, string $activationLink): bool {
+    $safeName = htmlspecialchars($toName ?: $toEmail, ENT_QUOTES, 'UTF-8');
+    $safeLink = htmlspecialchars($activationLink, ENT_QUOTES, 'UTF-8');
+
+    if (function_exists('pcm_email_wrap')) {
+        $body = pcm_email_wrap('Welcome to Bhutanese Buddhist and Culture Centre, Canberra', "
+            <p style='margin:0 0 14px;'>Hello <strong>{$safeName}</strong>,</p>
+            <p style='margin:20px 0;'>
+                <a href='{$safeLink}' style='background:#881b12;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;font-size:15px;'>
+                    Activate Account
+                </a>
+            </p>
+            <p style='margin:0 0 8px;'>If the button does not work, copy this URL into your browser:</p>
+            <p style='margin:0;word-break:break-all;'><a href='{$safeLink}'>{$safeLink}</a></p>
+            <p style='margin:14px 0 0;font-size:13px;color:#666;'>If this email landed in Spam/Junk, please mark it as Not Spam so future emails arrive in your inbox.</p>
+            <p style='margin:8px 0 0;font-size:13px;color:#666;'>This link expires in 48 hours.</p>
+        ");
+    } else {
+        $body = "
+            <p>Hello <strong>{$safeName}</strong>,</p>
+            <p><a href='{$safeLink}'>{$safeLink}</a></p>
+            <p>This link expires in 48 hours.</p>
+        ";
+    }
+
+    return send_mail($toEmail, $toName, 'Welcome to Bhutanese Buddhist and Culture Centre', $body);
+}
+
 function bbcc_activate_account_with_token(PDO $pdo, string $rawToken): array {
     bbcc_activation_ensure_schema($pdo);
 

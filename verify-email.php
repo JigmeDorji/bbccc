@@ -32,7 +32,11 @@ if (!hash_equals(csrf_token(), $submitted)) {
 
 $action = trim($_POST['action'] ?? '');
 $email  = strtolower(trim($_POST['email'] ?? ''));
-$purpose = 'signup';
+$purpose = strtolower(trim((string)($_POST['purpose'] ?? 'signup')));
+$allowedPurposes = ['signup', 'patron_signup'];
+if (!in_array($purpose, $allowedPurposes, true)) {
+    $purpose = 'signup';
+}
 
 if (!in_array($action, ['send', 'verify'], true)) {
     echo json_encode(['ok' => false, 'message' => 'Invalid action.']);
@@ -63,11 +67,20 @@ try {
 /* ── SEND CODE ────────────────────────────────────────────── */
 if ($action === 'send') {
     // Check if email is already registered (no point verifying)
-    $stmtCheck = $pdo->prepare("SELECT id FROM parents WHERE LOWER(email) = LOWER(:e) LIMIT 1");
-    $stmtCheck->execute([':e' => $email]);
-    if ($stmtCheck->fetchColumn()) {
-        echo json_encode(['ok' => false, 'message' => 'This email is already registered. Please use a different email or login.']);
-        exit;
+    if ($purpose === 'signup') {
+        $stmtCheck = $pdo->prepare("SELECT id FROM parents WHERE LOWER(email) = LOWER(:e) LIMIT 1");
+        $stmtCheck->execute([':e' => $email]);
+        if ($stmtCheck->fetchColumn()) {
+            echo json_encode(['ok' => false, 'message' => 'This email is already registered. Please use a different email or login.']);
+            exit;
+        }
+    } elseif ($purpose === 'patron_signup') {
+        $stmtCheckPatron = $pdo->prepare("SELECT id FROM patrons WHERE LOWER(email) = LOWER(:e) LIMIT 1");
+        $stmtCheckPatron->execute([':e' => $email]);
+        if ($stmtCheckPatron->fetchColumn()) {
+            echo json_encode(['ok' => false, 'message' => 'This email is already registered. Please use a different email or login.']);
+            exit;
+        }
     }
 
     $stmtCheckUser = $pdo->prepare("SELECT userid FROM `user` WHERE LOWER(username) = LOWER(:u) LIMIT 1");
@@ -91,6 +104,7 @@ if ($action === 'verify') {
         // Store in session so parentAccountSetup.php can trust the verification
         $_SESSION['verified_email'] = $email;
         $_SESSION['verified_email_at'] = time();
+        $_SESSION['verified_email_purpose'] = $purpose;
     }
 
     echo json_encode($result);

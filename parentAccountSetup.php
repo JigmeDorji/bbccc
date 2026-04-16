@@ -55,7 +55,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // ── Verify that the email was OTP-verified ──
         $verifiedEmail = $_SESSION['verified_email'] ?? '';
         $verifiedAt    = $_SESSION['verified_email_at'] ?? 0;
-        if (strtolower($verifiedEmail) !== strtolower($email) || (time() - $verifiedAt) > 1800) {
+        $verifiedPurpose = strtolower((string)($_SESSION['verified_email_purpose'] ?? 'signup'));
+        if (strtolower($verifiedEmail) !== strtolower($email) || (time() - $verifiedAt) > 1800 || $verifiedPurpose !== 'signup') {
             throw new Exception("Please verify your email address first. Go back to the Email Verification step.");
         }
 
@@ -109,10 +110,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         // Send welcome greeting email (no activation link needed — email already verified via OTP)
         $safeName = htmlspecialchars($full_name, ENT_QUOTES, 'UTF-8');
+        $welcomeSubject = 'Welcome to Parent Portal';
         if (function_exists('pcm_email_wrap')) {
-            $welcomeBody = pcm_email_wrap('Welcome to Bhutanese Centre Canberra', "
+            $welcomeBody = pcm_email_wrap('Bhutanese Language and Culture School, Canberra', "
                 <p style='margin:0 0 14px;'>Hello <strong>{$safeName}</strong>,</p>
-                <p style='margin:0 0 14px;'>Welcome to the <strong>Bhutanese Buddhist &amp; Cultural Centre Canberra</strong> community! Your account has been created successfully.</p>
+                <p style='margin:0 0 14px;'>Welcome to the <strong>Bhutanese Language and Culture School</strong> community! Your account has been created successfully.</p>
                 <p style='margin:0 0 14px;'>You can now log in using your email and password to access all parent portal features including class enrolments, attendance tracking, and more.</p>
                 <p style='margin:20px 0;'>
                     <a href='" . rtrim(BASE_URL, '/') . "/login' style='background:#881b12;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;font-size:15px;'>
@@ -124,15 +126,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         } else {
             $welcomeBody = "
                 <p>Hello <strong>{$safeName}</strong>,</p>
-                <p>Welcome to the Bhutanese Buddhist & Cultural Centre Canberra! Your account has been created successfully.</p>
+                <p>Welcome to the Bhutanese Language and Culture School! Your account has been created successfully.</p>
                 <p>You can now log in using your email and password.</p>
                 <p>Thank you for joining us.</p>
             ";
         }
-        $sent = send_mail($email, $full_name, 'Welcome to Bhutanese Centre Canberra', $welcomeBody);
+        $sent = send_mail($email, $full_name, $welcomeSubject, $welcomeBody);
         if (!$sent) {
             error_log("Parent signup welcome email failed for {$email}");
         }
+        unset($_SESSION['verified_email'], $_SESSION['verified_email_at'], $_SESSION['verified_email_purpose']);
         $message = "Account created successfully! You can now log in with your email and password.";
         $signupSuccess = true;
     } catch (Exception $e) {
@@ -632,7 +635,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('verify-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: '_csrf=' + encodeURIComponent(csrfToken) + '&action=send&email=' + encodeURIComponent(email)
+            body: '_csrf=' + encodeURIComponent(csrfToken) + '&action=send&purpose=signup&email=' + encodeURIComponent(email)
         })
         .then(r => r.json())
         .then(data => {
@@ -680,7 +683,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('verify-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: '_csrf=' + encodeURIComponent(csrfToken) + '&action=verify&email=' + encodeURIComponent(email) + '&code=' + encodeURIComponent(code)
+            body: '_csrf=' + encodeURIComponent(csrfToken) + '&action=verify&purpose=signup&email=' + encodeURIComponent(email) + '&code=' + encodeURIComponent(code)
         })
         .then(r => r.json())
         .then(data => {
