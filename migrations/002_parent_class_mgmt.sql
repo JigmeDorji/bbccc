@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS `pcm_bank_accounts` (
     `created_at`     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 3) Enrolment requests
 CREATE TABLE IF NOT EXISTS `pcm_enrolments` (
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS `pcm_enrolments` (
     KEY `idx_enrol_status` (`status`),
     CONSTRAINT `fk_enrol_student` FOREIGN KEY (`student_id`) REFERENCES `students`(`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_enrol_parent`  FOREIGN KEY (`parent_id`)  REFERENCES `parents`(`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 4) Fee payments
 CREATE TABLE IF NOT EXISTS `pcm_fee_payments` (
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS `pcm_fee_payments` (
     CONSTRAINT `fk_fee_enrolment` FOREIGN KEY (`enrolment_id`) REFERENCES `pcm_enrolments`(`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_fee_student2`  FOREIGN KEY (`student_id`)   REFERENCES `students`(`id`)       ON DELETE CASCADE,
     CONSTRAINT `fk_fee_parent2`   FOREIGN KEY (`parent_id`)    REFERENCES `parents`(`id`)        ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 5) Kiosk sign-in / sign-out log
 CREATE TABLE IF NOT EXISTS `pcm_kiosk_log` (
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS `pcm_kiosk_log` (
     KEY `idx_kiosk_date`   (`log_date`),
     CONSTRAINT `fk_kiosk_child2`  FOREIGN KEY (`child_id`)  REFERENCES `students`(`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_kiosk_parent2` FOREIGN KEY (`parent_id`) REFERENCES `parents`(`id`)  ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 6) Absence requests
 CREATE TABLE IF NOT EXISTS `pcm_absence_requests` (
@@ -125,7 +125,7 @@ CREATE TABLE IF NOT EXISTS `pcm_absence_requests` (
     KEY `idx_abs_date`   (`absence_date`),
     CONSTRAINT `fk_abs_child`  FOREIGN KEY (`child_id`)  REFERENCES `students`(`id`) ON DELETE CASCADE,
     CONSTRAINT `fk_abs_parent` FOREIGN KEY (`parent_id`) REFERENCES `parents`(`id`)  ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 7) Kiosk brute-force protection
 CREATE TABLE IF NOT EXISTS `pcm_kiosk_failed` (
@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS `pcm_kiosk_failed` (
     KEY `idx_fail_phone` (`phone`),
     KEY `idx_fail_ip`    (`ip_address`),
     KEY `idx_fail_time`  (`attempted_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 8) Seed bank account from existing fees_settings (optional)
 DROP PROCEDURE IF EXISTS _pcm_seed_bank;
