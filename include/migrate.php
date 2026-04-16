@@ -31,6 +31,7 @@ function bbcc_run_migrations() {
         $pdo = new PDO($dsn, $DB_USER, $DB_PASSWORD, [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
         ]);
     } catch (PDOException $e) {
         error_log("[BBCC Migrate] DB connection failed: " . $e->getMessage());
@@ -49,8 +50,14 @@ function bbcc_run_migrations() {
     // ── Get already-applied migrations ──────────────────────
     $applied = [];
     $stmt = $pdo->query("SELECT `migration` FROM `db_migrations`");
-    while ($row = $stmt->fetch()) {
-        $applied[$row['migration']] = true;
+    $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+    if ($stmt) {
+        $stmt->closeCursor();
+    }
+    foreach ($rows as $row) {
+        if (!empty($row['migration'])) {
+            $applied[$row['migration']] = true;
+        }
     }
 
     // ── Discover migration files (sorted by numeric prefix) ─
@@ -94,7 +101,7 @@ function bbcc_run_migrations() {
                 $statements = bbcc_split_sql($sql);
                 foreach ($statements as $statement) {
                     if (!empty(trim($statement))) {
-                        $pdo->exec($statement);
+                        bbcc_exec_statement_pdo($pdo, $statement);
                     }
                 }
             }
@@ -110,6 +117,22 @@ function bbcc_run_migrations() {
             // Stop processing further migrations to keep order intact
             break;
         }
+    }
+}
+
+/**
+ * Execute a SQL statement via PDO while explicitly closing any cursor.
+ * This avoids "unbuffered queries are active" errors on some hosts.
+ */
+function bbcc_exec_statement_pdo(PDO $pdo, string $sql): void {
+    $stmt = $pdo->prepare($sql);
+    if ($stmt === false) {
+        throw new Exception("Failed to prepare SQL statement.");
+    }
+    try {
+        $stmt->execute();
+    } finally {
+        $stmt->closeCursor();
     }
 }
 

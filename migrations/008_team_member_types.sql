@@ -13,7 +13,7 @@ SET @has_member_type := (
 SET @sql_add_member_type := IF(
   @has_member_type = 0,
   "ALTER TABLE `ourteam` ADD COLUMN `member_type` VARCHAR(30) NOT NULL DEFAULT 'executive' AFTER `designation`",
-  "SELECT 'member_type already exists' AS info"
+  "SET @bbcc_member_type_exists := 1"
 );
 PREPARE stmt_add_member_type FROM @sql_add_member_type;
 EXECUTE stmt_add_member_type;
