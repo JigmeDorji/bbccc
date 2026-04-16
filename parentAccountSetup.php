@@ -6,6 +6,7 @@ require_once "include/pcm_helpers.php";
 require_once "include/account_activation.php";
 require_once "include/patron_schema.php";
 require_once "include/user_id_helper.php";
+require_once "include/email_verification.php";
 
 $message = "";
 $signupSuccess = false;
@@ -50,6 +51,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if ($phone === '') throw new Exception("Mobile Number is required.");
         if (!preg_match('/^[0-9 +()-]{8,20}$/', $phone)) throw new Exception("Please enter a valid Mobile Number.");
         if ($address === '') throw new Exception("Address is required.");
+
+        // ── Verify that the email was OTP-verified ──
+        $verifiedEmail = $_SESSION['verified_email'] ?? '';
+        $verifiedAt    = $_SESSION['verified_email_at'] ?? 0;
+        if (strtolower($verifiedEmail) !== strtolower($email) || (time() - $verifiedAt) > 1800) {
+            throw new Exception("Please verify your email address first. Go back to the Email Verification step.");
+        }
+
         if (strlen($password_plain) < 8) throw new Exception("Password must be at least 8 characters long.");
         if (!preg_match('/[A-Za-z]/', $password_plain) || !preg_match('/[0-9]/', $password_plain)) throw new Exception("Password must include at least 1 letter and 1 number.");
         if ($password_plain !== $confirm_password) throw new Exception("Password and Confirm Password do not match.");
@@ -73,9 +82,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $parentId = (int)$pdo->lastInsertId();
 
         $pdo->prepare("INSERT INTO `user` (userid, username, password, role, is_active, createdDate) VALUES (:userid, :username, :password, :role, :is_active, :createdDate)")
-            ->execute([':userid'=>$userid, ':username'=>$username, ':password'=>$password, ':role'=>'parent', ':is_active'=>0, ':createdDate'=>date('Y-m-d H:i:s')]);
-
-        $activationToken = bbcc_issue_activation_token($pdo, $userid, $email, 48);
+            ->execute([':userid'=>$userid, ':username'=>$username, ':password'=>$password, ':role'=>'parent', ':is_active'=>1, ':createdDate'=>date('Y-m-d H:i:s')]);
 
         if ($registerAsPatron) {
             $pdo->prepare("
@@ -100,14 +107,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         $pdo->commit();
 
-        $activationLink = bbcc_activation_link($activationToken);
-        $sent = bbcc_send_activation_email($email, $full_name, $activationLink);
-        if (!$sent) {
-            error_log("Parent signup activation email failed for {$email}");
-            $message = "Account created, but activation email could not be sent. Please contact admin.";
+        // Send welcome greeting email (no activation link needed — email already verified via OTP)
+        $safeName = htmlspecialchars($full_name, ENT_QUOTES, 'UTF-8');
+        if (function_exists('pcm_email_wrap')) {
+            $welcomeBody = pcm_email_wrap('Welcome to Bhutanese Centre Canberra', "
+                <p style='margin:0 0 14px;'>Hello <strong>{$safeName}</strong>,</p>
+                <p style='margin:0 0 14px;'>Welcome to the <strong>Bhutanese Buddhist &amp; Cultural Centre Canberra</strong> community! Your account has been created successfully.</p>
+                <p style='margin:0 0 14px;'>You can now log in using your email and password to access all parent portal features including class enrolments, attendance tracking, and more.</p>
+                <p style='margin:20px 0;'>
+                    <a href='" . rtrim(BASE_URL, '/') . "/login' style='background:#881b12;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;font-size:15px;'>
+                        Login to Your Account
+                    </a>
+                </p>
+                <p style='margin:14px 0 0;font-size:13px;color:#666;'>Thank you for joining us. We look forward to serving you and your family.</p>
+            ");
         } else {
-            $message = "Account created successfully! Please check your inbox for the activation email. If you do not see it, check Spam/Junk and mark it as Not Spam, then open the activation link.";
+            $welcomeBody = "
+                <p>Hello <strong>{$safeName}</strong>,</p>
+                <p>Welcome to the Bhutanese Buddhist & Cultural Centre Canberra! Your account has been created successfully.</p>
+                <p>You can now log in using your email and password.</p>
+                <p>Thank you for joining us.</p>
+            ";
         }
+        $sent = send_mail($email, $full_name, 'Welcome to Bhutanese Centre Canberra', $welcomeBody);
+        if (!$sent) {
+            error_log("Parent signup welcome email failed for {$email}");
+        }
+        $message = "Account created successfully! You can now log in with your email and password.";
         $signupSuccess = true;
     } catch (Exception $e) {
         if (isset($pdo) && $pdo instanceof PDO && $pdo->inTransaction()) $pdo->rollBack();
@@ -220,9 +246,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <div class="steps-indicator" id="stepsIndicator">
                 <div class="step-item active" data-step="1"><div class="step-dot">1</div><span>Personal Info</span></div>
                 <div class="step-line"></div>
-                <div class="step-item" data-step="2"><div class="step-dot">2</div><span>Security</span></div>
+                <div class="step-item" data-step="2"><div class="step-dot">2</div><span>Verify Email</span></div>
                 <div class="step-line"></div>
-                <div class="step-item" data-step="3"><div class="step-dot">3</div><span>Review</span></div>
+                <div class="step-item" data-step="3"><div class="step-dot">3</div><span>Security</span></div>
+                <div class="step-line"></div>
+                <div class="step-item" data-step="4"><div class="step-dot">4</div><span>Review</span></div>
             </div>
 
             <form method="POST" action="" id="signupForm" novalidate>
@@ -278,8 +306,73 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     </div>
                 </div>
 
-                <!-- STEP 2: Security -->
+                <!-- STEP 2: Verify Email -->
                 <div class="step-panel" id="step2">
+                    <div class="info-box">
+                        <i class="fas fa-envelope-circle-check"></i>
+                        We need to verify your email address. A <strong>6-digit code</strong> will be sent to your email.
+                    </div>
+
+                    <div class="text-center mb-3">
+                        <p class="mb-1" style="font-size:0.9rem;color:#555;">Sending verification code to:</p>
+                        <p class="fw-bold" style="font-size:1.05rem;color:var(--brand);" id="verifyEmailDisplay">—</p>
+                    </div>
+
+                    <div class="text-center mb-3" id="sendCodeSection">
+                        <button type="button" class="btn btn-brand" id="sendCodeBtn">
+                            <i class="fas fa-paper-plane me-2"></i>Send Verification Code
+                        </button>
+                    </div>
+
+                    <div id="otpSection" style="display:none;">
+                        <p class="text-center mb-2" style="font-size:0.85rem;color:#28a745;">
+                            <i class="fas fa-check-circle me-1"></i>Code sent! Check your inbox (and Spam/Junk folder).
+                        </p>
+                        <div class="d-flex justify-content-center gap-2 mb-2" id="otpInputGroup">
+                            <input type="text" class="form-control text-center fw-bold" id="otp1" maxlength="1" style="width:48px;height:56px;font-size:1.4rem;border-radius:10px;border:2px solid #dee2e6;" autocomplete="off">
+                            <input type="text" class="form-control text-center fw-bold" id="otp2" maxlength="1" style="width:48px;height:56px;font-size:1.4rem;border-radius:10px;border:2px solid #dee2e6;" autocomplete="off">
+                            <input type="text" class="form-control text-center fw-bold" id="otp3" maxlength="1" style="width:48px;height:56px;font-size:1.4rem;border-radius:10px;border:2px solid #dee2e6;" autocomplete="off">
+                            <span class="align-self-center" style="font-size:1.2rem;color:#ccc;">—</span>
+                            <input type="text" class="form-control text-center fw-bold" id="otp4" maxlength="1" style="width:48px;height:56px;font-size:1.4rem;border-radius:10px;border:2px solid #dee2e6;" autocomplete="off">
+                            <input type="text" class="form-control text-center fw-bold" id="otp5" maxlength="1" style="width:48px;height:56px;font-size:1.4rem;border-radius:10px;border:2px solid #dee2e6;" autocomplete="off">
+                            <input type="text" class="form-control text-center fw-bold" id="otp6" maxlength="1" style="width:48px;height:56px;font-size:1.4rem;border-radius:10px;border:2px solid #dee2e6;" autocomplete="off">
+                        </div>
+
+                        <div class="text-center mb-3">
+                            <button type="button" class="btn btn-brand" id="verifyCodeBtn">
+                                <i class="fas fa-shield-halved me-2"></i>Verify Code
+                            </button>
+                        </div>
+
+                        <div class="text-center" style="font-size:0.82rem;color:#888;">
+                            <span id="resendTimer">Resend available in <strong id="countdown">60</strong>s</span>
+                            <button type="button" class="btn btn-link btn-sm p-0" id="resendBtn" style="display:none;font-size:0.82rem;color:var(--brand);">
+                                <i class="fas fa-redo me-1"></i>Resend Code
+                            </button>
+                        </div>
+
+                        <div class="text-center mt-2" style="font-size:0.75rem;color:#999;">
+                            <i class="fas fa-clock me-1"></i>Code expires in 10 minutes &nbsp;|&nbsp; <i class="fas fa-shield me-1"></i>Max 5 attempts
+                        </div>
+                    </div>
+
+                    <div class="text-center mt-3" id="emailVerifiedBadge" style="display:none;">
+                        <div style="background:#d4edda;border:1px solid #c3e6cb;border-radius:12px;padding:16px 24px;display:inline-block;">
+                            <i class="fas fa-check-circle text-success" style="font-size:1.6rem;"></i>
+                            <p class="mb-0 mt-1 fw-bold text-success">Email Verified Successfully!</p>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between mt-4">
+                        <button type="button" class="btn btn-outline-brand" id="backToStep1FromVerify"><i class="fas fa-arrow-left me-2"></i> Back</button>
+                        <button type="button" class="btn btn-brand" id="toStep3" disabled>
+                            Continue <i class="fas fa-arrow-right ms-2"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STEP 3: Security -->
+                <div class="step-panel" id="step3">
                     <div class="info-box">
                         <i class="fas fa-shield-halved"></i>
                         Create a strong password — at least 8 characters with both letters and numbers.
@@ -307,13 +400,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     </div>
 
                     <div class="d-flex justify-content-between mt-3">
-                        <button type="button" class="btn btn-outline-brand" id="backToStep1"><i class="fas fa-arrow-left me-2"></i> Back</button>
-                        <button type="button" class="btn btn-brand" id="toStep3">Review <i class="fas fa-arrow-right ms-2"></i></button>
+                        <button type="button" class="btn btn-outline-brand" id="backToStep2"><i class="fas fa-arrow-left me-2"></i> Back</button>
+                        <button type="button" class="btn btn-brand" id="toStep4">Review <i class="fas fa-arrow-right ms-2"></i></button>
                     </div>
                 </div>
 
-                <!-- STEP 3: Review & Submit -->
-                <div class="step-panel" id="step3">
+                <!-- STEP 4: Review & Submit -->
+                <div class="step-panel" id="step4">
                     <div class="info-box">
                         <i class="fas fa-clipboard-check"></i>
                         Please review your details before submitting.
@@ -322,7 +415,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     <table class="review-table" id="reviewTable">
                         <tr><td>Full Name</td><td id="revName">—</td></tr>
                         <tr><td>Gender</td><td id="revGender">—</td></tr>
-                        <tr><td>Email</td><td id="revEmail">—</td></tr>
+                        <tr><td>Email</td><td id="revEmail">— <span style="color:#28a745;font-size:0.8rem;"><i class="fas fa-check-circle"></i> Verified</span></td></tr>
                         <tr><td>Mobile</td><td id="revPhone">—</td></tr>
                         <tr><td>Address</td><td id="revAddress">—</td></tr>
                         <tr>
@@ -340,7 +433,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     </table>
 
                     <div class="d-flex justify-content-between mt-4">
-                        <button type="button" class="btn btn-outline-brand" id="backToStep2"><i class="fas fa-arrow-left me-2"></i> Back</button>
+                        <button type="button" class="btn btn-outline-brand" id="backToStep3"><i class="fas fa-arrow-left me-2"></i> Back</button>
                         <button type="submit" class="btn btn-brand" id="submitBtn"><i class="fas fa-user-check me-2"></i> Create Account</button>
                     </div>
                 </div>
@@ -358,6 +451,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 document.addEventListener('DOMContentLoaded', function() {
     const msg = <?= json_encode($message) ?>;
     const isSuccess = <?= $signupSuccess ? 'true' : 'false' ?>;
+    const csrfToken = document.querySelector('input[name="_csrf"]').value;
 
     if (msg) {
         Swal.fire({
@@ -368,14 +462,16 @@ document.addEventListener('DOMContentLoaded', function() {
             showConfirmButton: true,
             confirmButtonColor: '#881b12'
         }).then(() => {
-            if (isSuccess) { window.location.href = "login.php"; return; }
+            if (isSuccess) { window.location.href = "login"; return; }
             const lower = (msg || "").toLowerCase();
             if (lower.includes("email is already registered")) { goToStep(1); document.getElementById('email')?.focus(); }
-            if (lower.includes("password")) { goToStep(2); document.getElementById('password').value=''; document.getElementById('confirmPassword').value=''; document.getElementById('password')?.focus(); }
+            if (lower.includes("verify your email")) { goToStep(2); }
+            if (lower.includes("password")) { goToStep(3); document.getElementById('password').value=''; document.getElementById('confirmPassword').value=''; document.getElementById('password')?.focus(); }
         });
     }
 
-    const steps = [document.getElementById('step1'), document.getElementById('step2'), document.getElementById('step3')];
+    /* ── Step navigation ─────────────────────────────────── */
+    const steps = [document.getElementById('step1'), document.getElementById('step2'), document.getElementById('step3'), document.getElementById('step4')];
     const indicators = document.querySelectorAll('.step-item');
     const lines = document.querySelectorAll('.step-line');
 
@@ -391,6 +487,7 @@ document.addEventListener('DOMContentLoaded', function() {
         window.scrollTo({top:0,behavior:'smooth'});
     }
 
+    /* ── Step 1 validation ───────────────────────────────── */
     function validateStep1() {
         const name = document.getElementById('fullName').value.trim();
         const gender = document.getElementById('gender').value;
@@ -413,7 +510,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return errors;
     }
 
-    function validateStep2() {
+    /* ── Step 3 (password) validation ────────────────────── */
+    function validateStep3() {
         const pw = document.getElementById('password').value;
         const cf = document.getElementById('confirmPassword').value;
         const errors = [];
@@ -424,25 +522,238 @@ document.addEventListener('DOMContentLoaded', function() {
         return errors;
     }
 
+    /* ── Navigation buttons ──────────────────────────────── */
+    // Step 1 → Step 2
     document.getElementById('toStep2').addEventListener('click', () => {
         const errors = validateStep1();
         if (errors.length) { Swal.fire({icon:'warning',title:'Please fix:',html:errors.map(e=>'<div>'+e+'</div>').join(''),confirmButtonColor:'#881b12'}); return; }
+        // Show the email on step 2
+        document.getElementById('verifyEmailDisplay').textContent = document.getElementById('email').value.trim();
+        // Reset verification UI if email changed
+        if (verifiedEmail !== document.getElementById('email').value.trim().toLowerCase()) {
+            resetOtpUI();
+        }
         goToStep(2);
     });
-    document.getElementById('backToStep1').addEventListener('click', () => goToStep(1));
+
+    // Step 2 → Step 1
+    document.getElementById('backToStep1FromVerify').addEventListener('click', () => goToStep(1));
+
+    // Step 2 → Step 3 (only when email is verified)
     document.getElementById('toStep3').addEventListener('click', () => {
-        const errors = validateStep2();
+        if (!emailIsVerified) {
+            Swal.fire({icon:'warning',title:'Email not verified',text:'Please verify your email before continuing.',confirmButtonColor:'#881b12'});
+            return;
+        }
+        goToStep(3);
+    });
+
+    // Step 3 → Step 2
+    document.getElementById('backToStep2').addEventListener('click', () => goToStep(2));
+
+    // Step 3 → Step 4
+    document.getElementById('toStep4').addEventListener('click', () => {
+        const errors = validateStep3();
         if (errors.length) { Swal.fire({icon:'warning',title:'Please fix:',html:errors.map(e=>'<div>'+e+'</div>').join(''),confirmButtonColor:'#881b12'}); return; }
         document.getElementById('revName').textContent = document.getElementById('fullName').value.trim();
         document.getElementById('revGender').textContent = document.getElementById('gender').value;
         document.getElementById('revEmail').textContent = document.getElementById('email').value.trim();
         document.getElementById('revPhone').textContent = document.getElementById('phone').value.trim();
         document.getElementById('revAddress').textContent = document.getElementById('address').value.trim();
-        goToStep(3);
+        goToStep(4);
     });
-    document.getElementById('backToStep2').addEventListener('click', () => goToStep(2));
 
-    // Password strength
+    // Step 4 → Step 3
+    document.getElementById('backToStep3').addEventListener('click', () => goToStep(3));
+
+    /* ══════════════════════════════════════════════════════
+       EMAIL VERIFICATION (OTP) — Step 2
+       ══════════════════════════════════════════════════════ */
+    let emailIsVerified = false;
+    let verifiedEmail = '';
+    let countdownInterval = null;
+
+    function resetOtpUI() {
+        emailIsVerified = false;
+        verifiedEmail = '';
+        document.getElementById('sendCodeSection').style.display = '';
+        document.getElementById('otpSection').style.display = 'none';
+        document.getElementById('emailVerifiedBadge').style.display = 'none';
+        document.getElementById('toStep3').disabled = true;
+        document.getElementById('sendCodeBtn').disabled = false;
+        document.getElementById('sendCodeBtn').innerHTML = '<i class="fas fa-paper-plane me-2"></i>Send Verification Code';
+        clearOtpInputs();
+        if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+    }
+
+    function clearOtpInputs() {
+        for (let i = 1; i <= 6; i++) {
+            const el = document.getElementById('otp'+i);
+            el.value = '';
+            el.style.borderColor = '#dee2e6';
+        }
+    }
+
+    function getOtpValue() {
+        let code = '';
+        for (let i = 1; i <= 6; i++) code += document.getElementById('otp'+i).value;
+        return code;
+    }
+
+    function startResendCountdown(seconds) {
+        const timerSpan = document.getElementById('resendTimer');
+        const countdownEl = document.getElementById('countdown');
+        const resendBtn = document.getElementById('resendBtn');
+        timerSpan.style.display = '';
+        resendBtn.style.display = 'none';
+        let remaining = seconds;
+        countdownEl.textContent = remaining;
+
+        if (countdownInterval) clearInterval(countdownInterval);
+        countdownInterval = setInterval(() => {
+            remaining--;
+            countdownEl.textContent = remaining;
+            if (remaining <= 0) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+                timerSpan.style.display = 'none';
+                resendBtn.style.display = '';
+            }
+        }, 1000);
+    }
+
+    // ── Send Code ───────────────────────────────────────────
+    function sendCode() {
+        const email = document.getElementById('email').value.trim();
+        const btn = document.getElementById('sendCodeBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Sending...';
+
+        fetch('verify-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: '_csrf=' + encodeURIComponent(csrfToken) + '&action=send&email=' + encodeURIComponent(email)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                document.getElementById('sendCodeSection').style.display = 'none';
+                document.getElementById('otpSection').style.display = '';
+                document.getElementById('otp1').focus();
+                startResendCountdown(60);
+            } else {
+                Swal.fire({icon:'error',title:'Error',text:data.message,confirmButtonColor:'#881b12'});
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Send Verification Code';
+            }
+        })
+        .catch(() => {
+            Swal.fire({icon:'error',title:'Error',text:'Network error. Please try again.',confirmButtonColor:'#881b12'});
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>Send Verification Code';
+        });
+    }
+
+    document.getElementById('sendCodeBtn').addEventListener('click', sendCode);
+    document.getElementById('resendBtn').addEventListener('click', () => {
+        clearOtpInputs();
+        document.getElementById('verifyCodeBtn').disabled = false;
+        document.getElementById('verifyCodeBtn').innerHTML = '<i class="fas fa-shield-halved me-2"></i>Verify Code';
+        sendCode();
+        document.getElementById('sendCodeSection').style.display = 'none';
+        document.getElementById('otpSection').style.display = '';
+    });
+
+    // ── Verify Code ─────────────────────────────────────────
+    document.getElementById('verifyCodeBtn').addEventListener('click', function() {
+        const code = getOtpValue();
+        if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+            Swal.fire({icon:'warning',title:'Invalid Code',text:'Please enter the complete 6-digit code.',confirmButtonColor:'#881b12'});
+            return;
+        }
+
+        const email = document.getElementById('email').value.trim();
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Verifying...';
+
+        fetch('verify-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: '_csrf=' + encodeURIComponent(csrfToken) + '&action=verify&email=' + encodeURIComponent(email) + '&code=' + encodeURIComponent(code)
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                emailIsVerified = true;
+                verifiedEmail = email.toLowerCase();
+                // Show success state
+                document.getElementById('otpSection').style.display = 'none';
+                document.getElementById('emailVerifiedBadge').style.display = '';
+                document.getElementById('toStep3').disabled = false;
+                // Highlight OTP inputs green
+                for (let i = 1; i <= 6; i++) document.getElementById('otp'+i).style.borderColor = '#28a745';
+                if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null; }
+                Swal.fire({
+                    icon:'success',
+                    title:'Email Verified!',
+                    text:'Your email has been verified. You can now continue.',
+                    timer:2000,
+                    showConfirmButton:false
+                });
+            } else {
+                Swal.fire({icon:'error',title:'Verification Failed',text:data.message,confirmButtonColor:'#881b12'});
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-shield-halved me-2"></i>Verify Code';
+                // Shake animation on OTP inputs
+                for (let i = 1; i <= 6; i++) {
+                    const el = document.getElementById('otp'+i);
+                    el.style.borderColor = '#dc3545';
+                    el.style.animation = 'shake 0.4s';
+                    setTimeout(() => { el.style.animation = ''; el.style.borderColor = '#dee2e6'; }, 500);
+                }
+            }
+        })
+        .catch(() => {
+            Swal.fire({icon:'error',title:'Error',text:'Network error. Please try again.',confirmButtonColor:'#881b12'});
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-shield-halved me-2"></i>Verify Code';
+        });
+    });
+
+    // ── OTP input auto-advance & paste support ──────────────
+    const otpInputs = document.querySelectorAll('#otpInputGroup input');
+    otpInputs.forEach((input, idx) => {
+        input.addEventListener('input', function() {
+            this.value = this.value.replace(/[^0-9]/g, '');
+            if (this.value && idx < otpInputs.length - 1) {
+                otpInputs[idx+1].focus();
+            }
+        });
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Backspace' && !this.value && idx > 0) {
+                otpInputs[idx-1].focus();
+            }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('verifyCodeBtn').click();
+            }
+        });
+        input.addEventListener('paste', function(e) {
+            e.preventDefault();
+            const paste = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, 6);
+            for (let j = 0; j < paste.length && j < otpInputs.length; j++) {
+                otpInputs[j].value = paste[j];
+            }
+            if (paste.length >= 6) otpInputs[5].focus();
+            else if (paste.length > 0) otpInputs[paste.length].focus();
+        });
+        input.addEventListener('focus', function() {
+            this.select();
+        });
+    });
+
+    /* ── Password strength ───────────────────────────────── */
     const pwField = document.getElementById('password');
     const pwBar = document.getElementById('pwBar');
     pwField.addEventListener('input', function() {
@@ -476,6 +787,7 @@ document.addEventListener('DOMContentLoaded', function() {
         this.querySelector('i').classList.toggle('fa-eye-slash');
     });
 
+    /* ── Form submit ─────────────────────────────────────── */
     document.getElementById('signupForm').addEventListener('submit', function() {
         const btn = document.getElementById('submitBtn');
         btn.disabled = true;
@@ -483,5 +795,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+
+<style>
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    50% { transform: translateX(6px); }
+    75% { transform: translateX(-4px); }
+}
+</style>
 </body>
 </html>
