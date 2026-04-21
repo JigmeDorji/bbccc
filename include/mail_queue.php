@@ -3,6 +3,10 @@
 
 require_once __DIR__ . '/mailer.php';
 
+function bbcc_mail_queue_is_truthy(string $value): bool {
+    return in_array(strtolower(trim($value)), ['1', 'true', 'on', 'yes'], true);
+}
+
 function bbcc_mail_queue_pdo(): ?PDO {
     static $pdo = null;
     if ($pdo instanceof PDO) {
@@ -84,11 +88,38 @@ function bbcc_queue_mail(string $toEmail, string $toName, string $subject, strin
             ':html_body' => $htmlBody,
             ':max_attempts' => max(1, $maxAttempts),
         ]);
+
+        // Improve perceived speed: drain a small batch after response is sent.
+        if (bbcc_mail_queue_is_truthy(bbcc_env('MAIL_QUEUE_DRAIN_ON_SHUTDOWN', '1'))) {
+            $drainLimit = (int)bbcc_env('MAIL_QUEUE_DRAIN_LIMIT', '3');
+            bbcc_schedule_mail_queue_drain(max(1, min(10, $drainLimit)));
+        }
         return true;
     } catch (Throwable $e) {
         bbcc_mail_log('MAIL QUEUE INSERT ERROR: ' . $e->getMessage());
         return false;
     }
+}
+
+function bbcc_schedule_mail_queue_drain(int $limit = 3): void {
+    static $scheduled = false;
+    if ($scheduled) {
+        return;
+    }
+    $scheduled = true;
+    $limit = max(1, min(10, $limit));
+
+    register_shutdown_function(function () use ($limit) {
+        // If available, flush HTTP response first so user does not wait on SMTP.
+        if (function_exists('fastcgi_finish_request')) {
+            @fastcgi_finish_request();
+        }
+        try {
+            bbcc_process_mail_queue($limit);
+        } catch (Throwable $e) {
+            bbcc_mail_log('MAIL QUEUE SHUTDOWN DRAIN ERROR: ' . $e->getMessage());
+        }
+    });
 }
 
 function bbcc_process_mail_queue(int $limit = 20): array {
@@ -118,11 +149,13 @@ function bbcc_process_mail_queue(int $limit = 20): array {
         $attempts = (int)$row['attempts'];
         $maxAttempts = (int)$row['max_attempts'];
         try {
+            $queueTimeout = (int)bbcc_env('MAIL_QUEUE_SEND_TIMEOUT', '8');
             $ok = send_mail(
                 (string)$row['to_email'],
                 (string)($row['to_name'] ?? ''),
                 (string)$row['subject'],
-                (string)$row['html_body']
+                (string)$row['html_body'],
+                $queueTimeout > 0 ? $queueTimeout : null
             );
             if ($ok) {
                 $upd = $pdo->prepare("UPDATE mail_queue SET status='sent', sent_at=NOW(), attempts=:a, last_error=NULL WHERE id=:id");
@@ -176,4 +209,3 @@ function bbcc_process_mail_queue(int $limit = 20): array {
 
     return $stats;
 }
-

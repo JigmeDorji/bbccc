@@ -30,6 +30,8 @@ function bbcc_mail_config(): array {
         'username'   => bbcc_env('MAIL_USERNAME', ''),
         'password'   => bbcc_env('MAIL_PASSWORD', ''),
         'timeout'    => (int)bbcc_env('MAIL_TIMEOUT', '12'),
+        'connect_timeout' => (int)bbcc_env('MAIL_CONNECT_TIMEOUT', '6'),
+        'time_limit' => (int)bbcc_env('MAIL_TIME_LIMIT', '20'),
         'from_email' => MAIL_FROM_EMAIL,
         'from_name'  => MAIL_FROM_NAME,
         'debug'      => in_array(strtolower(bbcc_env('MAIL_DEBUG', '0')), ['1', 'true', 'on', 'yes'], true),
@@ -67,6 +69,9 @@ function send_mail(string $toEmail, string $toName, string $subject, string $htm
         $mail->Password   = $cfg['password'];
         $mail->SMTPSecure = $cfg['encryption'];
         $mail->Port       = $cfg['port'];
+        if (!empty($cfg['connect_timeout']) && (int)$cfg['connect_timeout'] > 0) {
+            $mail->Timeout = (int)$cfg['connect_timeout'];
+        }
         $effectiveTimeout = $timeoutSeconds;
         if ($effectiveTimeout === null) {
             $effectiveTimeout = (int)($cfg['timeout'] ?? 0);
@@ -74,6 +79,10 @@ function send_mail(string $toEmail, string $toName, string $subject, string $htm
         if (!empty($effectiveTimeout) && (int)$effectiveTimeout > 0) {
             $mail->Timeout = (int)$effectiveTimeout;
         }
+        if (!empty($cfg['time_limit']) && (int)$cfg['time_limit'] > 0) {
+            $mail->Timelimit = (int)$cfg['time_limit'];
+        }
+        $mail->SMTPKeepAlive = false;
 
         $mail->setFrom($cfg['from_email'], $cfg['from_name']);
         $mail->addAddress($toEmail, $toName ?: $toEmail);
