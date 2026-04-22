@@ -4,7 +4,7 @@
  *
  * Streamlined 3-screen flow:
  *   1. Welcome (tap anywhere)
- *   2. Phone + PIN combined (single numpad, auto-advance, auto-submit)
+ *   2. Phone + PIN combined (single numpad, manual submit)
  *   3. Children (one-tap sign in/out, auto-action for single child)
  *   + brief confirmation overlay (3s)
  */
@@ -204,7 +204,6 @@ if (!$kioskCssVersion) {
     var PHONE_MIN = 8;
     var PHONE_MAX = 15;
     var PIN_MIN  = 4;
-    var PIN_MAX  = 6;
     var QR_ROTATE_SEC = 120;
 
     // State
@@ -339,13 +338,8 @@ if (!$kioskCssVersion) {
             } else {
                 if (k === 'clear') { pin = ''; }
                 else if (k === 'back') { pin = pin.slice(0,-1); }
-                else if (pin.length < PIN_MAX) { pin += k; }
+                else { pin += k; }
                 updatePin();
-
-                // Auto-submit when PIN reaches min length and phone is valid
-                if (pin.length >= PIN_MIN && phone.length >= PHONE_MIN && !submitting) {
-                    setTimeout(function() { doAuth(); }, 300);
-                }
             }
             bumpTimer();
         });

@@ -84,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $pin = preg_replace('/\D+/', '', (string)($_POST['pin'] ?? ''));
     $confirm = preg_replace('/\D+/', '', (string)($_POST['confirm_pin'] ?? ''));
 
-    if (!preg_match('/^\d{4,6}$/', $pin)) $errors[] = "PIN must be 4 to 6 digits.";
+    if (!preg_match('/^\d{4,}$/', $pin)) $errors[] = "PIN must be at least 4 digits.";
     if ($pin !== $confirm) $errors[] = "PIN and Confirm PIN do not match.";
 
     if (empty($errors)) {
@@ -124,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="card shadow-sm border-0">
         <div class="card-body p-4">
             <h4 class="mb-2"><i class="fas fa-lock mr-1"></i>Reset Kiosk PIN</h4>
-            <p class="text-muted mb-3">Set a new 4 to 6 digit PIN for kiosk sign in/out.</p>
+            <p class="text-muted mb-3">Set a new PIN with at least 4 digits for kiosk sign in/out.</p>
 
             <?php if (!empty($message)): ?>
                 <script>
@@ -150,11 +150,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <?= csrf_field() ?>
                 <div class="form-group mb-3">
                     <label for="pin"><i class="fas fa-key mr-1"></i> New PIN</label>
-                    <input type="password" class="form-control" id="pin" name="pin" pattern="\d{4,6}" maxlength="6" required inputmode="numeric" placeholder="4-6 digits">
+                    <input type="password" class="form-control" id="pin" name="pin" pattern="\d{4,}" required inputmode="numeric" placeholder="Minimum 4 digits">
                 </div>
                 <div class="form-group mb-3">
                     <label for="confirm_pin"><i class="fas fa-check mr-1"></i> Confirm PIN</label>
-                    <input type="password" class="form-control" id="confirm_pin" name="confirm_pin" pattern="\d{4,6}" maxlength="6" required inputmode="numeric" placeholder="Re-enter PIN">
+                    <input type="password" class="form-control" id="confirm_pin" name="confirm_pin" pattern="\d{4,}" required inputmode="numeric" placeholder="Re-enter PIN">
                 </div>
                 <button class="btn btn-primary btn-block" type="submit" id="resetBtn">
                     <i class="fas fa-save mr-1"></i> Update Kiosk PIN

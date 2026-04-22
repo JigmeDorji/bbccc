@@ -21,8 +21,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'set_p
 
     if (!$pid) {
         $flash = 'Invalid parent.';
-    } elseif (!preg_match('/^\d{4,6}$/', $pin)) {
-        $flash = 'PIN must be 4–6 digits.';
+    } elseif (!preg_match('/^\d{4,}$/', $pin)) {
+        $flash = 'PIN must be at least 4 digits.';
     } else {
         $hash = password_hash($pin, PASSWORD_DEFAULT);
         $upd = $pdo->prepare("UPDATE parents SET pin_hash=:h WHERE id=:id");
@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded',()=>{
         <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-key mr-1"></i>Parent Kiosk PINs</h6>
     </div>
     <div class="card-body">
-        <p class="text-muted small mb-3">Set a 4–6 digit numeric PIN for each parent. They will use their <strong>phone number + PIN</strong> to sign in at the kiosk.</p>
+        <p class="text-muted small mb-3">Set a numeric PIN with at least 4 digits for each parent. They will use their <strong>phone number + PIN</strong> to sign in at the kiosk.</p>
         <?php if (empty($parents)): ?>
             <p class="text-muted">No parent accounts found.</p>
         <?php else: ?>
@@ -111,7 +111,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                             <input type="hidden" name="action" value="set_pin">
                             <input type="hidden" name="parent_id" value="<?= $p['id'] ?>">
                             <input type="text" name="pin" class="form-control form-control-sm mr-1" style="width:90px"
-                                   placeholder="PIN" pattern="\d{4,6}" maxlength="6" required inputmode="numeric">
+                                   placeholder="PIN" pattern="\d{4,}" required inputmode="numeric">
                             <button class="btn btn-primary btn-sm mr-1"><i class="fas fa-save"></i></button>
                         </form>
                         <?php if ($p['pin_hash']): ?>

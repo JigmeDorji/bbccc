@@ -188,7 +188,7 @@ $mobileBaseUrl = $base . "/kiosk-mobile.php";
             <h2 class="access-title"><i class="fa-solid fa-mobile-screen-button"></i> Enter Phone and PIN</h2>
             <div class="auth-grid">
                 <input type="tel" class="auth-input" id="phoneInput" placeholder="Phone Number" inputmode="numeric" maxlength="15" autocomplete="off">
-                <input type="password" class="auth-input" id="pinInput" placeholder="PIN" inputmode="numeric" maxlength="6" autocomplete="off">
+                <input type="password" class="auth-input" id="pinInput" placeholder="PIN" inputmode="numeric" autocomplete="off">
             </div>
             <div class="auth-error" id="authError"></div>
             <div class="auth-actions">

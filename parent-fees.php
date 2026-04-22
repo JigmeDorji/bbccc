@@ -124,7 +124,14 @@ $feesByEnrolment = [];
 if ($enrolments) {
     $ids = array_column($enrolments, 'eid');
     $in  = implode(',', array_map('intval', $ids));
-    $fees = $pdo->query("SELECT * FROM pcm_fee_payments WHERE enrolment_id IN ({$in}) ORDER BY id")->fetchAll();
+    $fees = $pdo->query("
+        SELECT *
+        FROM pcm_fee_payments
+        WHERE enrolment_id IN ({$in})
+        ORDER BY
+            CASE WHEN plan_type='Additional' THEN 1 ELSE 0 END,
+            id
+    ")->fetchAll();
     foreach ($fees as $f) {
         $feesByEnrolment[$f['enrolment_id']][] = $f;
     }
@@ -222,7 +229,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                 <?php foreach ($fees as $f): ?>
                 <tr>
                     <td><?= h($en['campus_name'] ?? 'Main Campus') ?></td>
-                    <td><?= h($en['fee_plan']) ?></td>
+                    <td><?= h((string)($f['plan_type'] ?? $en['fee_plan'])) ?></td>
                     <td><?= h(pcm_campus_selection_label((string)($en['campus_preference'] ?? ''))) ?></td>
                     <td class="font-weight-bold"><?= h($f['instalment_label']) ?></td>
                     <td>$<?= number_format($f['due_amount'],2) ?></td>
@@ -246,11 +253,6 @@ document.addEventListener('DOMContentLoaded',()=>{
                     </td>
                     <td>
                         <?php if (in_array($f['status'], ['Unpaid','Rejected'])): ?>
-                        <?php
-                            $planShort = strtolower(trim((string)$en['fee_plan'])) === 'half-yearly' ? 'hy' : (strtolower(trim((string)$en['fee_plan'])) === 'yearly' ? 'y' : 'tw');
-                            $nameCompact = preg_replace('/[^A-Za-z0-9]/', '', (string)$en['student_name']);
-                            $suggestRef = $nameCompact . '_' . $planShort;
-                        ?>
                         <a class="btn btn-primary btn-sm" href="parent-fees-pay?fee_id=<?= (int)$f['id'] ?>">
                             <i class="fas fa-upload mr-1"></i>Pay
                         </a>

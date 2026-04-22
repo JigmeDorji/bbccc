@@ -71,7 +71,7 @@ $csrfToken = csrf_token();
 
             <div class="km-field-group">
                 <label class="km-label"><i class="fa-solid fa-lock"></i> PIN</label>
-                <input type="password" class="km-input km-input--pin" id="mPin" placeholder="••••" maxlength="6" inputmode="numeric" autocomplete="off">
+                <input type="password" class="km-input km-input--pin" id="mPin" placeholder="••••" inputmode="numeric" autocomplete="off">
             </div>
 
             <div class="km-error" id="mAuthError">
@@ -198,15 +198,7 @@ $csrfToken = csrf_token();
         $('#mAuthError').classList.add('show');
     }
 
-    // Auto-submit when PIN >= 4 digits and phone filled
-    mPin.addEventListener('input', function() {
-        hideError();
-        var p = mPhone.value.replace(/[^0-9]/g, '');
-        var n = mPin.value.replace(/[^0-9]/g, '');
-        if (n.length >= PIN_MIN && p.length >= 8 && !submitting) {
-            setTimeout(function() { doAuth(); }, 300);
-        }
-    });
+    mPin.addEventListener('input', function() { hideError(); });
 
     mPhone.addEventListener('input', function() { hideError(); });
 

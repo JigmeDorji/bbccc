@@ -1,0 +1,18 @@
+SET NAMES utf8mb4;
+ALTER TABLE `classes` ADD COLUMN IF NOT EXISTS `campus_key` VARCHAR(20) NOT NULL DEFAULT 'c1' AFTER `class_name`;
+START TRANSACTION;
+INSERT INTO classes (class_name,campus_key,active) SELECT 'BEL - 4','c2',1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM classes c WHERE c.class_name='BEL - 4' AND c.campus_key='c2');
+INSERT INTO classes (class_name,campus_key,active) SELECT 'WOD - PP','c1',1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM classes c WHERE c.class_name='WOD - PP' AND c.campus_key='c1');
+INSERT INTO classes (class_name,campus_key,active) SELECT 'WOD - 2','c1',1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM classes c WHERE c.class_name='WOD - 2' AND c.campus_key='c1');
+INSERT INTO classes (class_name,campus_key,active) SELECT 'WOD - 1','c1',1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM classes c WHERE c.class_name='WOD - 1' AND c.campus_key='c1');
+INSERT INTO classes (class_name,campus_key,active) SELECT 'BEL - PP','c2',1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM classes c WHERE c.class_name='BEL - PP' AND c.campus_key='c2');
+INSERT INTO classes (class_name,campus_key,active) SELECT 'WOD - 4','c1',1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM classes c WHERE c.class_name='WOD - 4' AND c.campus_key='c1');
+INSERT INTO classes (class_name,campus_key,active) SELECT 'BEL - 2','c2',1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM classes c WHERE c.class_name='BEL - 2' AND c.campus_key='c2');
+INSERT INTO classes (class_name,campus_key,active) SELECT 'WOD - 3','c1',1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM classes c WHERE c.class_name='WOD - 3' AND c.campus_key='c1');
+INSERT INTO classes (class_name,campus_key,active) SELECT 'BEL - 5','c2',1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM classes c WHERE c.class_name='BEL - 5' AND c.campus_key='c2');
+INSERT INTO classes (class_name,campus_key,active) SELECT 'BEL - 1','c2',1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM classes c WHERE c.class_name='BEL - 1' AND c.campus_key='c2');
+INSERT INTO classes (class_name,campus_key,active) SELECT 'BEL - 3','c2',1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM classes c WHERE c.class_name='BEL - 3' AND c.campus_key='c2');
+INSERT INTO classes (class_name,campus_key,active) SELECT 'BEL - Special','c2',1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM classes c WHERE c.class_name='BEL - Special' AND c.campus_key='c2');
+INSERT INTO classes (class_name,campus_key,active) SELECT 'WOD - 5','c1',1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM classes c WHERE c.class_name='WOD - 5' AND c.campus_key='c1');
+INSERT INTO classes (class_name,campus_key,active) SELECT 'Unassigned Class','c1',1 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM classes c WHERE c.class_name='Unassigned Class' AND c.campus_key='c1');
+COMMIT;

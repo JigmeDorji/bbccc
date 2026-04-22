@@ -105,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $subject = "Reset your kiosk PIN - Bhutanese Language and Culture School";
             $body = pcm_email_wrap('Kiosk PIN Reset', "
                 <p style='margin:0 0 14px;'>Hello {$safeName},</p>
-                <p style='margin:0 0 14px;'>We received a request to reset your kiosk PIN. Click below to set a new PIN (4-6 digits). This link expires in <strong>30 minutes</strong>.</p>
+                <p style='margin:0 0 14px;'>We received a request to reset your kiosk PIN. Click below to set a new PIN (minimum 4 digits). This link expires in <strong>30 minutes</strong>.</p>
                 <p style='margin:20px 0;'>
                     <a href='{$resetLink}' style='background:#881b12;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;font-size:15px;' target='_blank'>
                         Reset Kiosk PIN

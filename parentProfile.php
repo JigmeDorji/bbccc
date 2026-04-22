@@ -105,7 +105,7 @@ if ($isEditMode && $_SERVER['REQUEST_METHOD'] === 'POST' && $postAction === 'res
         $pinErrors[] = "Kiosk PIN is not available yet. Please ask admin to run the latest migration.";
     }
     if ($accountPassword === '') $pinErrors[] = "Account password is required.";
-    if (!preg_match('/^\d{4,6}$/', $kioskPin)) $pinErrors[] = "Kiosk PIN must be 4 to 6 digits.";
+    if (!preg_match('/^\d{4,}$/', $kioskPin)) $pinErrors[] = "Kiosk PIN must be at least 4 digits.";
     if ($kioskPin !== $kioskPinConfirm) $pinErrors[] = "Kiosk PIN and confirm PIN do not match.";
 
     if (empty($pinErrors)) {
@@ -569,7 +569,7 @@ $address   = $parent['address'] ?? '';
                     <div class="card shadow mb-4" id="kiosk-pin">
                         <div class="card-header py-3 d-flex align-items-center justify-content-between">
                             <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-key mr-1"></i> Reset Kiosk PIN</h6>
-                            <span class="badge badge-info">4 to 6 digits</span>
+                            <span class="badge badge-info">Minimum 4 digits</span>
                         </div>
                         <div class="card-body">
                             <?php if (!empty($pinErrors)): ?>
@@ -595,13 +595,13 @@ $address   = $parent['address'] ?? '';
                                     <div class="col-md-4">
                                         <div class="form-group">
                                             <label><i class="fas fa-key mr-1" style="color:var(--brand);font-size:0.7rem;"></i> New Kiosk PIN <span class="text-danger">*</span></label>
-                                            <input type="password" class="form-control" name="kiosk_pin" pattern="\d{4,6}" maxlength="6" inputmode="numeric" required placeholder="4-6 digits">
+                                            <input type="password" class="form-control" name="kiosk_pin" pattern="\d{4,}" inputmode="numeric" required placeholder="Minimum 4 digits">
                                         </div>
                                     </div>
                                     <div class="col-md-4">
                                         <div class="form-group">
                                             <label><i class="fas fa-check mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Confirm PIN <span class="text-danger">*</span></label>
-                                            <input type="password" class="form-control" name="kiosk_pin_confirm" pattern="\d{4,6}" maxlength="6" inputmode="numeric" required placeholder="Re-enter PIN">
+                                            <input type="password" class="form-control" name="kiosk_pin_confirm" pattern="\d{4,}" inputmode="numeric" required placeholder="Re-enter PIN">
                                         </div>
                                     </div>
                                 </div>

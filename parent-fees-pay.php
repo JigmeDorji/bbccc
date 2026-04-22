@@ -66,8 +66,9 @@ if (!in_array($status, ['Unpaid', 'Rejected'], true)) {
     exit;
 }
 
-$plan = trim((string)($fee['fee_plan'] ?? 'Term-wise'));
-$planShort = strtolower($plan) === 'half-yearly' ? 'hy' : (strtolower($plan) === 'yearly' ? 'y' : 'tw');
+$plan = trim((string)($fee['plan_type'] ?? $fee['fee_plan'] ?? 'Term-wise'));
+$planSlug = strtolower($plan);
+$planShort = $planSlug === 'half-yearly' ? 'hy' : ($planSlug === 'yearly' ? 'y' : ($planSlug === 'additional' ? 'ex' : 'tw'));
 $nameCompact = preg_replace('/[^A-Za-z0-9]/', '', (string)($fee['student_name'] ?? 'Student'));
 $suggestRef = $nameCompact . '_' . $planShort;
 

@@ -1,0 +1,15 @@
+Migration Fill Report
+=====================
+Parents: 205
+Parents with kiosk PIN value: 205
+Students: 255
+Classes: 14
+Class assignments: 255
+Enrolments: 255
+Fee payment rows: 510
+Payment status counts: Verified=365, Unpaid=145
+
+Rules applied:
+- Verified only if amount > 0
+- Unpaid if amount is 0 or empty
+- kiosk_pin_plain included; hash it into parents.pin_hash on import
