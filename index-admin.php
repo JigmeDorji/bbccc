@@ -56,6 +56,13 @@ $attendanceViewLink = 'attendanceManagement';
 $parentClassesAttended = 0;
 $parentChildTermProgress = [];
 $parentTermTotals = [1 => 0, 2 => 0, 3 => 0, 4 => 0];
+$parentFeeSummary = [
+    'outstanding_count' => 0,
+    'outstanding_amount' => 0.0,
+    'pending_count' => 0,
+    'pending_amount' => 0.0,
+    'items' => [],
+];
 $recentClassroomActivity = [];
 $dashboardTeacherId = 0;
 $teacherAssignedClassNames = [];
@@ -63,6 +70,7 @@ $campusAttendanceSummary = [];
 $campusAttendanceOverall = ['present' => 0, 'absent' => 0, 'grand' => 0];
 $campusKioskSummary = [];
 $campusKioskOverall = ['registered' => 0, 'sign_in' => 0, 'sign_out' => 0, 'grand' => 0];
+$dashboardFeePayments = [];
 $summaryDate = date('Y-m-d');
 if (isset($_GET['summary_date'])) {
     $candidateDate = trim((string)$_GET['summary_date']);
@@ -146,6 +154,51 @@ try {
             ");
             $stmtKids->execute([':pid' => $parentDbId]);
             $myChildren = $stmtKids->fetchAll(PDO::FETCH_ASSOC);
+
+            if (bbcc_table_exists($pdo, 'pcm_fee_payments')) {
+                $stmtParentFees = $pdo->prepare("
+                    SELECT
+                        s.student_name,
+                        f.instalment_label,
+                        f.status,
+                        COALESCE(f.due_amount, 0) AS due_amount,
+                        COALESCE(f.paid_amount, 0) AS paid_amount
+                    FROM pcm_fee_payments f
+                    INNER JOIN students s ON s.id = f.student_id
+                    WHERE s.parentId = :pid
+                      AND COALESCE(f.due_amount, 0) > 0
+                    ORDER BY s.student_name ASC, f.id ASC
+                ");
+                $stmtParentFees->execute([':pid' => $parentDbId]);
+                $feeRows = $stmtParentFees->fetchAll(PDO::FETCH_ASSOC);
+
+                foreach ($feeRows as $fr) {
+                    $status = strtolower(trim((string)($fr['status'] ?? '')));
+                    $due = (float)($fr['due_amount'] ?? 0);
+                    $paid = (float)($fr['paid_amount'] ?? 0);
+                    $balance = max($due - $paid, 0);
+                    $label = trim((string)($fr['instalment_label'] ?? 'Installment'));
+                    $studentName = trim((string)($fr['student_name'] ?? 'Child'));
+
+                    if ($status === 'pending') {
+                        $parentFeeSummary['pending_count']++;
+                        $parentFeeSummary['pending_amount'] += ($paid > 0 ? $paid : $due);
+                        continue;
+                    }
+
+                    if (in_array($status, ['unpaid', 'rejected'], true) && $balance > 0) {
+                        $parentFeeSummary['outstanding_count']++;
+                        $parentFeeSummary['outstanding_amount'] += $balance;
+                        if (count($parentFeeSummary['items']) < 6) {
+                            $parentFeeSummary['items'][] = [
+                                'student_name' => $studentName,
+                                'instalment_label' => $label,
+                                'balance' => $balance,
+                            ];
+                        }
+                    }
+                }
+            }
 
             $stmtParentAttended = $pdo->prepare("
                 SELECT COUNT(*) 
@@ -456,6 +509,22 @@ try {
             $feePending      = (float)($feeRow['pending'] ?? 0);
             $feeVerifiedCount= (int)($feeRow['verified_count'] ?? 0);
             $feePendingCount = (int)($feeRow['pending_count'] ?? 0);
+
+            $stmtFeeTable = $pdo->query("
+                SELECT
+                    f.id,
+                    s.student_name,
+                    COALESCE(s.student_id, CONCAT('ID-', s.id)) AS public_student_id,
+                    f.instalment_label,
+                    COALESCE(f.due_amount, 0) AS due_amount,
+                    f.status
+                FROM pcm_fee_payments f
+                LEFT JOIN students s ON s.id = f.student_id
+                WHERE COALESCE(f.due_amount, 0) > 0
+                ORDER BY f.id DESC
+                LIMIT 8
+            ");
+            $dashboardFeePayments = $stmtFeeTable->fetchAll(PDO::FETCH_ASSOC);
 
             // Today's kiosk attendance
             $stmtToday = $pdo->query("SELECT
@@ -1057,6 +1126,58 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                         </div>
                     </div>
                 </div>
+
+                <?php if ((int)$parentFeeSummary['outstanding_count'] > 0 || (int)$parentFeeSummary['pending_count'] > 0): ?>
+                    <div class="card dash-card shadow mb-4">
+                        <div class="card-body" style="padding:18px 22px;">
+                            <div class="d-flex flex-wrap justify-content-between align-items-start">
+                                <div>
+                                    <div class="section-title mb-1" style="font-size:.95rem;">
+                                        <i class="fas fa-exclamation-circle mr-2" style="color:#e74a3b;"></i>Fees Payment Reminder
+                                    </div>
+                                    <?php if ((int)$parentFeeSummary['outstanding_count'] > 0): ?>
+                                        <div style="font-weight:700; color:#881b12;">
+                                            Outstanding: $<?= number_format((float)$parentFeeSummary['outstanding_amount'], 2) ?>
+                                            across <?= (int)$parentFeeSummary['outstanding_count'] ?> installment(s).
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if ((int)$parentFeeSummary['pending_count'] > 0): ?>
+                                        <div style="color:#8a6d3b; margin-top:4px;">
+                                            Pending verification: <?= (int)$parentFeeSummary['pending_count'] ?> payment(s).
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="mt-2 mt-md-0">
+                                    <a href="parent-fees" class="btn btn-sm btn-primary" style="border-radius:8px;">
+                                        <i class="fas fa-credit-card mr-1"></i> Review Fees
+                                    </a>
+                                </div>
+                            </div>
+                            <?php if (!empty($parentFeeSummary['items'])): ?>
+                                <div class="table-responsive mt-3">
+                                    <table class="dash-table mb-0">
+                                        <thead>
+                                        <tr>
+                                            <th>Child</th>
+                                            <th>Installment</th>
+                                            <th>Outstanding</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        <?php foreach ($parentFeeSummary['items'] as $fi): ?>
+                                            <tr>
+                                                <td><?= htmlspecialchars((string)$fi['student_name']) ?></td>
+                                                <td><?= htmlspecialchars((string)$fi['instalment_label']) ?></td>
+                                                <td>$<?= number_format((float)$fi['balance'], 2) ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
 
                 <!-- Children Table -->
                 <div class="card dash-card shadow mb-4">
@@ -1727,6 +1848,36 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                                 <div style="margin-top:10px; display:flex; justify-content:center; gap:16px; font-size:0.76rem; color:#888;">
                                     <span><i class="fas fa-check-circle" style="color:#1cc88a;"></i> <?php echo $feeVerifiedCount; ?> verified</span>
                                     <span><i class="fas fa-clock" style="color:#f6c23e;"></i> <?php echo $feePendingCount; ?> pending</span>
+                                </div>
+
+                                <div class="table-responsive mt-3">
+                                    <table class="dash-table mb-0">
+                                        <thead>
+                                        <tr>
+                                            <th>Student</th>
+                                            <th>Installment</th>
+                                            <th>Amount</th>
+                                            <th>Status</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        <?php if (empty($dashboardFeePayments)): ?>
+                                            <tr><td colspan="4" class="text-muted">No payment records found.</td></tr>
+                                        <?php else: ?>
+                                            <?php foreach ($dashboardFeePayments as $fp): ?>
+                                                <tr>
+                                                    <td>
+                                                        <strong><?= htmlspecialchars((string)($fp['student_name'] ?? 'Student')) ?></strong>
+                                                        <div style="font-size:.72rem;color:#8c8c9e;"><?= htmlspecialchars((string)($fp['public_student_id'] ?? '')) ?></div>
+                                                    </td>
+                                                    <td><?= htmlspecialchars((string)($fp['instalment_label'] ?? '-')) ?></td>
+                                                    <td>$<?= number_format((float)($fp['due_amount'] ?? 0), 2) ?></td>
+                                                    <td><span class="badge badge-<?= badge_class((string)($fp['status'] ?? 'Pending')) ?>"><?= htmlspecialchars((string)($fp['status'] ?? 'Pending')) ?></span></td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>

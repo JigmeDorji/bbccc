@@ -448,6 +448,7 @@ foreach ($enrollmentRows as $r) {
             'student_name' => $r['student_name'] ?? '',
             'payment_plan' => $r['plan_type'] ?? $plan,
             'enrollment_status' => $r['enrolment_status'] ?? 'Pending',
+            'enrollment_amount' => (float)($r['enrollment_amount'] ?? 0),
             'enrollment_reference' => $r['enrollment_reference'] ?? '',
             'enrollment_proof' => $r['enrollment_proof'] ?? '',
             'parent_name' => $r['parent_name'] ?? '',
@@ -471,6 +472,7 @@ foreach ($rows as $r) {
             'student_name' => $r['student_name'] ?? '',
             'payment_plan' => $r['payment_plan'] ?? $plan,
             'enrollment_status' => $r['enrollment_status'] ?? 'Pending',
+            'enrollment_amount' => 0.0,
             'enrollment_reference' => $r['enrollment_reference'] ?? '',
             'enrollment_proof' => $r['enrollment_proof'] ?? '',
             'parent_name' => $r['parent_name'] ?? '',
@@ -965,6 +967,8 @@ $classCharges = $pdo->query("
                                             <th>Email</th>
                                             <th>Phone</th>
                                             <th class="wrap">Address</th>
+                                            <th class="nowrap">Amount</th>
+                                            <th class="nowrap">Status</th>
                                             <th class="ref-col">Reference No.</th>
 
                                             <!-- ✅ Due date shown in column header -->
@@ -980,6 +984,27 @@ $classCharges = $pdo->query("
 
                                         <tbody>
                                         <?php foreach ($group[$planName] as $sid => $info): ?>
+                                            <?php
+                                                $totalPlanAmount = 0.0;
+                                                $hasInstallmentRows = false;
+                                                $isFullyPaid = true;
+                                                foreach ($codes as $codeForPlan) {
+                                                    $instRow = $info['installments'][$codeForPlan] ?? null;
+                                                    if (!$instRow) {
+                                                        $isFullyPaid = false;
+                                                        continue;
+                                                    }
+                                                    $hasInstallmentRows = true;
+                                                    $totalPlanAmount += (float)($instRow['due_amount'] ?? 0);
+                                                    if (normalize_status($instRow['status'] ?? '') !== 'approved') {
+                                                        $isFullyPaid = false;
+                                                    }
+                                                }
+                                                if ($totalPlanAmount <= 0) {
+                                                    $totalPlanAmount = (float)($info['enrollment_amount'] ?? 0);
+                                                }
+                                                $planPaymentStatus = ($hasInstallmentRows && $isFullyPaid) ? 'Paid' : 'Unpaid';
+                                            ?>
                                             <tr>
                                                 <td class="wrap">
                                                     <strong><?php echo htmlspecialchars($info['student_name']); ?></strong><br>
@@ -995,6 +1020,12 @@ $classCharges = $pdo->query("
                                                 <td class="wrap"><?php echo htmlspecialchars($info['parent_email'] ?: '-'); ?></td>
                                                 <td class="wrap"><?php echo htmlspecialchars($info['parent_phone'] ?: '-'); ?></td>
                                                 <td class="wrap"><?php echo htmlspecialchars($info['parent_address'] ?: '-'); ?></td>
+                                                <td class="nowrap"><strong>$<?php echo number_format((float)$totalPlanAmount, 2); ?></strong></td>
+                                                <td class="nowrap">
+                                                    <span class="badge badge-<?php echo $planPaymentStatus === 'Paid' ? 'success' : 'warning'; ?>">
+                                                        <?php echo $planPaymentStatus; ?>
+                                                    </span>
+                                                </td>
 
                                                 <!-- ✅ Reference column -->
                                                 <td class="wrap">
@@ -1016,13 +1047,19 @@ $classCharges = $pdo->query("
                                                 <?php foreach ($codes as $code): ?>
                                                     <?php
                                                         $r = $info['installments'][$code] ?? null;
-                                                        $status = $r['status'] ?? 'Pending';
+                                                        $hasRow = is_array($r);
+                                                        $status = $r['status'] ?? 'Not Created';
                                                         $proof = trim((string)($r['proof_path'] ?? ''));
                                                         $feeId = (int)($r['id'] ?? 0);
+                                                        $amount = $hasRow ? (float)($r['due_amount'] ?? 0) : null;
 
                                                         $isApproved = (normalize_status($status) === 'approved');
                                                     ?>
                                                     <td>
+                                                        <div class="mini mb-1">
+                                                            <strong>Amount:</strong>
+                                                            <?php echo $amount === null ? '-' : ('$' . number_format($amount, 2)); ?>
+                                                        </div>
                                                         <div class="mb-1">
                                                             <span class="badge badge-<?php echo badge_class($status); ?>">
                                                                 <?php echo htmlspecialchars($status); ?>
