@@ -69,7 +69,12 @@ if ($action === 'generate_token') {
 
     // Generate a cryptographically secure token
     $token = bin2hex(random_bytes(32));
-    $expiresAt = date('Y-m-d H:i:s', strtotime('+3 minutes')); // valid for 3 minutes
+    // Valid until end of current day (server timezone)
+    $expiresAtTs = strtotime('today 23:59:59');
+    if ($expiresAtTs === false) {
+        $expiresAtTs = time() + 86400;
+    }
+    $expiresAt = date('Y-m-d H:i:s', $expiresAtTs);
 
     $stmt = $pdo->prepare("INSERT INTO pcm_kiosk_tokens (token, expires_at) VALUES (:t, :e)");
     $stmt->execute([':t' => $token, ':e' => $expiresAt]);
@@ -77,7 +82,7 @@ if ($action === 'generate_token') {
     echo json_encode([
         'ok'    => true,
         'token' => $token,
-        'expires_in' => 180, // seconds
+        'expires_in' => max(1, $expiresAtTs - time()), // seconds to end-of-day
     ]);
     exit;
 }
@@ -92,7 +97,7 @@ if ($action === 'validate_token') {
     }
 
     $stmt = $pdo->prepare("
-        SELECT id, token, expires_at, used FROM pcm_kiosk_tokens
+        SELECT id, token, expires_at FROM pcm_kiosk_tokens
         WHERE token = :t LIMIT 1
     ");
     $stmt->execute([':t' => $qrToken]);
@@ -107,15 +112,6 @@ if ($action === 'validate_token') {
         echo json_encode(['ok' => false, 'message' => 'QR code has expired. Please scan the new code at the door.']);
         exit;
     }
-
-    if ($row['used']) {
-        echo json_encode(['ok' => false, 'message' => 'This QR code has already been used. Please scan the new code at the door.']);
-        exit;
-    }
-
-    // Mark token as used
-    $upd = $pdo->prepare("UPDATE pcm_kiosk_tokens SET used = 1, used_by_ip = :ip WHERE id = :id");
-    $upd->execute([':ip' => $ip, ':id' => $row['id']]);
 
     // Return a session key so subsequent calls (auth, sign) are allowed
     $sessionKey = bin2hex(random_bytes(16));
