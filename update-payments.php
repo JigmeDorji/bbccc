@@ -825,6 +825,65 @@ if ($updateOnlyMode) {
         .method-pill.is-active-term-wise { background:#4e73df; color:#fff; border-color:#4e73df; }
         .method-pill.is-active-half-yearly { background:#36b9cc; color:#fff; border-color:#36b9cc; }
         .method-pill.is-active-yearly { background:#1cc88a; color:#fff; border-color:#1cc88a; }
+
+        /* Update Payments table responsiveness */
+        .update-payments-table {
+            min-width: 1180px;
+            table-layout: fixed;
+        }
+        .update-payments-table td,
+        .update-payments-table th {
+            vertical-align: middle;
+        }
+        .update-payments-table input.form-control-sm,
+        .update-payments-table select.form-control-sm {
+            min-width: 110px;
+            height: 36px;
+            font-size: 0.88rem;
+        }
+        .update-payments-table .btn.btn-sm {
+            min-height: 36px;
+            font-size: 0.84rem;
+            padding: 0.38rem 0.6rem;
+        }
+        .upd-cell-label {
+            display: none;
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: #6c757d;
+            margin-bottom: 4px;
+            font-weight: 700;
+        }
+        .update-payments-table .col-child { min-width: 220px; }
+        .update-payments-table .col-parent { min-width: 170px; }
+        .update-payments-table .col-proof { min-width: 120px; }
+        .update-payments-table .col-action { min-width: 100px; }
+        @media (max-width: 768px) {
+            .update-payments-table {
+                min-width: 1280px;
+            }
+            .update-payments-table input.form-control-sm,
+            .update-payments-table select.form-control-sm {
+                height: 40px;
+                font-size: 0.92rem;
+            }
+            .update-payments-table .btn.btn-sm {
+                min-height: 40px;
+                font-size: 0.9rem;
+            }
+        }
+        @media (max-width: 480px) {
+            .update-payments-table {
+                min-width: 1420px;
+            }
+            .upd-cell-label {
+                display: block;
+            }
+            .update-payments-table .form-control-sm {
+                min-width: 128px;
+            }
+        }
     </style>
 </head>
 <body id="page-top">
@@ -1078,10 +1137,20 @@ if ($updateOnlyMode) {
                                 <span><strong>Unpaid:</strong> <?= (int)$updateCounts['Unpaid'] ?></span>
                             </div>
                             <div class="table-responsive">
-                                <table class="table table-bordered table-hover">
+                                <table class="table table-bordered table-hover update-payments-table">
                                     <thead class="thead-light">
                                         <tr>
-                                            <th>#</th><th>Child</th><th>Parent</th><th>Plan</th><th>Instalment</th><th>Due</th><th>Paid</th><th>Ref</th><th>Status</th><th>Proof</th><th>Action</th>
+                                            <th>#</th>
+                                            <th class="col-child">Child</th>
+                                            <th class="col-parent">Parent</th>
+                                            <th>Plan</th>
+                                            <th>Instalment</th>
+                                            <th>Due</th>
+                                            <th>Paid</th>
+                                            <th>Ref</th>
+                                            <th>Status</th>
+                                            <th class="col-proof">Proof</th>
+                                            <th class="col-action">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -1095,17 +1164,45 @@ if ($updateOnlyMode) {
                                                 <td><?= h($up['parent_name'] ?? '-') ?></td>
                                                 <td><?= h($up['plan_type']) ?></td>
                                                 <td><?= h($up['instalment_label']) ?></td>
-                                                <td><input type="number" step="0.01" min="0" name="due_amount" class="form-control form-control-sm" value="<?= h((string)$up['due_amount']) ?>"></td>
-                                                <td><input type="number" step="0.01" min="0" name="paid_amount" class="form-control form-control-sm" value="<?= h((string)$up['paid_amount']) ?>"></td>
-                                                <td><input type="text" name="payment_ref" class="form-control form-control-sm" value="<?= h((string)($up['payment_ref'] ?? '')) ?>"></td>
                                                 <td>
+                                                    <div class="upd-cell-label">Due</div>
+                                                    <input type="number" step="0.01" min="0" name="due_amount" class="form-control form-control-sm" value="<?= h((string)$up['due_amount']) ?>" placeholder="Due amount">
+                                                </td>
+                                                <td>
+                                                    <div class="upd-cell-label">Paid</div>
+                                                    <input type="number" step="0.01" min="0" name="paid_amount" class="form-control form-control-sm" value="<?= h((string)$up['paid_amount']) ?>" placeholder="Paid amount">
+                                                </td>
+                                                <td>
+                                                    <div class="upd-cell-label">Reference</div>
+                                                    <input type="text" name="payment_ref" class="form-control form-control-sm" value="<?= h((string)($up['payment_ref'] ?? '')) ?>" placeholder="Payment reference">
+                                                </td>
+                                                <td>
+                                                    <div class="upd-cell-label">Status</div>
                                                     <select name="status" class="form-control form-control-sm">
                                                         <?php foreach (['Unpaid','Pending','Verified','Rejected'] as $st): ?>
                                                             <option value="<?= $st ?>" <?= ((string)$up['status'] === $st) ? 'selected' : '' ?>><?= $st ?></option>
                                                         <?php endforeach; ?>
                                                     </select>
                                                 </td>
-                                                <td><?= !empty($up['proof_path']) ? '<a href="'.h((string)$up['proof_path']).'" target="_blank">View</a>' : '—' ?></td>
+                                                <td>
+                                                    <?php if (!empty($up['proof_path'])): ?>
+                                                        <?php $ptype = proof_type((string)$up['proof_path']); ?>
+                                                        <a href="javascript:void(0)"
+                                                           class="proof-thumb"
+                                                           data-proof="<?= h((string)$up['proof_path']) ?>"
+                                                           data-type="<?= h($ptype) ?>"
+                                                           data-name="<?= h(basename((string)$up['proof_path'])) ?>">
+                                                            <?php if ($ptype === 'img'): ?>
+                                                                <img class="thumb-img" src="<?= h((string)$up['proof_path']) ?>" alt="proof">
+                                                            <?php else: ?>
+                                                                <span class="thumb-icon"><i class="fas fa-file-pdf"></i></span>
+                                                            <?php endif; ?>
+                                                            <span class="mini"><i class="fas fa-eye"></i> View</span>
+                                                        </a>
+                                                    <?php else: ?>
+                                                        —
+                                                    <?php endif; ?>
+                                                </td>
                                                 <td class="nowrap">
                                                     <input type="hidden" name="action" value="update_payment_row">
                                                     <input type="hidden" name="payment_id" value="<?= (int)$up['id'] ?>">
