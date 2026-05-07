@@ -403,7 +403,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
     <?php if (!isParent() && !isTeacher() && !isPatron()) { ?>
         <?php
             $websiteActive = in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','serviceSetup.php','ourTeamSetup.php','viewFeedback.php'], true);
-            $dzoActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php'], true);
+            $dzoActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','update-payments.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php'], true);
             $eventsActive = in_array($currentPage, ['eventManagement.php','bookingManagement.php'], true);
             $adminSettingsActive = in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php','audit-logs.php','run-migration.php','module-access.php'], true);
             $canWebsiteManage = function_exists('bbcc_can') ? bbcc_can('website', 'manage') : false;
@@ -449,7 +449,8 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
             <div id="collapseOrders" class="collapse <?= $dzoActive ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <?php
-                        $dzoEnrollActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','admin-fee-verification.php','admin-assign-class.php'], true);
+                        $dzoEnrollActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','admin-assign-class.php'], true);
+                        $dzoFeesActive = in_array($currentPage, ['feesManagement.php','update-payments.php','admin-fee-verification.php'], true);
                         $dzoOpsActive = in_array($currentPage, ['dzongkha-classroom.php','attendanceManagement.php','attendance-records.php','parent-email.php','admin-attendance.php'], true);
                         $dzoConfigActive = in_array($currentPage, ['admin-class-setup.php','feesSetting.php','admin-parent-pins.php'], true);
                     ?>
@@ -459,8 +460,15 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                     <div id="collapseDzoEnroll" class="collapse dzo-subgroup-links <?= $dzoEnrollActive ? 'show' : '' ?>" data-parent="#collapseOrders">
                         <a class="collapse-item <?= ($currentPage === 'dzoClassManagement.php') ? 'active' : '' ?>" href="dzoClassManagement"><i class="fas fa-user-plus fa-sm mr-1 text-muted"></i> Child Registration</a>
                         <a class="collapse-item <?= ($currentPage === 'admin-enrolments.php') ? 'active' : '' ?>" href="admin-enrolments"><i class="fas fa-file-signature fa-sm mr-1 text-muted"></i> Enrollment</a>
-                        <a class="collapse-item <?= in_array($currentPage, ['feesManagement.php','admin-fee-verification.php']) ? 'active' : '' ?>" href="feesManagement"><i class="fas fa-money-check-alt fa-sm mr-1 text-muted"></i> Fees</a>
                         <a class="collapse-item <?= ($currentPage == 'admin-assign-class.php') ? 'active' : '' ?>" href="admin-assign-class"><i class="fas fa-user-plus fa-sm mr-1 text-muted"></i> Assign Students</a>
+                    </div>
+
+                    <h6 class="collapse-header dzo-group-header d-none d-lg-block">Fees Management</h6>
+                    <a class="collapse-item dzo-subgroup-trigger <?= $dzoFeesActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseDzoFees" aria-expanded="<?= $dzoFeesActive ? 'true' : 'false' ?>" aria-controls="collapseDzoFees">Fees Management</a>
+                    <div id="collapseDzoFees" class="collapse dzo-subgroup-links <?= $dzoFeesActive ? 'show' : '' ?>" data-parent="#collapseOrders">
+                        <a class="collapse-item <?= ($currentPage == 'feesManagement.php') ? 'active' : '' ?>" href="feesManagement"><i class="fas fa-money-check-alt fa-sm mr-1 text-muted"></i> Fees Overview</a>
+                        <a class="collapse-item <?= ($currentPage == 'update-payments.php') ? 'active' : '' ?>" href="update-payments"><i class="fas fa-edit fa-sm mr-1 text-muted"></i> Update Payments</a>
+                        <a class="collapse-item <?= ($currentPage == 'admin-fee-verification.php') ? 'active' : '' ?>" href="admin-fee-verification"><i class="fas fa-check-double fa-sm mr-1 text-muted"></i> Verify Payments</a>
                     </div>
 
                     <h6 class="collapse-header dzo-group-header d-none d-lg-block">Classroom Operations</h6>

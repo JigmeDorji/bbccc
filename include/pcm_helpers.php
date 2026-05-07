@@ -462,10 +462,28 @@ function pcm_current_parent(PDO $pdo): ?array {
 
 // ─── Generate next student ID ─────────────────────────────
 function pcm_next_student_id(PDO $pdo): string {
-    $stmt = $pdo->query("SELECT MAX(CAST(SUBSTRING(student_id,5) AS UNSIGNED)) AS mx FROM students WHERE student_id LIKE 'BLCS%'");
-    $row = $stmt->fetch();
-    $next = ((int)($row['mx'] ?? 0)) + 1;
-    return 'BLCS' . str_pad((string)$next, 4, '0', STR_PAD_LEFT);
+    // Support legacy IDs (BLCS####) and current IDs (STU-####), then continue as STU-XXXX.
+    $stmt = $pdo->query("
+        SELECT student_id
+        FROM students
+        WHERE student_id REGEXP '^(STU-|BLCS)[0-9]+$'
+    ");
+    $rows = $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+
+    $maxNum = 0;
+    foreach ($rows as $sid) {
+        $sid = (string)$sid;
+        $num = 0;
+        if (strpos($sid, 'STU-') === 0) {
+            $num = (int)substr($sid, 4);
+        } elseif (strpos($sid, 'BLCS') === 0) {
+            $num = (int)substr($sid, 4);
+        }
+        if ($num > $maxNum) $maxNum = $num;
+    }
+
+    $next = $maxNum + 1;
+    return 'STU-' . str_pad((string)$next, 4, '0', STR_PAD_LEFT);
 }
 
 // ─── Safe upload directory creation ───────────────────────

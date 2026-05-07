@@ -3,6 +3,7 @@ require_once "include/config.php";
 require_once "include/auth.php";
 require_once "access_control.php";
 require_once "include/parent_helpers.php";
+require_once "include/pcm_helpers.php";
 require_login();
 allowRoles(['parent']);
 
@@ -24,13 +25,6 @@ if (!$parent) {
 
 $parentId = (int)$parent['id'];
 
-function generate_next_student_id(PDO $pdo) {
-    $stmt = $pdo->query("SELECT MAX(CAST(SUBSTRING(student_id, 5) AS UNSIGNED)) AS max_num FROM students WHERE student_id LIKE 'BLCS%'");
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    $next = ((int)($row['max_num'] ?? 0)) + 1;
-    return 'BLCS' . str_pad((string)$next, 4, '0', STR_PAD_LEFT);
-}
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_student') {
     try {
         $student_name = trim($_POST['student_name'] ?? '');
@@ -42,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_s
             throw new Exception("Please fill in all required fields.");
         }
 
-        $student_id = generate_next_student_id($pdo);
+        $student_id = pcm_next_student_id($pdo);
         $registration_date = date('Y-m-d');
         $approval_status = 'Pending';
         $status = 'Pending';

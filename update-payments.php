@@ -12,7 +12,7 @@ if ($role === 'parent') {
 $message = "";
 $success = false;
 $reload  = false;
-$updateOnlyMode = false; // Fees Overview page only
+$updateOnlyMode = true; // Dedicated Update Payments page
 
 // ---------------- DB CONNECTION ----------------
 try {
@@ -725,7 +725,7 @@ if ($updateOnlyMode) {
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Fees Management</title>
+    <title>Update Payments</title>
 
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
@@ -837,10 +837,10 @@ if ($updateOnlyMode) {
 
             <div class="container-fluid">
                 <div class="d-flex align-items-center justify-content-between mb-3">
-                    <h1 class="h3 text-gray-800 mb-0">Fees Management</h1>
+                    <h1 class="h3 text-gray-800 mb-0">Update Payments</h1>
 
-                    <a href="feesSetting" class="btn btn-sm btn-primary">
-                        <i class="fas fa-cog"></i> Fees Settings
+                    <a href="feesManagement" class="btn btn-sm btn-outline-primary">
+                        <i class="fas fa-table"></i> Fees Overview
                     </a>
                 </div>
 
@@ -856,11 +856,12 @@ if ($updateOnlyMode) {
                                 title: msg,
                                 showConfirmButton: true,
                                 timer: ok ? 1400 : 6000
-                            }).then(()=> { if (ok && reload) window.location.href = 'feesManagement.php'; });
+                            }).then(()=> { if (ok && reload) window.location.href = 'update-payments.php'; });
                         }
                     });
                 </script>
 
+                <?php if (!$updateOnlyMode): ?>
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center">
                         <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-book mr-1"></i>Class-Based Additional Charges</h6>
@@ -1061,6 +1062,7 @@ if ($updateOnlyMode) {
                         </div>
                     </div>
                 </div>
+                <?php endif; ?>
 
                 <?php if ($updateOnlyMode): ?>
                     <div class="card shadow mb-4">

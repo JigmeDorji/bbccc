@@ -161,6 +161,7 @@ function bbcc_acl_page_rules(): array {
         'teacher-attendance' => ['admin', 'teacher'],
         'attendancemanagement' => ['admin', 'teacher'],
         'feesmanagement' => ['admin', 'teacher'],
+        'update-payments' => ['admin', 'teacher'],
         'admin-attendance' => ['admin'],
 
         // Parent-only flows
@@ -234,6 +235,7 @@ function bbcc_acl_route_module_rules(): array {
         'admin-bank-settings' => ['fees_payments', 'manage'],
         'admin-fee-verification' => ['fees_payments', 'verify'],
         'feesmanagement' => ['fees_payments', 'view'],
+        'update-payments' => ['fees_payments', 'manage'],
         'parent-fees' => ['fees_payments', 'view'],
         'parent-fees-pay' => ['fees_payments', 'submit'],
         'parentfeespayment' => ['fees_payments', 'submit'],
