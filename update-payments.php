@@ -828,16 +828,18 @@ if ($updateOnlyMode) {
 
         /* Update Payments table responsiveness */
         .update-payments-table {
-            min-width: 1180px;
-            table-layout: fixed;
+            min-width: 1100px;
+            table-layout: auto;
         }
         .update-payments-table td,
         .update-payments-table th {
             vertical-align: middle;
+            white-space: nowrap;
         }
         .update-payments-table input.form-control-sm,
         .update-payments-table select.form-control-sm {
-            min-width: 110px;
+            width: 100%;
+            min-width: 96px;
             height: 36px;
             font-size: 0.88rem;
         }
@@ -855,13 +857,13 @@ if ($updateOnlyMode) {
             margin-bottom: 4px;
             font-weight: 700;
         }
-        .update-payments-table .col-child { min-width: 220px; }
-        .update-payments-table .col-parent { min-width: 170px; }
-        .update-payments-table .col-proof { min-width: 120px; }
+        .update-payments-table .col-child { min-width: 200px; }
+        .update-payments-table .col-parent { min-width: 150px; }
+        .update-payments-table .col-proof { min-width: 110px; }
         .update-payments-table .col-action { min-width: 100px; }
         @media (max-width: 768px) {
             .update-payments-table {
-                min-width: 1280px;
+                min-width: 1200px;
             }
             .update-payments-table input.form-control-sm,
             .update-payments-table select.form-control-sm {
@@ -875,7 +877,7 @@ if ($updateOnlyMode) {
         }
         @media (max-width: 480px) {
             .update-payments-table {
-                min-width: 1420px;
+                min-width: 1320px;
             }
             .upd-cell-label {
                 display: block;
@@ -1501,9 +1503,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 didOpen: () => {
                     const img = document.getElementById('swalProofImg');
                     if (!img) return;
+                    const stage = img.closest('.proof-stage');
 
                     img.onload = () => {
-                        img.style.width = img.naturalWidth + 'px';
+                        // Fit image to modal viewport by default (prevents oversized display)
+                        if (stage) {
+                            const maxW = Math.max(320, stage.clientWidth - 24);
+                            const naturalW = img.naturalWidth || maxW;
+                            img.style.width = Math.min(naturalW, maxW) + 'px';
+                        } else {
+                            img.style.width = '100%';
+                            img.style.maxWidth = '100%';
+                        }
                         img.style.height = 'auto';
                         applyScale();
                     };
