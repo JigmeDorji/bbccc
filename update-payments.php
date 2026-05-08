@@ -702,6 +702,7 @@ $classCharges = $pdo->query("
 
 $updatePayments = [];
 $updateCounts = ['Pending' => 0, 'Verified' => 0, 'Rejected' => 0, 'Unpaid' => 0];
+$filterStudentId = trim((string)($_GET['student_id'] ?? ''));
 if ($updateOnlyMode) {
     $stmtUpd = $pdo->query("
         SELECT f.*, s.student_name, s.student_id AS stu_code, p.full_name AS parent_name
@@ -713,6 +714,11 @@ if ($updateOnlyMode) {
         LIMIT 500
     ");
     $updatePayments = $stmtUpd->fetchAll(PDO::FETCH_ASSOC);
+    if ($filterStudentId !== '') {
+        $updatePayments = array_values(array_filter($updatePayments, function ($row) use ($filterStudentId) {
+            return (string)($row['student_id'] ?? '') === $filterStudentId;
+        }));
+    }
     foreach ($updatePayments as $row) {
         $k = (string)($row['status'] ?? '');
         if (isset($updateCounts[$k])) $updateCounts[$k]++;
@@ -729,6 +735,7 @@ if ($updateOnlyMode) {
 
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap4.min.css" rel="stylesheet">
 
     <script src="vendor/jquery/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
@@ -789,6 +796,9 @@ if ($updateOnlyMode) {
             border-radius: 12px;
             padding: 10px;
             background: #fafbff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .proof-img {
             display:block;
@@ -796,6 +806,10 @@ if ($updateOnlyMode) {
             border-radius: 10px;
             border: 1px solid #e3e6f0;
             background:#fff;
+            max-width: 100%;
+            max-height: calc(72vh - 24px);
+            width: auto;
+            height: auto;
         }
         .swal-toolbar {
             display:flex;
@@ -1138,8 +1152,15 @@ if ($updateOnlyMode) {
                                 <span><strong>Rejected:</strong> <?= (int)$updateCounts['Rejected'] ?></span>
                                 <span><strong>Unpaid:</strong> <?= (int)$updateCounts['Unpaid'] ?></span>
                             </div>
+                            <div class="mb-3">
+                                <button type="button" class="btn btn-sm btn-primary plan-filter-btn active" data-plan="all">All</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary plan-filter-btn" data-plan="Term-wise">Term-wise</button>
+                                <button type="button" class="btn btn-sm btn-outline-info plan-filter-btn" data-plan="Half-yearly">Half-yearly</button>
+                                <button type="button" class="btn btn-sm btn-outline-success plan-filter-btn" data-plan="Yearly">Yearly</button>
+                                <button type="button" class="btn btn-sm btn-outline-dark plan-filter-btn" data-plan="Additional">Additional</button>
+                            </div>
                             <div class="table-responsive">
-                                <table class="table table-bordered table-hover update-payments-table">
+                                    <table id="updatePaymentsTable" class="table table-bordered table-hover update-payments-table">
                                     <thead class="thead-light">
                                         <tr>
                                             <th>#</th>
@@ -1431,8 +1452,37 @@ if ($updateOnlyMode) {
     <input type="hidden" name="new_status" id="new_status" value="">
 </form>
 
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap4.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    let updateTable = null;
+    if (window.jQuery && jQuery.fn && typeof jQuery.fn.DataTable === 'function') {
+        updateTable = jQuery('#updatePaymentsTable').DataTable({
+            pageLength: 25,
+            order: [[0, 'asc']]
+        });
+    }
+
+    const filterButtons = document.querySelectorAll('.plan-filter-btn');
+    filterButtons.forEach(btn => {
+        btn.addEventListener('click', function () {
+            filterButtons.forEach(b => {
+                b.classList.remove('active', 'btn-primary');
+                if (!b.classList.contains('btn-outline-primary') && !b.classList.contains('btn-outline-info') && !b.classList.contains('btn-outline-success') && !b.classList.contains('btn-outline-dark')) {
+                    b.classList.add('btn-outline-primary');
+                }
+            });
+            this.classList.add('active', 'btn-primary');
+            this.classList.remove('btn-outline-primary', 'btn-outline-info', 'btn-outline-success', 'btn-outline-dark');
+
+            if (updateTable) {
+                const plan = this.getAttribute('data-plan') || 'all';
+                updateTable.column(3).search(plan === 'all' ? '' : '^' + plan + '$', true, false).draw();
+            }
+        });
+    });
+
     // ---------- Payment method tabs ----------
     const methodPills = document.querySelectorAll('.js-method-pill');
     const planSections = document.querySelectorAll('.fee-plan-section');
@@ -1503,18 +1553,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 didOpen: () => {
                     const img = document.getElementById('swalProofImg');
                     if (!img) return;
-                    const stage = img.closest('.proof-stage');
 
                     img.onload = () => {
-                        // Fit image to modal viewport by default (prevents oversized display)
-                        if (stage) {
-                            const maxW = Math.max(320, stage.clientWidth - 24);
-                            const naturalW = img.naturalWidth || maxW;
-                            img.style.width = Math.min(naturalW, maxW) + 'px';
-                        } else {
-                            img.style.width = '100%';
-                            img.style.maxWidth = '100%';
-                        }
+                        // Default behavior: fit full image inside modal viewport.
+                        img.style.width = 'auto';
+                        img.style.maxWidth = '100%';
                         img.style.height = 'auto';
                         applyScale();
                     };

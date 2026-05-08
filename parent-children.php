@@ -23,6 +23,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     verify_csrf();
 
     if ($_POST['action'] === 'add_child') {
+        if (!bbcc_verify_form_nonce_once('parent_add_child')) {
+            $flash = 'Duplicate submission detected. Please submit once and wait.';
+        } else {
         $name   = trim($_POST['child_name'] ?? '');
         $dob    = trim($_POST['dob'] ?? '');
         $gender = trim($_POST['gender'] ?? '');
@@ -54,9 +57,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $flash = "Child <strong>{$name}</strong> added (ID: {$sid}).";
             $ok = true;
         }
+        }
     }
 
     if ($_POST['action'] === 'remove_child') {
+        if (!bbcc_verify_form_nonce_once('parent_remove_child')) {
+            $flash = 'Duplicate submission detected. Please refresh and try again.';
+        } else {
         $cid = (int)($_POST['child_id'] ?? 0);
         // only allow removing Pending children with no active enrolment
         $chk = $pdo->prepare("SELECT id FROM pcm_enrolments WHERE student_id = :id LIMIT 1");
@@ -68,6 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $del->execute([':id'=>$cid, ':pid'=>$parentId]);
             $flash = $del->rowCount() ? 'Child removed.' : 'Cannot remove this child.';
             $ok = (bool)$del->rowCount();
+        }
         }
     }
 }
@@ -114,6 +122,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     <div class="card-body">
         <form method="POST" class="row">
             <?= csrf_field() ?>
+            <?= bbcc_form_nonce_field('parent_add_child') ?>
             <input type="hidden" name="action" value="add_child">
 
             <div class="col-md-4 mb-3">
@@ -138,7 +147,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                 <input type="text" name="medical" class="form-control" maxlength="500" placeholder="None">
             </div>
             <div class="col-12">
-                <button type="submit" class="btn btn-primary"><i class="fas fa-user-plus mr-1"></i>Add Child</button>
+                <button type="submit" class="btn btn-primary" data-loading-text="<span class='spinner-border spinner-border-sm mr-1'></span>Adding..."><i class="fas fa-user-plus mr-1"></i>Add Child</button>
             </div>
         </form>
     </div>
@@ -176,6 +185,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                             ?>
                             <form method="POST" class="d-inline" onsubmit="return confirm('Remove this child?')">
                                 <?= csrf_field() ?>
+                                <?= bbcc_form_nonce_field('parent_remove_child') ?>
                                 <input type="hidden" name="action" value="remove_child">
                                 <input type="hidden" name="child_id" value="<?= (int)$c['id'] ?>">
                                 <button class="btn btn-outline-danger btn-sm"><i class="fas fa-trash-alt"></i></button>

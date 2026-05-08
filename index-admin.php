@@ -63,6 +63,7 @@ $parentFeeSummary = [
     'pending_amount' => 0.0,
     'items' => [],
 ];
+$parentFeeMatrix = [];
 $recentClassroomActivity = [];
 $dashboardTeacherId = 0;
 $teacherAssignedClassNames = [];
@@ -172,6 +173,20 @@ try {
                 $stmtParentFees->execute([':pid' => $parentDbId]);
                 $feeRows = $stmtParentFees->fetchAll(PDO::FETCH_ASSOC);
 
+                $labelToKey = static function (string $label): string {
+                    $l = strtolower(trim($label));
+                    return match ($l) {
+                        'term 1', 'term1' => 'term1',
+                        'term 2', 'term2' => 'term2',
+                        'term 3', 'term3' => 'term3',
+                        'term 4', 'term4' => 'term4',
+                        'half 1', 'half1', 'half-year 1', 'half-yearly 1' => 'half1',
+                        'half 2', 'half2', 'half-year 2', 'half-yearly 2' => 'half2',
+                        'yearly', 'year' => 'yearly',
+                        default => '',
+                    };
+                };
+
                 foreach ($feeRows as $fr) {
                     $status = strtolower(trim((string)($fr['status'] ?? '')));
                     $due = (float)($fr['due_amount'] ?? 0);
@@ -179,21 +194,44 @@ try {
                     $balance = max($due - $paid, 0);
                     $label = trim((string)($fr['instalment_label'] ?? 'Installment'));
                     $studentName = trim((string)($fr['student_name'] ?? 'Child'));
+                    $slot = $labelToKey($label);
+
+                    if (!isset($parentFeeMatrix[$studentName])) {
+                        $parentFeeMatrix[$studentName] = [
+                            'term1' => null, 'term2' => null, 'term3' => null, 'term4' => null,
+                            'half1' => null, 'half2' => null, 'yearly' => null,
+                        ];
+                    }
+                    if ($slot !== '') {
+                        $parentFeeMatrix[$studentName][$slot] = [
+                            'amount' => $due,
+                            'status' => ucfirst($status ?: 'unpaid'),
+                        ];
+                    }
 
                     if ($status === 'pending') {
                         $parentFeeSummary['pending_count']++;
                         $parentFeeSummary['pending_amount'] += ($paid > 0 ? $paid : $due);
+                        if (count($parentFeeSummary['items']) < 8) {
+                            $parentFeeSummary['items'][] = [
+                                'student_name' => $studentName,
+                                'instalment_label' => $label,
+                                'balance' => ($paid > 0 ? $paid : $due),
+                                'status' => 'Pending',
+                            ];
+                        }
                         continue;
                     }
 
                     if (in_array($status, ['unpaid', 'rejected'], true) && $balance > 0) {
                         $parentFeeSummary['outstanding_count']++;
                         $parentFeeSummary['outstanding_amount'] += $balance;
-                        if (count($parentFeeSummary['items']) < 6) {
+                        if (count($parentFeeSummary['items']) < 8) {
                             $parentFeeSummary['items'][] = [
                                 'student_name' => $studentName,
                                 'instalment_label' => $label,
                                 'balance' => $balance,
+                                'status' => ($status === 'rejected' ? 'Rejected' : 'Unpaid'),
                             ];
                         }
                     }
@@ -1153,22 +1191,44 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                                     </a>
                                 </div>
                             </div>
-                            <?php if (!empty($parentFeeSummary['items'])): ?>
+                            <?php if (!empty($parentFeeMatrix)): ?>
                                 <div class="table-responsive mt-3">
                                     <table class="dash-table mb-0">
                                         <thead>
                                         <tr>
-                                            <th>Child</th>
-                                            <th>Installment</th>
-                                            <th>Outstanding</th>
+                                            <th>Child Name</th>
+                                            <th>Term 1</th>
+                                            <th>Term 2</th>
+                                            <th>Term 3</th>
+                                            <th>Term 4</th>
+                                            <th>Half-year 1</th>
+                                            <th>Half-year 2</th>
+                                            <th>Yearly</th>
                                         </tr>
                                         </thead>
                                         <tbody>
-                                        <?php foreach ($parentFeeSummary['items'] as $fi): ?>
+                                        <?php foreach ($parentFeeMatrix as $childName => $slots): ?>
                                             <tr>
-                                                <td><?= htmlspecialchars((string)$fi['student_name']) ?></td>
-                                                <td><?= htmlspecialchars((string)$fi['instalment_label']) ?></td>
-                                                <td>$<?= number_format((float)$fi['balance'], 2) ?></td>
+                                                <td><?= htmlspecialchars((string)$childName) ?></td>
+                                                <?php foreach (['term1','term2','term3','term4','half1','half2','yearly'] as $k): ?>
+                                                    <?php $cell = $slots[$k] ?? null; ?>
+                                                    <td>
+                                                        <?php if ($cell === null): ?>
+                                                            <span class="text-muted">-</span>
+                                                        <?php else: ?>
+                                                            <?php
+                                                                $feeSt = strtolower((string)($cell['status'] ?? 'Unpaid'));
+                                                                $feeBadge = 'secondary';
+                                                                if ($feeSt === 'unpaid') $feeBadge = 'warning';
+                                                                elseif ($feeSt === 'pending') $feeBadge = 'info';
+                                                                elseif (in_array($feeSt, ['verified','approved'], true)) $feeBadge = 'success';
+                                                                elseif ($feeSt === 'rejected') $feeBadge = 'danger';
+                                                            ?>
+                                                            <div>$<?= number_format((float)($cell['amount'] ?? 0), 2) ?></div>
+                                                            <span class="badge badge-<?= $feeBadge ?>"><?= htmlspecialchars((string)($cell['status'] ?? 'Unpaid')) ?></span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                <?php endforeach; ?>
                                             </tr>
                                         <?php endforeach; ?>
                                         </tbody>

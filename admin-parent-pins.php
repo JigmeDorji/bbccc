@@ -43,8 +43,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'clear
     }
 }
 
-// ── Fetch parents ──
-$parents = $pdo->query("SELECT id, full_name, email, phone, pin_hash, status FROM parents ORDER BY full_name")->fetchAll();
+// ── Fetch parents + students ──
+$parents = $pdo->query("
+    SELECT
+        p.id,
+        p.full_name,
+        p.email,
+        p.phone,
+        p.pin_hash,
+        p.status,
+        GROUP_CONCAT(DISTINCT s.student_name ORDER BY s.student_name SEPARATOR ', ') AS student_names
+    FROM parents p
+    LEFT JOIN students s
+        ON s.parentId = p.id OR s.parent_id = p.id
+    GROUP BY p.id, p.full_name, p.email, p.phone, p.pin_hash, p.status
+    ORDER BY p.full_name
+")->fetchAll();
 
 $pageScripts = [];
 ?>
@@ -82,21 +96,28 @@ document.addEventListener('DOMContentLoaded',()=>{
     </div>
     <div class="card-body">
         <p class="text-muted small mb-3">Set a numeric PIN with at least 4 digits for each parent. They will use their <strong>phone number + PIN</strong> to sign in at the kiosk.</p>
+        <div class="row mb-3">
+            <div class="col-md-5">
+                <label class="small font-weight-bold text-muted mb-1">Search by Parent Name</label>
+                <input type="text" id="parentNameSearch" class="form-control form-control-sm" placeholder="Type parent name...">
+            </div>
+        </div>
         <?php if (empty($parents)): ?>
             <p class="text-muted">No parent accounts found.</p>
         <?php else: ?>
         <div class="table-responsive">
-            <table class="table table-bordered table-hover">
+            <table class="table table-bordered table-hover" id="parentPinsTable">
                 <thead class="thead-light">
-                    <tr><th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>PIN Set?</th><th>Status</th><th style="width:280px">Action</th></tr>
+                    <tr><th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Students</th><th>PIN Set?</th><th>Status</th><th style="width:280px">Action</th></tr>
                 </thead>
                 <tbody>
                 <?php foreach ($parents as $i => $p): ?>
-                <tr>
+                <tr data-parent-name="<?= h(strtolower((string)$p['full_name'])) ?>">
                     <td><?= $i+1 ?></td>
                     <td class="font-weight-bold"><?= h($p['full_name']) ?></td>
                     <td><?= h($p['email']) ?></td>
                     <td><?= h($p['phone'] ?? '—') ?></td>
+                    <td><?= h($p['student_names'] ?? '—') ?></td>
                     <td>
                         <?php if ($p['pin_hash']): ?>
                             <span class="badge badge-success"><i class="fas fa-check mr-1"></i>Yes</span>
@@ -137,5 +158,19 @@ document.addEventListener('DOMContentLoaded',()=>{
 <?php include 'include/admin-footer.php'; ?>
 </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const input = document.getElementById('parentNameSearch');
+    const rows = document.querySelectorAll('#parentPinsTable tbody tr');
+    if (!input) return;
+    input.addEventListener('input', function () {
+        const q = (input.value || '').trim().toLowerCase();
+        rows.forEach((row) => {
+            const name = row.getAttribute('data-parent-name') || '';
+            row.style.display = (!q || name.includes(q)) ? '' : 'none';
+        });
+    });
+});
+</script>
 </body>
 </html>

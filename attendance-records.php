@@ -203,6 +203,26 @@ $filterClassId = (int)($_GET['class_id'] ?? 0);
 $filterChildId = (int)($_GET['child_id'] ?? 0);
 $fromDate = trim((string)($_GET['from_date'] ?? ''));
 $toDate = trim((string)($_GET['to_date'] ?? ''));
+$termYear = (int)($_GET['term_year'] ?? (int)date('Y'));
+$term = (int)($_GET['term'] ?? 0);
+
+if ($termYear < 2000 || $termYear > 2100) {
+    $termYear = (int)date('Y');
+}
+if (!in_array($term, [0, 1, 2, 3, 4], true)) {
+    $term = 0;
+}
+
+if ($term > 0) {
+    $termRanges = [
+        1 => ['-01-01', '-03-31'],
+        2 => ['-04-01', '-06-30'],
+        3 => ['-07-01', '-09-30'],
+        4 => ['-10-01', '-12-31'],
+    ];
+    $fromDate = sprintf('%d%s', $termYear, $termRanges[$term][0]);
+    $toDate = sprintf('%d%s', $termYear, $termRanges[$term][1]);
+}
 
 if ($filterClassId > 0 && !$isAdmin && !in_array($filterClassId, $allowedClassIds, true)) {
     $filterClassId = 0;
@@ -261,7 +281,6 @@ $sql = "
     LEFT JOIN classes c ON c.id = a.class_id
     WHERE " . implode(" AND ", $where) . "
     ORDER BY a.attendance_date DESC, a.id DESC
-    LIMIT 1000
 ";
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
@@ -311,9 +330,6 @@ usort($dateHeaders, function ($a, $b) {
     if ($ta === $tb) return 0;
     return ($ta > $tb) ? -1 : 1;
 });
-if (count($dateHeaders) > 31) {
-    $dateHeaders = array_slice($dateHeaders, 0, 31);
-}
 uasort($gridRows, function ($a, $b) {
     return strcasecmp((string)$a['student_name'], (string)$b['student_name']);
 });
@@ -367,6 +383,16 @@ if ($viewMode === 'parent') {
         cursor: pointer;
     }
     .att-edit-btn:hover { background: #f3f4f6; }
+    .attendance-scroll-wrap { overflow: auto; max-width: 100%; }
+    table.attendance-grid { min-width: 1100px; border-collapse: separate; border-spacing: 0; }
+    table.attendance-grid th, table.attendance-grid td { white-space: nowrap; vertical-align: middle; }
+    .sticky-col { position: sticky; background: #fff; z-index: 3; }
+    .sticky-head { position: sticky; top: 0; z-index: 4; background: #f8f9fc; }
+    .sticky-1 { left: 0; min-width: 60px; }
+    .sticky-2 { left: 60px; min-width: 220px; }
+    .sticky-3 { left: 280px; min-width: 140px; }
+    .sticky-4 { left: 420px; min-width: 180px; }
+    thead .sticky-col { z-index: 6; background: #f8f9fc; }
     </style>
 </head>
 <body id="page-top">
@@ -473,8 +499,27 @@ if ($viewMode === 'parent') {
                                 <label>To Date</label>
                                 <input type="date" class="form-control" name="to_date" value="<?= htmlspecialchars($toDate) ?>">
                             </div>
+                            <div class="form-group col-md-2">
+                                <label>Year</label>
+                                <input type="number" class="form-control" name="term_year" min="2000" max="2100" value="<?= (int)$termYear ?>">
+                            </div>
+                            <div class="form-group col-md-2">
+                                <label>Term</label>
+                                <select name="term" class="form-control">
+                                    <option value="0" <?= $term === 0 ? 'selected' : '' ?>>All</option>
+                                    <option value="1" <?= $term === 1 ? 'selected' : '' ?>>Term 1</option>
+                                    <option value="2" <?= $term === 2 ? 'selected' : '' ?>>Term 2</option>
+                                    <option value="3" <?= $term === 3 ? 'selected' : '' ?>>Term 3</option>
+                                    <option value="4" <?= $term === 4 ? 'selected' : '' ?>>Term 4</option>
+                                </select>
+                            </div>
                             <div class="form-group col-md-2 d-flex align-items-end">
                                 <button class="btn btn-primary btn-block" type="submit"><i class="fas fa-filter mr-1"></i>Apply</button>
+                            </div>
+                            <div class="form-group col-md-2 d-flex align-items-end">
+                                <a class="btn btn-outline-secondary btn-block" href="attendance-records<?= $viewMode === 'teacher' ? '?as=teacher' : ($viewMode === 'parent' ? '?as=parent' : '') ?>">
+                                    <i class="fas fa-history mr-1"></i>Show All History
+                                </a>
                             </div>
                         </form>
                     </div>
@@ -491,21 +536,21 @@ if ($viewMode === 'parent') {
                         <?php if (empty($gridRows)): ?>
                             <div class="text-muted">No attendance records found for selected filters.</div>
                         <?php else: ?>
-                            <div class="table-responsive">
-                                <table class="table table-bordered table-hover" id="attendanceRecordsTable" width="100%">
+                            <div class="attendance-scroll-wrap">
+                                <table class="table table-bordered table-hover attendance-grid" id="attendanceRecordsTable" width="100%">
                                     <thead class="thead-light">
                                     <tr>
-                                        <th style="width:60px;">#</th>
-                                        <th><?= $viewMode === 'parent' ? 'Child Name' : 'Name' ?></th>
-                                        <th style="width:140px;">Student ID</th>
-                                        <th>Class</th>
+                                        <th class="sticky-col sticky-head sticky-1">#</th>
+                                        <th class="sticky-col sticky-head sticky-2"><?= $viewMode === 'parent' ? 'Child Name' : 'Name' ?></th>
+                                        <th class="sticky-col sticky-head sticky-3">Student ID</th>
+                                        <th class="sticky-col sticky-head sticky-4">Class</th>
                                         <?php foreach ($dateHeaders as $hdr): ?>
                                             <?php
                                                 $d = (string)($hdr['date'] ?? '');
                                                 $timeRaw = (string)($hdr['time'] ?? '');
                                                 $timeLabel = $timeRaw ? date('h:i A', strtotime($timeRaw)) : '--:--';
                                             ?>
-                                            <th style="min-width:140px;">
+                                            <th class="sticky-head" style="min-width:140px;">
                                                 <div><?= htmlspecialchars(date('d M Y', strtotime($d))) ?></div>
                                                 <div style="font-size:.72rem;color:#6c757d;line-height:1.2;"><?= htmlspecialchars($timeLabel) ?></div>
                                             </th>
@@ -515,10 +560,10 @@ if ($viewMode === 'parent') {
                                     <tbody>
                                     <?php $rowNum = 1; foreach ($gridRows as $gr): ?>
                                         <tr>
-                                            <td><?= $rowNum++ ?></td>
-                                            <td><strong><?= htmlspecialchars($gr['student_name'] ?: '-') ?></strong></td>
-                                            <td><?= htmlspecialchars($gr['student_id'] ?: '-') ?></td>
-                                            <td><?= htmlspecialchars($gr['class_name'] ?: '-') ?></td>
+                                            <td class="sticky-col sticky-1"><?= $rowNum++ ?></td>
+                                            <td class="sticky-col sticky-2"><strong><?= htmlspecialchars($gr['student_name'] ?: '-') ?></strong></td>
+                                            <td class="sticky-col sticky-3"><?= htmlspecialchars($gr['student_id'] ?: '-') ?></td>
+                                            <td class="sticky-col sticky-4"><?= htmlspecialchars($gr['class_name'] ?: '-') ?></td>
                                             <?php foreach ($dateHeaders as $hdr): ?>
                                                 <?php
                                                     $sessionKey = (string)($hdr['key'] ?? '');

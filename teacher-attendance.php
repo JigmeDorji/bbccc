@@ -1,6 +1,7 @@
 <?php
 require_once "include/config.php";
 require_once "include/auth.php";
+require_once "include/csrf.php";
 require_once "access_control.php";
 require_once "include/role_helpers.php";
 require_login();
@@ -89,6 +90,10 @@ $lockDate = $today->modify(sprintf('-%d days', $attendanceLockDays))->format('Y-
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_attendance') {
     try {
+        verify_csrf();
+        if (!bbcc_verify_form_nonce_once('teacher_attendance_save')) {
+            throw new Exception("Duplicate submission detected. Please wait.");
+        }
         $classId = (int)($_POST['class_id'] ?? 0);
         $attendanceDate = $_POST['attendance_date'] ?? date('Y-m-d');
         $statuses = $_POST['status'] ?? [];
@@ -292,6 +297,8 @@ if ($selectedClassId > 0) {
                         </div>
                         <div class="card-body">
                             <form method="POST" id="teacherAttendanceForm">
+                                <?= csrf_field() ?>
+                                <?= bbcc_form_nonce_field('teacher_attendance_save') ?>
                                 <input type="hidden" name="action" value="save_attendance">
                                 <input type="hidden" name="class_id" value="<?php echo $selectedClassId; ?>">
                                 <input type="hidden" name="attendance_date" value="<?php echo htmlspecialchars($selectedDate); ?>">

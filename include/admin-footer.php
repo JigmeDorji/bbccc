@@ -49,3 +49,29 @@ if (!empty($pageScripts) && is_array($pageScripts)) :
     endforeach;
 endif;
 ?>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var forms = document.querySelectorAll('form');
+    forms.forEach(function (form) {
+        form.addEventListener('submit', function () {
+            if (form.dataset.submitting === '1') {
+                return false;
+            }
+            form.dataset.submitting = '1';
+            var buttons = form.querySelectorAll('button[type="submit"], input[type="submit"]');
+            buttons.forEach(function (btn) {
+                btn.disabled = true;
+                if (btn.tagName === 'BUTTON') {
+                    if (!btn.dataset.originalHtml) btn.dataset.originalHtml = btn.innerHTML;
+                    if (btn.dataset.loadingText) {
+                        btn.innerHTML = btn.dataset.loadingText;
+                    }
+                } else if (btn.tagName === 'INPUT' && btn.dataset.loadingText) {
+                    btn.value = btn.dataset.loadingText;
+                }
+            });
+        }, {capture: true});
+    });
+});
+</script>

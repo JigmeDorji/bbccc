@@ -1,6 +1,7 @@
 <?php
 require_once "include/config.php";
 require_once "include/auth.php";
+require_once "include/csrf.php";
 require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
@@ -60,6 +61,10 @@ if (!$adminTeacherId) {
 // Save attendance
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
+        verify_csrf();
+        if (!bbcc_verify_form_nonce_once('admin_attendance_save')) {
+            throw new Exception("Duplicate submission detected. Please wait.");
+        }
         $date = $_POST['date'] ?? date('Y-m-d');
         $classId = (int)($_POST['class_id'] ?? 0);
         if (!$classId) throw new Exception("Please select a class.");
@@ -228,6 +233,8 @@ if ($classId) {
 
                     <div class="card-body">
                         <form method="POST" id="adminAttendanceForm">
+                            <?= csrf_field() ?>
+                            <?= bbcc_form_nonce_field('admin_attendance_save') ?>
                             <input type="hidden" name="date" value="<?php echo htmlspecialchars($date); ?>">
                             <input type="hidden" name="class_id" value="<?php echo (int)$classId; ?>">
 

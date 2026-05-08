@@ -34,6 +34,9 @@ bbcc_ensure_absence_unique_daily($pdo);
 // ── POST: absence request ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'absence') {
     verify_csrf();
+    if (!bbcc_verify_form_nonce_once('parent_absence_submit')) {
+        $flash = 'Duplicate submission detected. Please submit once and wait.';
+    } else {
     $childId = (int)($_POST['child_id'] ?? 0);
     $date    = trim($_POST['absence_date'] ?? '');
     $reason  = trim($_POST['reason'] ?? '');
@@ -66,6 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'absen
             $flash = 'Absence request submitted.';
             $ok = true;
         }
+    }
     }
 }
 
@@ -142,6 +146,7 @@ document.addEventListener('DOMContentLoaded',()=>{
             <?php else: ?>
             <form method="POST" id="absenceForm">
                 <?= csrf_field() ?>
+                <?= bbcc_form_nonce_field('parent_absence_submit') ?>
                 <input type="hidden" name="action" value="absence">
                 <div class="form-group">
                     <label><i class="fas fa-child mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Child <span class="text-danger">*</span></label>
@@ -160,7 +165,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                     <label><i class="fas fa-comment-alt mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Reason <span class="text-danger">*</span></label>
                     <textarea name="reason" class="form-control" rows="3" required maxlength="2000" placeholder="Why will your child be absent?"></textarea>
                 </div>
-                <button type="submit" class="btn btn-primary" id="absBtn"><i class="fas fa-paper-plane mr-1"></i>Submit Request</button>
+                <button type="submit" class="btn btn-primary" id="absBtn" data-loading-text="<span class='spinner-border spinner-border-sm mr-1'></span>Submitting..."><i class="fas fa-paper-plane mr-1"></i>Submit Request</button>
             </form>
             <script>
             document.getElementById('absenceForm')?.addEventListener('submit', function() {

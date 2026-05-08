@@ -76,6 +76,9 @@ $flash = '';
 $ok = false;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submit_payment') {
     verify_csrf();
+    if (!bbcc_verify_form_nonce_once('parent_fee_submit_' . $feeId)) {
+        $flash = 'Duplicate submission detected. Please submit once and wait.';
+    } else {
 
     $ref = trim((string)($_POST['payment_ref'] ?? ''));
     $confirmPaid = (int)($_POST['confirm_paid'] ?? 0);
@@ -117,6 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
                 $flash = 'Payment proof uploaded. Awaiting admin verification.';
             }
         }
+    }
     }
 }
 ?>
@@ -171,6 +175,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
 
                         <form method="POST" enctype="multipart/form-data">
                             <?= csrf_field() ?>
+                            <?= bbcc_form_nonce_field('parent_fee_submit_' . $feeId) ?>
                             <input type="hidden" name="action" value="submit_payment">
                             <input type="hidden" name="fee_id" value="<?= (int)$feeId ?>">
 
@@ -218,7 +223,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
                             </div>
 
                             <div class="d-flex">
-                                <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane mr-1"></i>Submit Payment</button>
+                                <button type="submit" class="btn btn-primary" data-loading-text="<span class='spinner-border spinner-border-sm mr-1'></span>Submitting..."><i class="fas fa-paper-plane mr-1"></i>Submit Payment</button>
                                 <a href="parent-fees" class="btn btn-light ml-2">Cancel</a>
                             </div>
                         </form>

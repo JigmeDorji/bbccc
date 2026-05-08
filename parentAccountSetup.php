@@ -25,6 +25,9 @@ function clean($v) { return trim((string)$v); }
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     try {
         verify_csrf();
+        if (!bbcc_verify_form_nonce_once('parent_signup_submit')) {
+            throw new Exception("Duplicate submission detected. Please submit once and wait.");
+        }
 
         $pdo = new PDO("mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME . ";charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
@@ -258,6 +261,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
             <form method="POST" action="" id="signupForm" novalidate>
                 <?= csrf_field() ?>
+                <?= bbcc_form_nonce_field('parent_signup_submit') ?>
 
                 <!-- STEP 1: Personal Info -->
                 <div class="step-panel active" id="step1">
@@ -437,7 +441,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
                     <div class="d-flex justify-content-between mt-4">
                         <button type="button" class="btn btn-outline-brand" id="backToStep3"><i class="fas fa-arrow-left me-2"></i> Back</button>
-                        <button type="submit" class="btn btn-brand" id="submitBtn"><i class="fas fa-user-check me-2"></i> Create Account</button>
+                        <button type="submit" class="btn btn-brand" id="submitBtn" data-loading-text="<span class='spinner-border spinner-border-sm me-2'></span>Creating..."><i class="fas fa-user-check me-2"></i> Create Account</button>
                     </div>
                 </div>
 

@@ -303,8 +303,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['class_charge_action']
     }
 }
 
-// ---------------- ACTIONS: APPROVE / REJECT / UPDATE ----------------
-// NOTE: "Update" here will open an inline modal to change status (Approved/Rejected/Pending) + reset verify meta.
+// ---------------- ACTIONS: VERIFY / REJECT / UPDATE ----------------
+// NOTE: "Update" here will open an inline modal to change status (Unpaid/Pending/Verified/Rejected) + reset verify meta.
 // If you want update to edit due_amount, remarks, etc, tell me and I will add those fields too.
 
 if (isset($_GET['fee_action'], $_GET['fee_id'])) {
@@ -314,9 +314,9 @@ if (isset($_GET['fee_action'], $_GET['fee_id'])) {
 
         if ($feeId <= 0) throw new Exception("Invalid fee ID.");
 
-        // approve / reject keep as before
+        // verify / reject quick actions
         if (in_array($act, ['approve','reject'], true)) {
-            $newStatus = ($act === 'approve') ? 'Approved' : 'Rejected';
+            $newStatus = ($act === 'approve') ? 'Verified' : 'Rejected';
             $verifiedBy = $_SESSION['username'] ?? 'admin';
 
             $stmt = $pdo->prepare("
@@ -348,22 +348,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
         $newStatus = trim((string)($_POST['new_status'] ?? ''));
 
         if ($feeId <= 0) throw new Exception("Invalid fee ID.");
-        if (!in_array($newStatus, ['Pending','Approved','Rejected'], true)) {
+        if (!in_array($newStatus, ['Unpaid','Pending','Verified','Rejected','Approved'], true)) {
             throw new Exception("Invalid status.");
         }
 
         $verifiedBy = $_SESSION['username'] ?? 'admin';
+        $dbStatus = match ($newStatus) {
+            'Verified' => 'Approved', // legacy fees_payments uses Approved as verified state
+            'Unpaid' => 'Pending',    // legacy table has no Unpaid state
+            default => $newStatus,
+        };
 
         // If Approved/Rejected => set verified_*; if Pending => clear verified_*
-        if ($newStatus === 'Pending') {
+        if ($dbStatus === 'Pending') {
             $stmt = $pdo->prepare("
                 UPDATE fees_payments
-                SET status = 'Pending',
+                SET status = :st,
                     verified_by = NULL,
                     verified_at = NULL
                 WHERE id = :id
             ");
-            $stmt->execute([':id'=>$feeId]);
+            $stmt->execute([':st'=>$dbStatus, ':id'=>$feeId]);
         } else {
             $stmt = $pdo->prepare("
                 UPDATE fees_payments
@@ -372,7 +377,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
                     verified_at = NOW()
                 WHERE id = :id
             ");
-            $stmt->execute([':st'=>$newStatus, ':vb'=>$verifiedBy, ':id'=>$feeId]);
+            $stmt->execute([':st'=>$dbStatus, ':vb'=>$verifiedBy, ':id'=>$feeId]);
         }
 
         $message = "Installment updated successfully.";
@@ -699,6 +704,8 @@ $classCharges = $pdo->query("
     LEFT JOIN classes c ON c.id = cc.class_id
     ORDER BY cc.created_at DESC, cc.id DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
+
+// ---------------- Unified fees overview table data ----------------
 
 $updatePayments = [];
 $updateCounts = ['Pending' => 0, 'Verified' => 0, 'Rejected' => 0, 'Unpaid' => 0];
@@ -1160,6 +1167,7 @@ if ($updateOnlyMode) {
                                                     <div class="mini text-muted">Due: <?php echo $dueHeader ? htmlspecialchars($dueHeader) : '-'; ?></div>
                                                 </th>
                                             <?php endforeach; ?>
+                                            <th class="nowrap text-center">Edit</th>
                                         </tr>
                                         </thead>
 
@@ -1177,7 +1185,7 @@ if ($updateOnlyMode) {
                                                     }
                                                     $hasInstallmentRows = true;
                                                     $totalPlanAmount += (float)($instRow['due_amount'] ?? 0);
-                                                    if (normalize_status($instRow['status'] ?? '') !== 'approved') {
+                                                    if (!in_array(normalize_status($instRow['status'] ?? ''), ['approved','verified'], true)) {
                                                         $isFullyPaid = false;
                                                     }
                                                 }
@@ -1234,7 +1242,7 @@ if ($updateOnlyMode) {
                                                         $feeId = (int)($r['id'] ?? 0);
                                                         $amount = $hasRow ? (float)($r['due_amount'] ?? 0) : null;
 
-                                                        $isApproved = (normalize_status($status) === 'approved');
+                                                        $isVerified = in_array(normalize_status($status), ['approved','verified'], true);
                                                     ?>
                                                     <td>
                                                         <div class="mini mb-1">
@@ -1267,45 +1275,35 @@ if ($updateOnlyMode) {
                                                             <div class="mini text-muted mb-2">No proof</div>
                                                         <?php endif; ?>
 
-                                                        <?php if ($feeId > 0): ?>
-                                                            <?php if ($isApproved): ?>
-                                                                <!-- ✅ Replace Approve/Reject with Update -->
-                                                                <button type="button"
-                                                                        class="btn btn-sm btn-outline-primary update-btn"
-                                                                        data-fee-id="<?php echo (int)$feeId; ?>"
-                                                                        data-current-status="<?php echo htmlspecialchars($status); ?>">
-                                                                    <i class="fas fa-edit"></i> Update
-                                                                </button>
-                                                            <?php else: ?>
-                                                                <div class="btn-group btn-group-sm" role="group">
-                                                                    <a class="btn btn-success"
-                                                                       href="feesManagement?fee_action=approve&fee_id=<?php echo (int)$feeId; ?>"
-                                                                       onclick="return confirm('Approve this installment?');">
-                                                                        Approve
-                                                                    </a>
-                                                                    <a class="btn btn-warning"
-                                                                       href="feesManagement?fee_action=reject&fee_id=<?php echo (int)$feeId; ?>"
-                                                                       onclick="return confirm('Reject this installment?');">
-                                                                        Reject
-                                                                    </a>
-                                                                </div>
-
-                                                                <!-- Also allow update even if not approved (optional).
-                                                                     If you want update only when approved, delete this: -->
-                                                                <div class="mt-2">
-                                                                    <button type="button"
-                                                                            class="btn btn-sm btn-outline-primary update-btn"
-                                                                            data-fee-id="<?php echo (int)$feeId; ?>"
-                                                                            data-current-status="<?php echo htmlspecialchars($status); ?>">
-                                                                        <i class="fas fa-edit"></i> Update
-                                                                    </button>
-                                                                </div>
-                                                            <?php endif; ?>
-                                                        <?php else: ?>
+                                                        <?php if ($feeId <= 0): ?>
                                                             <div class="mini text-muted">Missing fee row</div>
                                                         <?php endif; ?>
                                                     </td>
                                                 <?php endforeach; ?>
+                                                <td class="text-center align-middle">
+                                                    <?php
+                                                        $editFeeId = 0;
+                                                        $editStatus = 'Pending';
+                                                        foreach ($codes as $editCode) {
+                                                            $editRow = $info['installments'][$editCode] ?? null;
+                                                            if (is_array($editRow) && (int)($editRow['id'] ?? 0) > 0) {
+                                                                $editFeeId = (int)$editRow['id'];
+                                                                $editStatus = (string)($editRow['status'] ?? 'Pending');
+                                                                break;
+                                                            }
+                                                        }
+                                                    ?>
+                                                    <?php if ($editFeeId > 0): ?>
+                                                        <button type="button"
+                                                                class="btn btn-sm btn-outline-primary update-btn"
+                                                                data-fee-id="<?php echo $editFeeId; ?>"
+                                                                data-current-status="<?php echo htmlspecialchars($editStatus); ?>">
+                                                            <i class="fas fa-edit"></i> Edit Status
+                                                        </button>
+                                                    <?php else: ?>
+                                                        <span class="text-muted small">No row</span>
+                                                    <?php endif; ?>
+                                                </td>
                                             </tr>
                                         <?php endforeach; ?>
                                         </tbody>
@@ -1463,7 +1461,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.update-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             const feeId = this.getAttribute('data-fee-id');
-            const current = this.getAttribute('data-current-status') || 'Pending';
+            const current = this.getAttribute('data-current-status') || 'Unpaid';
 
             Swal.fire({
                 title: 'Update Installment',
@@ -1472,12 +1470,13 @@ document.addEventListener('DOMContentLoaded', function () {
                         <div class="mini mb-2">Fee ID: <strong>${feeId}</strong></div>
                         <label class="mini mb-1">Status</label>
                         <select id="statusSelect" class="form-control">
+                            <option value="Unpaid">Unpaid</option>
                             <option value="Pending">Pending</option>
-                            <option value="Approved">Approved</option>
+                            <option value="Verified">Verified</option>
                             <option value="Rejected">Rejected</option>
                         </select>
                         <div class="mini text-muted mt-2">
-                            If set to Pending, verified_by and verified_at will be cleared.
+                            If set to Unpaid/Pending, verified_by and verified_at will be cleared.
                         </div>
                     </div>
                 `,
@@ -1486,11 +1485,18 @@ document.addEventListener('DOMContentLoaded', function () {
                 cancelButtonText: 'Cancel',
                 didOpen: () => {
                     const sel = document.getElementById('statusSelect');
-                    if (sel) sel.value = (current.charAt(0).toUpperCase() + current.slice(1).toLowerCase());
+                    if (sel) {
+                        const normalized = (current || '').toLowerCase();
+                        if (normalized === 'approved') {
+                            sel.value = 'Verified';
+                        } else {
+                            sel.value = (current.charAt(0).toUpperCase() + current.slice(1).toLowerCase());
+                        }
+                    }
                 },
                 preConfirm: () => {
                     const sel = document.getElementById('statusSelect');
-                    return sel ? sel.value : 'Pending';
+                    return sel ? sel.value : 'Unpaid';
                 }
             }).then((res) => {
                 if (!res.isConfirmed) return;

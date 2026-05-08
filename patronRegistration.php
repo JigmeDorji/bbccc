@@ -25,6 +25,9 @@ function clean_text($value) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         verify_csrf();
+        if (!bbcc_verify_form_nonce_once('patron_signup_submit')) {
+            throw new Exception("Duplicate submission detected. Please submit once and wait.");
+        }
 
         $fullName = clean_text($_POST['full_name'] ?? '');
         $email = strtolower(clean_text($_POST['email'] ?? ''));
@@ -219,6 +222,7 @@ $isPreverifiedEmail = $isSessionOtpValid && !empty($old['email']) && strtolower(
     <div class="auth-card">
         <form method="post" novalidate>
             <?= csrf_field() ?>
+            <?= bbcc_form_nonce_field('patron_signup_submit') ?>
             <div class="form-floating mb-3">
                 <input type="text" class="form-control" id="full_name" name="full_name" placeholder="Full Name" required value="<?= htmlspecialchars($old['full_name']) ?>">
                 <label for="full_name"><i class="fas fa-user me-1"></i> Full Name *</label>
@@ -289,7 +293,7 @@ $isPreverifiedEmail = $isSessionOtpValid && !empty($old['email']) && strtolower(
                 </div>
             </div>
 
-            <button type="submit" class="btn btn-brand w-100"><i class="fas fa-user-check me-2"></i>Create Patron Account</button>
+            <button type="submit" class="btn btn-brand w-100" data-loading-text="<span class='spinner-border spinner-border-sm me-2'></span>Creating..."><i class="fas fa-user-check me-2"></i>Create Patron Account</button>
 
             <div class="text-center mt-3">
                 Already have an account? <a href="login">Login</a>

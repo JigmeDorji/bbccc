@@ -21,6 +21,11 @@ $parentId = (int)$parent['id'];
 $flash    = '';
 $ok       = false;
 
+if (empty($_SESSION['enrol_submit_nonce'])) {
+    $_SESSION['enrol_submit_nonce'] = bin2hex(random_bytes(16));
+}
+$enrolSubmitNonce = (string)$_SESSION['enrol_submit_nonce'];
+
 // ── Bank details from fees_settings (single source of truth) ──
 $_fs = $pdo->query("SELECT bank_name, account_name, bsb, account_number, bank_notes FROM fees_settings WHERE id=1 LIMIT 1")->fetch(PDO::FETCH_ASSOC);
 $hasBankCore =
@@ -54,6 +59,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
     // --- Submit Enrolment ---
     if ($act === 'enrol') {
+        $postedNonce = (string)($_POST['submit_nonce'] ?? '');
+        $sessionNonce = (string)($_SESSION['enrol_submit_nonce'] ?? '');
+        if ($postedNonce === '' || $sessionNonce === '' || !hash_equals($sessionNonce, $postedNonce)) {
+            $flash = 'Duplicate submission detected. Please submit once and wait.';
+        } else {
+            // Consume token immediately to prevent double-submit on slow networks/double-clicks.
+            $_SESSION['enrol_submit_nonce'] = bin2hex(random_bytes(16));
+            $enrolSubmitNonce = (string)$_SESSION['enrol_submit_nonce'];
+
         $childId = (int)($_POST['child_id'] ?? 0);
         $campusSelection = $_POST['campus_choice'] ?? [];
         if (!is_array($campusSelection)) {
@@ -148,6 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $ok = true;
                 }
             }
+        }
         }
     }
 }
@@ -415,6 +430,7 @@ document.addEventListener('DOMContentLoaded',()=>{
             <form method="POST" enctype="multipart/form-data" id="enrolForm">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="enrol">
+                <input type="hidden" name="submit_nonce" value="<?= h($enrolSubmitNonce) ?>">
                 <input type="hidden" name="fee_plan" id="selectedPlan" value="">
 
                 <!-- Step 1: Select Child -->
@@ -782,6 +798,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const enrolForm = document.getElementById('enrolForm');
     if (enrolForm) {
         enrolForm.addEventListener('submit', function(e) {
+            if (enrolForm.dataset.submitting === '1') {
+                e.preventDefault();
+                return;
+            }
             if (!childSelect.value) {
                 e.preventDefault();
                 Swal.fire({icon:'warning', title:'Please select a child', confirmButtonColor:'#881b12'});
@@ -807,6 +827,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 Swal.fire({icon:'warning', title:'Please upload payment proof', confirmButtonColor:'#881b12'});
                 return;
             }
+            enrolForm.dataset.submitting = '1';
             enrolBtn.disabled = true;
             enrolBtn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2"></span>Submitting...';
         });

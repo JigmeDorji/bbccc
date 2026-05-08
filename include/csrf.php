@@ -31,3 +31,33 @@ function verify_csrf(): void {
         die('Invalid security token. Please refresh the page and try again.');
     }
 }
+
+/**
+ * One-time nonce per form scope to prevent duplicate submissions.
+ */
+function bbcc_form_nonce(string $scope = 'default'): string {
+    if (!isset($_SESSION['_form_nonce']) || !is_array($_SESSION['_form_nonce'])) {
+        $_SESSION['_form_nonce'] = [];
+    }
+    if (empty($_SESSION['_form_nonce'][$scope])) {
+        $_SESSION['_form_nonce'][$scope] = bin2hex(random_bytes(16));
+    }
+    return (string)$_SESSION['_form_nonce'][$scope];
+}
+
+function bbcc_form_nonce_field(string $scope = 'default', string $field = '_form_nonce'): string {
+    return '<input type="hidden" name="' . htmlspecialchars($field, ENT_QUOTES, 'UTF-8') . '" value="' . htmlspecialchars(bbcc_form_nonce($scope), ENT_QUOTES, 'UTF-8') . '">';
+}
+
+/**
+ * Verify and consume nonce. Returns true when valid, false when duplicate/invalid.
+ */
+function bbcc_verify_form_nonce_once(string $scope = 'default', string $field = '_form_nonce'): bool {
+    $submitted = (string)($_POST[$field] ?? '');
+    $current = (string)($_SESSION['_form_nonce'][$scope] ?? '');
+    if ($submitted === '' || $current === '' || !hash_equals($current, $submitted)) {
+        return false;
+    }
+    $_SESSION['_form_nonce'][$scope] = bin2hex(random_bytes(16));
+    return true;
+}
