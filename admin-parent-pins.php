@@ -32,6 +32,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'set_p
     }
 }
 
+// ── POST: bulk set PIN ──
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'bulk_set_pin') {
+    verify_csrf();
+    $selected = $_POST['selected_parent_ids'] ?? [];
+    $pinsById = $_POST['pins'] ?? [];
+
+    if (!is_array($selected) || empty($selected)) {
+        $flash = 'Please select at least one parent.';
+    } else {
+        $upd = $pdo->prepare("UPDATE parents SET pin_hash=:h WHERE id=:id");
+        $updated = 0;
+        $skipped = 0;
+        foreach ($selected as $rawPid) {
+            $pid = (int)$rawPid;
+            if ($pid <= 0) { $skipped++; continue; }
+            $pin = trim((string)($pinsById[$pid] ?? ''));
+            if (!preg_match('/^\d{4,}$/', $pin)) {
+                $skipped++;
+                continue;
+            }
+            $hash = password_hash($pin, PASSWORD_DEFAULT);
+            $upd->execute([':h' => $hash, ':id' => $pid]);
+            $updated++;
+        }
+        if ($updated > 0) {
+            $flash = "Updated PIN for {$updated} parent(s)." . ($skipped > 0 ? " Skipped {$skipped} invalid/blank row(s)." : '');
+            $ok = true;
+        } else {
+            $flash = 'No PIN updated. Enter at least 4-digit PIN for selected rows.';
+        }
+    }
+}
+
 // ── POST: clear PIN ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'clear_pin') {
     verify_csrf();
@@ -105,14 +138,31 @@ document.addEventListener('DOMContentLoaded',()=>{
         <?php if (empty($parents)): ?>
             <p class="text-muted">No parent accounts found.</p>
         <?php else: ?>
+        <form method="POST" id="bulkPinForm" onsubmit="return confirm('Save PIN for selected parents?')">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="bulk_set_pin">
+            <div class="d-flex flex-wrap align-items-center mb-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm mr-2 mb-2" id="selectAllParentsBtn">
+                    <i class="fas fa-check-square mr-1"></i>Select All
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm mr-2 mb-2" id="clearSelectionBtn">
+                    <i class="fas fa-square mr-1"></i>Clear Selection
+                </button>
+                <button type="submit" class="btn btn-success btn-sm mb-2">
+                    <i class="fas fa-save mr-1"></i>Save Selected
+                </button>
+            </div>
         <div class="table-responsive">
             <table class="table table-bordered table-hover" id="parentPinsTable">
                 <thead class="thead-light">
-                    <tr><th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Students</th><th>PIN Set?</th><th>Status</th><th style="width:280px">Action</th></tr>
+                    <tr><th style="width:44px">Sel</th><th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Students</th><th>PIN Set?</th><th>Status</th><th style="width:280px">Action</th></tr>
                 </thead>
                 <tbody>
                 <?php foreach ($parents as $i => $p): ?>
                 <tr data-parent-name="<?= h(strtolower((string)$p['full_name'])) ?>">
+                    <td class="text-center align-middle">
+                        <input type="checkbox" class="bulk-parent-check" name="selected_parent_ids[]" value="<?= (int)$p['id'] ?>">
+                    </td>
                     <td><?= $i+1 ?></td>
                     <td class="font-weight-bold"><?= h($p['full_name']) ?></td>
                     <td><?= h($p['email']) ?></td>
@@ -127,6 +177,13 @@ document.addEventListener('DOMContentLoaded',()=>{
                     </td>
                     <td><span class="badge badge-<?= ($p['status']??'Active')==='Active'?'success':'secondary' ?>"><?= h($p['status'] ?? 'Active') ?></span></td>
                     <td>
+                        <input type="text"
+                               name="pins[<?= (int)$p['id'] ?>]"
+                               class="form-control form-control-sm mb-2"
+                               style="max-width:160px"
+                               placeholder="PIN for bulk save"
+                               pattern="\d{4,}"
+                               inputmode="numeric">
                         <form method="POST" class="form-inline" onsubmit="return confirm('Set this PIN?')">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="set_pin">
@@ -149,6 +206,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                 </tbody>
             </table>
         </div>
+        </form>
         <?php endif; ?>
     </div>
 </div>
@@ -162,6 +220,8 @@ document.addEventListener('DOMContentLoaded',()=>{
 document.addEventListener('DOMContentLoaded', function () {
     const input = document.getElementById('parentNameSearch');
     const rows = document.querySelectorAll('#parentPinsTable tbody tr');
+    const selectAllBtn = document.getElementById('selectAllParentsBtn');
+    const clearSelectionBtn = document.getElementById('clearSelectionBtn');
     if (!input) return;
     input.addEventListener('input', function () {
         const q = (input.value || '').trim().toLowerCase();
@@ -170,6 +230,19 @@ document.addEventListener('DOMContentLoaded', function () {
             row.style.display = (!q || name.includes(q)) ? '' : 'none';
         });
     });
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function () {
+            document.querySelectorAll('.bulk-parent-check').forEach((cb) => {
+                const row = cb.closest('tr');
+                if (row && row.style.display !== 'none') cb.checked = true;
+            });
+        });
+    }
+    if (clearSelectionBtn) {
+        clearSelectionBtn.addEventListener('click', function () {
+            document.querySelectorAll('.bulk-parent-check').forEach((cb) => cb.checked = false);
+        });
+    }
 });
 </script>
 </body>
