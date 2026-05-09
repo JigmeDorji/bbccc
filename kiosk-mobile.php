@@ -80,7 +80,7 @@ $csrfToken = csrf_token();
             </div>
 
             <button class="km-btn km-btn--primary km-btn--block" id="mVerifyBtn" type="button">
-                <i class="fa-solid fa-arrow-right-to-bracket"></i> Verify &amp; Continue
+                <i class="fa-solid fa-arrow-right-to-bracket"></i> Log In
             </button>
             <div style="text-align:center; margin-top:10px;">
                 <a href="forgotKioskPin" target="_blank" rel="noopener" style="font-size:0.86rem; color:#9a3412; text-decoration:underline;">
@@ -141,7 +141,7 @@ $csrfToken = csrf_token();
     var parentData = null;
     var submitting = false;
     var qrSession  = '';  // session key from token validation
-    var pendingActions = {}; // { childId: 'in' | 'out' }
+    var actionBusy = {}; // { childId: true }
 
     function $(s)  { return document.querySelector(s); }
     function $$(s) { return document.querySelectorAll(s); }
@@ -224,7 +224,7 @@ $csrfToken = csrf_token();
 
             if (r.ok) {
                 parentData = r.data;
-                pendingActions = {};
+                actionBusy = {};
                 renderChildren();
                 go('children');
             } else if (r.token_expired) {
@@ -260,26 +260,18 @@ $csrfToken = csrf_token();
             var initials = child.student_name.split(' ').map(function(w){ return w[0]; }).join('').toUpperCase().slice(0,2);
             var statusHtml = '';
             var actionHtml = '';
-            var queuedMode = pendingActions[String(child.id)] || '';
+            var busy = !!actionBusy[String(child.id)];
 
             if (child.status === 'done') {
                 statusHtml = '<span class="km-child__status km-child__status--done">'
                     + '<i class="fa-solid fa-circle-check"></i> Done (out ' + fmtTime(child.time_out) + ')</span>';
-            } else if (queuedMode === 'in') {
-                statusHtml = '<span class="km-child__status km-child__status--in"><i class="fa-solid fa-clock"></i> Queued: Sign In</span>';
-                actionHtml = '<button class="km-btn km-btn--outline km-btn--sm" data-child="'+child.id+'" data-mode="">'
-                    + '<i class="fa-solid fa-rotate-left"></i> Undo</button>';
-            } else if (queuedMode === 'out') {
-                statusHtml = '<span class="km-child__status km-child__status--in"><i class="fa-solid fa-clock"></i> Queued: Sign Out</span>';
-                actionHtml = '<button class="km-btn km-btn--outline km-btn--sm" data-child="'+child.id+'" data-mode="">'
-                    + '<i class="fa-solid fa-rotate-left"></i> Undo</button>';
             } else if (child.status === 'none') {
-                actionHtml = '<button class="km-btn km-btn--success km-btn--sm" data-child="'+child.id+'" data-mode="in">'
-                    + '<i class="fa-solid fa-right-to-bracket"></i> Queue Sign In</button>';
+                actionHtml = '<button class="km-btn km-btn--success km-btn--sm" data-child="'+child.id+'" data-mode="in" ' + (busy ? 'disabled' : '') + '>'
+                    + '<i class="fa-solid fa-right-to-bracket"></i> ' + (busy ? 'Signing In...' : 'Sign In') + '</button>';
             } else if (child.status === 'signed_in') {
                 statusHtml = '<span class="km-child__status km-child__status--in">In at ' + fmtTime(child.time_in) + '</span>';
-                actionHtml = '<button class="km-btn km-btn--danger km-btn--sm" data-child="'+child.id+'" data-mode="out">'
-                    + '<i class="fa-solid fa-right-from-bracket"></i> Queue Sign Out</button>';
+                actionHtml = '<button class="km-btn km-btn--danger km-btn--sm" data-child="'+child.id+'" data-mode="out" ' + (busy ? 'disabled' : '') + '>'
+                    + '<i class="fa-solid fa-right-from-bracket"></i> ' + (busy ? 'Signing Out...' : 'Sign Out') + '</button>';
             }
 
             card.innerHTML = '<div class="km-child__info">'
@@ -295,69 +287,55 @@ $csrfToken = csrf_token();
 
         list.querySelectorAll('[data-child]').forEach(function(btn) {
             btn.addEventListener('click', function() {
-                queueSign(parseInt(btn.dataset.child, 10), btn.dataset.mode || '');
+                submitSign(parseInt(btn.dataset.child, 10), btn.dataset.mode || '');
             });
         });
-        updateDoneButton();
     }
 
-    function queueSign(childId, mode) {
+    function submitSign(childId, mode) {
+        if (!parentData || !childId || (mode !== 'in' && mode !== 'out')) return;
         var key = String(childId);
-        if (mode === 'in' || mode === 'out') pendingActions[key] = mode;
-        else delete pendingActions[key];
+        if (actionBusy[key]) return;
+        actionBusy[key] = true;
         renderChildren();
-    }
 
-    function updateDoneButton() {
-        var count = Object.keys(pendingActions).length;
-        var btn = $('#mDoneBtn');
-        if (!btn) return;
-        btn.innerHTML = '<i class="fa-solid fa-check"></i> '
-            + (count > 0 ? ('Done & Submit (' + count + ')') : 'Done');
-    }
-
-    function submitQueuedSigns() {
-        if (submitting) return;
-        var queued = Object.keys(pendingActions).map(function(k) {
-            return { child_id: parseInt(k, 10), mode: pendingActions[k] };
-        }).filter(function(x) { return x.child_id > 0 && (x.mode === 'in' || x.mode === 'out'); });
-
-        if (queued.length === 0) {
-            resetToAuth();
-            return;
-        }
-
-        submitting = true;
         api({
-            action: 'sign_batch',
+            action: 'sign',
             parent_id: parentData.parent_id,
-            actions: JSON.stringify(queued),
+            child_id: childId,
+            mode: mode,
             qr_session: qrSession
         }).then(function(r) {
-            submitting = false;
+            actionBusy[key] = false;
             if (r.ok) {
-                pendingActions = {};
-                showConfirm({
-                    batch: true,
-                    message: (r.data && r.data.message) ? r.data.message : 'Attendance submitted successfully.',
-                    success_count: (r.data && r.data.success_count) ? r.data.success_count : queued.length,
-                    failed_count: (r.data && r.data.failed_count) ? r.data.failed_count : 0
-                });
+                var c = (parentData.children || []).find(function(x){ return String(x.id) === key; });
+                if (c) {
+                    if (mode === 'in') {
+                        c.status = 'signed_in';
+                        c.time_in = (new Date()).toTimeString().slice(0,8);
+                    } else {
+                        c.status = 'done';
+                        c.time_out = (new Date()).toTimeString().slice(0,8);
+                    }
+                }
+                renderChildren();
+                showConfirm(r.data || {});
             } else if (r.token_expired) {
                 $('#mInvalidTitle').textContent = 'Session Expired';
                 $('#mInvalidMsg').textContent = r.message;
                 go('invalid');
             } else {
+                renderChildren();
                 alert(r.message || 'Unable to submit attendance. Please try again.');
             }
         });
     }
 
-    $('#mDoneBtn').addEventListener('click', submitQueuedSigns);
+    $('#mDoneBtn').addEventListener('click', resetToAuth);
 
     // ═══ CONFIRMATION ═══
     function showConfirm(data) {
-        var isBatch = !!data.batch;
+        var isBatch = false;
         var isIn = (data.action === 'in');
         var icon = $('#mConfirmIcon');
         if (isBatch) {
