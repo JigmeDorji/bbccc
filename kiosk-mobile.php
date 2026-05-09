@@ -100,7 +100,7 @@ $csrfToken = csrf_token();
 
             <div id="mChildrenList"></div>
 
-            <button class="km-btn km-btn--outline km-btn--block" id="mDoneBtn" type="button" style="margin-top:16px;">
+            <button class="km-btn km-btn--success km-btn--block" id="mDoneBtn" type="button" style="margin-top:16px;font-weight:700;">
                 <i class="fa-solid fa-right-from-bracket"></i> Done
             </button>
         </div>
@@ -114,7 +114,7 @@ $csrfToken = csrf_token();
                 <h2 class="km-confirm__title" id="mConfirmTitle">Done!</h2>
                 <p class="km-confirm__detail" id="mConfirmDetail"></p>
                 <div class="km-confirm__time" id="mConfirmTime"></div>
-                <p class="km-confirm__auto" id="mConfirmAuto">Returning in <span id="mConfirmCount">3</span>s…</p>
+                <p class="km-confirm__auto" id="mConfirmAuto">Returning to children in <span id="mConfirmCount">1</span>s…</p>
             </div>
         </div>
 
@@ -133,7 +133,7 @@ $csrfToken = csrf_token();
 
     var API       = 'kiosk-api.php';
     var PIN_MIN   = 4;
-    var CONFIRM_S = 3;
+    var CONFIRM_S = 1;
 
     var csrf       = <?= json_encode($csrfToken) ?>;
     var phone      = '';
@@ -357,7 +357,7 @@ $csrfToken = csrf_token();
 
         go('confirm');
 
-        // Countdown back to auth
+        // Countdown back to child list (faster for families with multiple children)
         var sec = CONFIRM_S;
         $('#mConfirmCount').textContent = sec;
         var iv = setInterval(function() {
@@ -365,7 +365,8 @@ $csrfToken = csrf_token();
             $('#mConfirmCount').textContent = Math.max(0, sec);
             if (sec <= 0) {
                 clearInterval(iv);
-                resetToAuth();
+                go('children');
+                renderChildren();
             }
         }, 1000);
     }
@@ -373,7 +374,7 @@ $csrfToken = csrf_token();
     // ═══ RESET ═══
     function resetToAuth() {
         parentData = null;
-        pendingActions = {};
+        actionBusy = {};
         submitting = false;
         mPhone.value = '';
         mPin.value = '';
