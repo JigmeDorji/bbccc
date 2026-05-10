@@ -183,8 +183,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
             $en = $row->fetch();
             if (!$en) {
                 $flash = 'Enrolment not found.';
-            } elseif (($en['status'] ?? '') !== 'Approved') {
-                $flash = 'Class can be assigned only after enrolment approval.';
+            } elseif (!in_array((string)($en['status'] ?? ''), ['Approved', 'Pending'], true)) {
+                $flash = 'Class can be assigned only for approved or pending enrollments.';
             } else {
                 $exist = $pdo->prepare("SELECT id FROM class_assignments WHERE student_id = :sid LIMIT 1");
                 $exist->execute([':sid' => (int)$en['student_id']]);
@@ -621,6 +621,35 @@ document.addEventListener('DOMContentLoaded',()=>{
                         <button class="btn btn-success btn-sm" data-toggle="modal" data-target="#approveModal<?= $e['id'] ?>"><i class="fas fa-check mr-1"></i>Approve</button>
                         <button class="btn btn-danger btn-sm"  data-toggle="modal" data-target="#rejectModal<?= $e['id'] ?>"><i class="fas fa-times mr-1"></i>Reject</button>
                         <button class="btn btn-warning btn-sm" data-toggle="modal" data-target="#changesModal<?= $e['id'] ?>"><i class="fas fa-edit mr-1"></i>Request Changes</button>
+                        <?php
+                            $selectedCampusKeys = pcm_normalize_campus_selection((string)($e['campus_preference'] ?? ''));
+                            $selectedCampusLabels = [];
+                            foreach ($selectedCampusKeys as $ck) {
+                                if (isset($campusChoices[$ck])) $selectedCampusLabels[] = $campusChoices[$ck];
+                            }
+                            $matchingClasses = array_values(array_filter($allClasses, function($cl) use ($selectedCampusLabels) {
+                                return bbcc_class_matches_campus((string)($cl['class_name'] ?? ''), $selectedCampusLabels);
+                            }));
+                            if (empty($matchingClasses)) {
+                                $matchingClasses = $allClasses;
+                            }
+                        ?>
+                        <form method="POST" class="form-inline mt-1">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="assign_class">
+                            <input type="hidden" name="enrolment_id" value="<?= (int)$e['id'] ?>">
+                            <select name="class_id" class="form-control form-control-sm mr-1" style="min-width:155px;" required>
+                                <option value="">Assign class</option>
+                                <?php foreach ($matchingClasses as $cl): ?>
+                                    <option value="<?= (int)$cl['id'] ?>" <?= ((int)$e['assigned_class_id'] === (int)$cl['id']) ? 'selected' : '' ?>>
+                                        <?= h($cl['class_name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-sync-alt mr-1"></i>Update Class
+                            </button>
+                        </form>
 
                         <!-- Approve Modal -->
                         <div class="modal fade" id="approveModal<?= $e['id'] ?>" tabindex="-1">
