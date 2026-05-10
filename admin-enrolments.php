@@ -59,6 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
         $childGender = trim((string)($_POST['child_gender'] ?? ''));
         $plan = trim((string)($_POST['fee_plan'] ?? 'Term-wise'));
         $ref = trim((string)($_POST['payment_ref'] ?? ''));
+        $approveNow = isset($_POST['manual_approve_now']) && (string)$_POST['manual_approve_now'] === '1';
         $campusSelection = $_POST['campus_choice'] ?? [];
         if (!is_array($campusSelection)) $campusSelection = [];
         $campusSelection = array_values(array_unique(array_filter(array_map('strval', $campusSelection))));
@@ -151,6 +152,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
                 pcm_log_enrolment_event($pdo, $studentDbId, $enrolmentId, 'manual_enrolment_created', $currentActor, 'Created manually by admin.');
                 $pdo->commit();
 
+                if ($approveNow) {
+                    $result = pcm_process_enrolment_decision(
+                        $pdo,
+                        $studentDbId,
+                        'approve',
+                        (string)($_SESSION['username'] ?? 'admin'),
+                        'Approved during manual enrollment by admin.'
+                    );
+                    pcm_log_enrolment_event(
+                        $pdo,
+                        $studentDbId,
+                        (int)($result['enrolment_id'] ?? $enrolmentId),
+                        'manual_enrolment_auto_approved',
+                        $currentActor,
+                        'Approved immediately by admin.'
+                    );
+                }
+
                 bbcc_notify_username(
                     $pdo,
                     $parentEmail,
@@ -159,7 +178,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
                     'children-enrollment'
                 );
 
-                $flash = 'Manual enrollment created for <strong>' . h($childName) . '</strong> (' . h($studentCode) . ').';
+                $flash = 'Manual enrollment created for <strong>' . h($childName) . '</strong> (' . h($studentCode) . ').'
+                    . ($approveNow ? ' Enrollment is also approved now.' : '');
                 $ok = true;
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
@@ -501,6 +521,12 @@ document.addEventListener('DOMContentLoaded',()=>{
                                 <label class="custom-control-label" for="manualCampusC2"><?= h($campusChoices['c2'] ?? 'Campus 2') ?></label>
                             </div>
                             <small class="form-text text-muted">Select one or both campuses.</small>
+                        </div>
+                        <div class="col-md-12 form-group mb-0">
+                            <div class="custom-control custom-checkbox">
+                                <input type="checkbox" class="custom-control-input" id="manualApproveNow" name="manual_approve_now" value="1">
+                                <label class="custom-control-label" for="manualApproveNow">Approve this enrollment immediately</label>
+                            </div>
                         </div>
                     </div>
                 </div>
