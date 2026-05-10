@@ -138,9 +138,6 @@ document.addEventListener('DOMContentLoaded',()=>{
         <?php if (empty($parents)): ?>
             <p class="text-muted">No parent accounts found.</p>
         <?php else: ?>
-        <form method="POST" id="bulkPinForm" onsubmit="return confirm('Save PIN for selected parents?')">
-            <?= csrf_field() ?>
-            <input type="hidden" name="action" value="bulk_set_pin">
             <div class="d-flex flex-wrap align-items-center mb-2">
                 <button type="button" class="btn btn-outline-secondary btn-sm mr-2 mb-2" id="selectAllParentsBtn">
                     <i class="fas fa-check-square mr-1"></i>Select All
@@ -148,7 +145,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                 <button type="button" class="btn btn-outline-secondary btn-sm mr-2 mb-2" id="clearSelectionBtn">
                     <i class="fas fa-square mr-1"></i>Clear Selection
                 </button>
-                <button type="submit" class="btn btn-success btn-sm mb-2">
+                <button type="button" class="btn btn-success btn-sm mb-2" id="bulkSaveBtn">
                     <i class="fas fa-save mr-1"></i>Save Selected
                 </button>
             </div>
@@ -206,7 +203,6 @@ document.addEventListener('DOMContentLoaded',()=>{
                 </tbody>
             </table>
         </div>
-        </form>
         <?php endif; ?>
     </div>
 </div>
@@ -216,12 +212,20 @@ document.addEventListener('DOMContentLoaded',()=>{
 <?php include 'include/admin-footer.php'; ?>
 </div>
 </div>
+<form method="POST" id="bulkPinSubmitForm" style="display:none;">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="bulk_set_pin">
+    <div id="bulkPinHiddenInputs"></div>
+</form>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const input = document.getElementById('parentNameSearch');
     const rows = document.querySelectorAll('#parentPinsTable tbody tr');
     const selectAllBtn = document.getElementById('selectAllParentsBtn');
     const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+    const bulkSaveBtn = document.getElementById('bulkSaveBtn');
+    const bulkForm = document.getElementById('bulkPinSubmitForm');
+    const bulkHidden = document.getElementById('bulkPinHiddenInputs');
     if (!input) return;
     input.addEventListener('input', function () {
         const q = (input.value || '').trim().toLowerCase();
@@ -241,6 +245,32 @@ document.addEventListener('DOMContentLoaded', function () {
     if (clearSelectionBtn) {
         clearSelectionBtn.addEventListener('click', function () {
             document.querySelectorAll('.bulk-parent-check').forEach((cb) => cb.checked = false);
+        });
+    }
+    if (bulkSaveBtn && bulkForm && bulkHidden) {
+        bulkSaveBtn.addEventListener('click', function () {
+            if (!confirm('Save PIN for selected parents?')) return;
+
+            const selected = Array.from(document.querySelectorAll('.bulk-parent-check:checked'));
+            bulkHidden.innerHTML = '';
+            selected.forEach((cb) => {
+                const pid = cb.value;
+                const pinInput = document.querySelector('input[name="pins[' + pid + ']"]');
+                const pinVal = pinInput ? (pinInput.value || '') : '';
+
+                const i1 = document.createElement('input');
+                i1.type = 'hidden';
+                i1.name = 'selected_parent_ids[]';
+                i1.value = pid;
+                bulkHidden.appendChild(i1);
+
+                const i2 = document.createElement('input');
+                i2.type = 'hidden';
+                i2.name = 'pins[' + pid + ']';
+                i2.value = pinVal;
+                bulkHidden.appendChild(i2);
+            });
+            bulkForm.submit();
         });
     }
 });

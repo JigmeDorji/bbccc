@@ -292,6 +292,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['class_charge_action']
             $message = "Charge status updated.";
             $success = true;
             $reload = true;
+        } elseif ($act === 'edit') {
+            $chargeId = (int)($_POST['charge_id'] ?? 0);
+            $title = trim((string)($_POST['charge_title'] ?? ''));
+            $amount = (float)($_POST['charge_amount'] ?? 0);
+            $dueDate = trim((string)($_POST['charge_due_date'] ?? ''));
+            $desc = trim((string)($_POST['charge_description'] ?? ''));
+
+            if ($chargeId <= 0) throw new Exception("Invalid charge.");
+            if ($title === '') throw new Exception("Charge name is required.");
+            if ($amount <= 0) throw new Exception("Amount must be greater than zero.");
+            $dueDate = $dueDate === '' ? null : $dueDate;
+
+            $rowStmt = $pdo->prepare("SELECT id, class_id FROM pcm_class_fee_charges WHERE id = :id LIMIT 1");
+            $rowStmt->execute([':id' => $chargeId]);
+            $existing = $rowStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$existing) throw new Exception("Charge not found.");
+
+            $dup = $pdo->prepare("
+                SELECT id
+                FROM pcm_class_fee_charges
+                WHERE class_id = :cid
+                  AND LOWER(charge_title) = LOWER(:title)
+                  AND id <> :id
+                LIMIT 1
+            ");
+            $dup->execute([
+                ':cid' => (int)$existing['class_id'],
+                ':title' => $title,
+                ':id' => $chargeId
+            ]);
+            if ($dup->fetch(PDO::FETCH_ASSOC)) {
+                throw new Exception("A charge with this name already exists for this class.");
+            }
+
+            $pdo->beginTransaction();
+            $upd = $pdo->prepare("
+                UPDATE pcm_class_fee_charges
+                SET charge_title = :title,
+                    amount = :amount,
+                    due_date = :due_date,
+                    description = :descr
+                WHERE id = :id
+            ");
+            $upd->execute([
+                ':title' => $title,
+                ':amount' => $amount,
+                ':due_date' => $dueDate,
+                ':descr' => ($desc === '' ? null : $desc),
+                ':id' => $chargeId
+            ]);
+
+            // Keep related unpaid/pending student rows in sync with updated class charge values.
+            $sync = $pdo->prepare("
+                UPDATE pcm_fee_payments
+                SET instalment_label = :label,
+                    due_amount = :due_amount,
+                    due_date = :due_date
+                WHERE class_charge_id = :ccid
+                  AND status IN ('Unpaid', 'Pending')
+            ");
+            $sync->execute([
+                ':label' => $title,
+                ':due_amount' => $amount,
+                ':due_date' => $dueDate,
+                ':ccid' => $chargeId
+            ]);
+            $syncedRows = (int)$sync->rowCount();
+            $pdo->commit();
+
+            $message = "Charge updated successfully. Synced {$syncedRows} unpaid/pending payment row(s).";
+            $success = true;
+            $reload = true;
         }
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
@@ -940,6 +1012,15 @@ if ($updateOnlyMode) {
                                                 </span>
                                             </td>
                                             <td class="nowrap">
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-info class-charge-edit-btn"
+                                                        data-charge-id="<?php echo (int)$cc['id']; ?>"
+                                                        data-charge-title="<?php echo h((string)$cc['charge_title']); ?>"
+                                                        data-charge-amount="<?php echo h((string)$cc['amount']); ?>"
+                                                        data-charge-due="<?php echo h((string)($cc['due_date'] ?? '')); ?>"
+                                                        data-charge-desc="<?php echo h((string)($cc['description'] ?? '')); ?>">
+                                                    Edit
+                                                </button>
                                                 <form method="POST" class="d-inline">
                                                     <input type="hidden" name="class_charge_action" value="apply">
                                                     <input type="hidden" name="charge_id" value="<?php echo (int)$cc['id']; ?>">
@@ -1328,6 +1409,15 @@ if ($updateOnlyMode) {
     <input type="hidden" name="new_status" id="new_status" value="">
 </form>
 
+<form id="editClassChargeForm" method="POST" style="display:none;">
+    <input type="hidden" name="class_charge_action" value="edit">
+    <input type="hidden" name="charge_id" id="edit_charge_id" value="">
+    <input type="hidden" name="charge_title" id="edit_charge_title" value="">
+    <input type="hidden" name="charge_amount" id="edit_charge_amount" value="">
+    <input type="hidden" name="charge_due_date" id="edit_charge_due_date" value="">
+    <input type="hidden" name="charge_description" id="edit_charge_description" value="">
+</form>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     // ---------- Payment method tabs ----------
@@ -1454,6 +1544,70 @@ document.addEventListener('DOMContentLoaded', function () {
             const name = this.getAttribute('data-name') || 'proof';
             if (!path) return;
             openProofModal(path, type, name);
+        });
+    });
+
+    // ---------- Edit additional class charge ----------
+    document.querySelectorAll('.class-charge-edit-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const chargeId = this.getAttribute('data-charge-id') || '';
+            const title = this.getAttribute('data-charge-title') || '';
+            const amount = this.getAttribute('data-charge-amount') || '';
+            const due = this.getAttribute('data-charge-due') || '';
+            const desc = this.getAttribute('data-charge-desc') || '';
+
+            Swal.fire({
+                title: 'Edit Additional Fee',
+                html: `
+                    <div class="text-left">
+                        <label class="mini mb-1">Charge Name</label>
+                        <input id="swChargeTitle" class="form-control mb-2" maxlength="120">
+                        <label class="mini mb-1">Amount</label>
+                        <input id="swChargeAmount" type="number" step="0.01" min="0.01" class="form-control mb-2">
+                        <label class="mini mb-1">Due Date</label>
+                        <input id="swChargeDue" type="date" class="form-control mb-2">
+                        <label class="mini mb-1">Description</label>
+                        <input id="swChargeDesc" class="form-control" maxlength="500">
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'Save Changes',
+                cancelButtonText: 'Cancel',
+                didOpen: () => {
+                    const t = document.getElementById('swChargeTitle');
+                    const a = document.getElementById('swChargeAmount');
+                    const d = document.getElementById('swChargeDue');
+                    const x = document.getElementById('swChargeDesc');
+                    if (t) t.value = title;
+                    if (a) a.value = amount;
+                    if (d) d.value = due;
+                    if (x) x.value = desc;
+                },
+                preConfirm: () => {
+                    const cTitle = (document.getElementById('swChargeTitle')?.value || '').trim();
+                    const cAmountRaw = (document.getElementById('swChargeAmount')?.value || '').trim();
+                    const cAmount = parseFloat(cAmountRaw);
+                    const cDue = (document.getElementById('swChargeDue')?.value || '').trim();
+                    const cDesc = (document.getElementById('swChargeDesc')?.value || '').trim();
+                    if (!cTitle) {
+                        Swal.showValidationMessage('Charge name is required.');
+                        return false;
+                    }
+                    if (!(cAmount > 0)) {
+                        Swal.showValidationMessage('Amount must be greater than zero.');
+                        return false;
+                    }
+                    return { cTitle, cAmountRaw, cDue, cDesc };
+                }
+            }).then((res) => {
+                if (!res.isConfirmed || !res.value) return;
+                document.getElementById('edit_charge_id').value = chargeId;
+                document.getElementById('edit_charge_title').value = res.value.cTitle;
+                document.getElementById('edit_charge_amount').value = res.value.cAmountRaw;
+                document.getElementById('edit_charge_due_date').value = res.value.cDue;
+                document.getElementById('edit_charge_description').value = res.value.cDesc;
+                document.getElementById('editClassChargeForm').submit();
+            });
         });
     });
 
