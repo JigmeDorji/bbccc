@@ -136,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
                     INSERT INTO pcm_enrolments
                     (student_id, parent_id, fee_plan, campus_preference, fee_amount, payment_ref, proof_path, status, admin_note, reviewed_by, reviewed_at, submitted_at)
                     VALUES
-                    (:sid, :pid, :plan, :campus, :amt, :ref, NULL, 'Pending', 'Manual enrollment created by admin.', NULL, NULL, NOW())
+                    (:sid, :pid, :plan, :campus, :amt, :ref, NULL, 'Pending', NULL, NULL, NULL, NOW())
                 ");
                 $insEnrol->execute([
                     ':sid' => $studentDbId,
@@ -788,6 +788,14 @@ document.addEventListener('DOMContentLoaded',()=>{
 $(function(){
     var dt = $('#enrolTable').DataTable({pageLength:25, order:[[12,'desc']]});
     var activeStatus = 'all';
+    $.fn.dataTable.ext.search.push(function(settings, data, dataIndex){
+        if (settings.nTable.id !== 'enrolTable') return true;
+        if (activeStatus === 'all') return true;
+        var rowNode = settings.aoData[dataIndex] && settings.aoData[dataIndex].nTr ? settings.aoData[dataIndex].nTr : null;
+        if (!rowNode) return true;
+        var rowStatus = String($(rowNode).attr('data-status') || '').trim();
+        return rowStatus === activeStatus;
+    });
 
     function statusClassKey(status) {
         var s = String(status || '').toLowerCase();
@@ -806,11 +814,7 @@ $(function(){
 
     function applyStatusFilter(status) {
         activeStatus = status;
-        if(status === 'all') {
-            dt.column(11).search('').draw();
-        } else {
-            dt.column(11).search('^' + status + '$', true, false).draw();
-        }
+        dt.draw();
         setPillActive(status);
     }
 
