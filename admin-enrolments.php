@@ -419,7 +419,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 <div class="modal fade" id="manualEnrolModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
-            <form method="POST">
+            <form method="POST" id="manualEnrolForm" autocomplete="off">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="manual_enrol">
                 <div class="modal-header bg-primary text-white">
@@ -436,7 +436,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                         </div>
                         <div class="col-md-6 form-group">
                             <label>Parent Email</label>
-                            <input type="email" class="form-control" name="parent_email" required maxlength="150">
+                            <input type="email" class="form-control" name="parent_email" required maxlength="150" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="parent@example.com">
                         </div>
                         <div class="col-md-6 form-group">
                             <label>Parent Phone</label>
@@ -700,7 +700,9 @@ document.addEventListener('DOMContentLoaded',()=>{
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
-                                    <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-sync-alt mr-1"></i>Update Class
+                                    </button>
                                 </form>
                             <?php else: ?>
                                 <span class="text-muted small"><?= h($e['reviewed_by'] ?? '') ?></span>
@@ -884,6 +886,14 @@ $(function(){
             $('#proofFallback').show();
         }
         $('#proofModal').modal('show');
+    });
+
+    $('#manualEnrolModal').on('shown.bs.modal', function(){
+        var form = document.getElementById('manualEnrolForm');
+        if (!form) return;
+        form.reset();
+        var emailInput = form.querySelector('input[name="parent_email"]');
+        if (emailInput) emailInput.value = '';
     });
 });
 </script>
