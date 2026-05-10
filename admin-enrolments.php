@@ -593,6 +593,20 @@ document.addEventListener('DOMContentLoaded',()=>{
                 <tbody>
                 <?php foreach ($all as $i => $e): ?>
                 <?php $rowStatusNorm = strtolower(trim((string)($e['status'] ?? ''))); ?>
+                <?php
+                    $selectedCampusKeys = pcm_normalize_campus_selection((string)($e['campus_preference'] ?? ''));
+                    $selectedCampusLabels = [];
+                    foreach ($selectedCampusKeys as $ck) {
+                        if (isset($campusChoices[$ck])) $selectedCampusLabels[] = $campusChoices[$ck];
+                    }
+                    $matchingClasses = array_values(array_filter($allClasses, function($cl) use ($selectedCampusLabels) {
+                        return bbcc_class_matches_campus((string)($cl['class_name'] ?? ''), $selectedCampusLabels);
+                    }));
+                    if (empty($matchingClasses)) {
+                        $matchingClasses = $allClasses;
+                    }
+                    $canAssignClass = in_array($rowStatusNorm, ['pending', 'approved'], true);
+                ?>
                 <tr data-status="<?= $e['status'] ?>">
                     <td><?= $i+1 ?></td>
                     <td><code><?= h($e['stu_code']) ?></code></td>
@@ -618,39 +632,26 @@ document.addEventListener('DOMContentLoaded',()=>{
                     </td>
                     <td><?= date('d M Y', strtotime($e['submitted_at'])) ?></td>
                     <td>
-                        <?php if ($rowStatusNorm === 'pending'): ?>
-                        <button class="btn btn-success btn-sm" data-toggle="modal" data-target="#approveModal<?= $e['id'] ?>"><i class="fas fa-check mr-1"></i>Approve</button>
-                        <button class="btn btn-danger btn-sm"  data-toggle="modal" data-target="#rejectModal<?= $e['id'] ?>"><i class="fas fa-times mr-1"></i>Reject</button>
-                        <button class="btn btn-warning btn-sm" data-toggle="modal" data-target="#changesModal<?= $e['id'] ?>"><i class="fas fa-edit mr-1"></i>Request Changes</button>
-                        <?php
-                            $selectedCampusKeys = pcm_normalize_campus_selection((string)($e['campus_preference'] ?? ''));
-                            $selectedCampusLabels = [];
-                            foreach ($selectedCampusKeys as $ck) {
-                                if (isset($campusChoices[$ck])) $selectedCampusLabels[] = $campusChoices[$ck];
-                            }
-                            $matchingClasses = array_values(array_filter($allClasses, function($cl) use ($selectedCampusLabels) {
-                                return bbcc_class_matches_campus((string)($cl['class_name'] ?? ''), $selectedCampusLabels);
-                            }));
-                            if (empty($matchingClasses)) {
-                                $matchingClasses = $allClasses;
-                            }
-                        ?>
-                        <form method="POST" class="form-inline mt-1">
+                        <form method="POST" class="form-inline mb-1">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="assign_class">
                             <input type="hidden" name="enrolment_id" value="<?= (int)$e['id'] ?>">
-                            <select name="class_id" class="form-control form-control-sm mr-1" style="min-width:155px;" required>
-                                <option value="">Assign class</option>
+                            <select name="class_id" class="form-control form-control-sm mr-1" style="min-width:155px;" <?= $canAssignClass ? 'required' : 'disabled' ?>>
+                                <option value=""><?= $canAssignClass ? 'Assign class' : 'Class assignment locked' ?></option>
                                 <?php foreach ($matchingClasses as $cl): ?>
                                     <option value="<?= (int)$cl['id'] ?>" <?= ((int)$e['assigned_class_id'] === (int)$cl['id']) ? 'selected' : '' ?>>
                                         <?= h($cl['class_name']) ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                            <button type="submit" class="btn btn-sm btn-outline-primary">
+                            <button type="submit" class="btn btn-sm btn-outline-primary" <?= $canAssignClass ? '' : 'disabled' ?>>
                                 <i class="fas fa-sync-alt mr-1"></i>Update Class
                             </button>
                         </form>
+                        <?php if ($rowStatusNorm === 'pending'): ?>
+                        <button class="btn btn-success btn-sm" data-toggle="modal" data-target="#approveModal<?= $e['id'] ?>"><i class="fas fa-check mr-1"></i>Approve</button>
+                        <button class="btn btn-danger btn-sm"  data-toggle="modal" data-target="#rejectModal<?= $e['id'] ?>"><i class="fas fa-times mr-1"></i>Reject</button>
+                        <button class="btn btn-warning btn-sm" data-toggle="modal" data-target="#changesModal<?= $e['id'] ?>"><i class="fas fa-edit mr-1"></i>Request Changes</button>
 
                         <!-- Approve Modal -->
                         <div class="modal fade" id="approveModal<?= $e['id'] ?>" tabindex="-1">
@@ -704,39 +705,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                             </div></div>
                         </div>
                         <?php else: ?>
-                            <?php if ($rowStatusNorm === 'approved'): ?>
-                                <?php
-                                    $selectedCampusKeys = pcm_normalize_campus_selection((string)($e['campus_preference'] ?? ''));
-                                    $selectedCampusLabels = [];
-                                    foreach ($selectedCampusKeys as $ck) {
-                                        if (isset($campusChoices[$ck])) $selectedCampusLabels[] = $campusChoices[$ck];
-                                    }
-                                    $matchingClasses = array_values(array_filter($allClasses, function($cl) use ($selectedCampusLabels) {
-                                        return bbcc_class_matches_campus((string)($cl['class_name'] ?? ''), $selectedCampusLabels);
-                                    }));
-                                    if (empty($matchingClasses)) {
-                                        $matchingClasses = $allClasses;
-                                    }
-                                ?>
-                                <form method="POST" class="form-inline">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="action" value="assign_class">
-                                    <input type="hidden" name="enrolment_id" value="<?= (int)$e['id'] ?>">
-                                    <select name="class_id" class="form-control form-control-sm mr-1" style="min-width:155px;" required>
-                                        <option value="">Assign class</option>
-                                        <?php foreach ($matchingClasses as $cl): ?>
-                                            <option value="<?= (int)$cl['id'] ?>" <?= ((int)$e['assigned_class_id'] === (int)$cl['id']) ? 'selected' : '' ?>>
-                                                <?= h($cl['class_name']) ?>
-                                            </option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                    <button type="submit" class="btn btn-sm btn-outline-primary">
-                                        <i class="fas fa-sync-alt mr-1"></i>Update Class
-                                    </button>
-                                </form>
-                            <?php else: ?>
-                                <span class="text-muted small"><?= h($e['reviewed_by'] ?? '') ?></span>
-                            <?php endif; ?>
+                            <span class="text-muted small"><?= h($e['reviewed_by'] ?? '') ?></span>
                         <?php endif; ?>
                     </td>
                     <td>
