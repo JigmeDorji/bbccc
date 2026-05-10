@@ -183,7 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
             $en = $row->fetch();
             if (!$en) {
                 $flash = 'Enrolment not found.';
-            } elseif (!in_array((string)($en['status'] ?? ''), ['Approved', 'Pending'], true)) {
+            } elseif (!in_array(strtolower(trim((string)($en['status'] ?? ''))), ['approved', 'pending'], true)) {
                 $flash = 'Class can be assigned only for approved or pending enrollments.';
             } else {
                 $exist = $pdo->prepare("SELECT id FROM class_assignments WHERE student_id = :sid LIMIT 1");
@@ -592,6 +592,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                 </thead>
                 <tbody>
                 <?php foreach ($all as $i => $e): ?>
+                <?php $rowStatusNorm = strtolower(trim((string)($e['status'] ?? ''))); ?>
                 <tr data-status="<?= $e['status'] ?>">
                     <td><?= $i+1 ?></td>
                     <td><code><?= h($e['stu_code']) ?></code></td>
@@ -617,7 +618,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                     </td>
                     <td><?= date('d M Y', strtotime($e['submitted_at'])) ?></td>
                     <td>
-                        <?php if ($e['status'] === 'Pending'): ?>
+                        <?php if ($rowStatusNorm === 'pending'): ?>
                         <button class="btn btn-success btn-sm" data-toggle="modal" data-target="#approveModal<?= $e['id'] ?>"><i class="fas fa-check mr-1"></i>Approve</button>
                         <button class="btn btn-danger btn-sm"  data-toggle="modal" data-target="#rejectModal<?= $e['id'] ?>"><i class="fas fa-times mr-1"></i>Reject</button>
                         <button class="btn btn-warning btn-sm" data-toggle="modal" data-target="#changesModal<?= $e['id'] ?>"><i class="fas fa-edit mr-1"></i>Request Changes</button>
@@ -703,7 +704,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                             </div></div>
                         </div>
                         <?php else: ?>
-                            <?php if ($e['status'] === 'Approved'): ?>
+                            <?php if ($rowStatusNorm === 'approved'): ?>
                                 <?php
                                     $selectedCampusKeys = pcm_normalize_campus_selection((string)($e['campus_preference'] ?? ''));
                                     $selectedCampusLabels = [];
