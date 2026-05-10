@@ -45,11 +45,128 @@ function bbcc_class_matches_campus(string $className, array $campusLabels): bool
 }
 
 // ── POST actions ──
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['approve','reject','request_changes','assign_class'], true)) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['approve','reject','request_changes','assign_class','manual_enrol'], true)) {
     verify_csrf();
     $action = $_POST['action'];
 
-    if ($action === 'assign_class') {
+    if ($action === 'manual_enrol') {
+        $parentName = trim((string)($_POST['parent_name'] ?? ''));
+        $parentEmail = strtolower(trim((string)($_POST['parent_email'] ?? '')));
+        $parentPhone = trim((string)($_POST['parent_phone'] ?? ''));
+        $parentAddress = trim((string)($_POST['parent_address'] ?? ''));
+        $childName = trim((string)($_POST['child_name'] ?? ''));
+        $childDob = trim((string)($_POST['child_dob'] ?? ''));
+        $childGender = trim((string)($_POST['child_gender'] ?? ''));
+        $plan = trim((string)($_POST['fee_plan'] ?? 'Term-wise'));
+        $ref = trim((string)($_POST['payment_ref'] ?? ''));
+        $campusSelection = $_POST['campus_choice'] ?? [];
+        if (!is_array($campusSelection)) $campusSelection = [];
+        $campusSelection = array_values(array_unique(array_filter(array_map('strval', $campusSelection))));
+        $allowedCampusChoices = array_keys($campusChoices);
+
+        if ($parentName === '' || $childName === '') {
+            $flash = 'Parent name and child name are required.';
+        } elseif (!filter_var($parentEmail, FILTER_VALIDATE_EMAIL)) {
+            $flash = 'Please provide a valid parent email.';
+        } elseif ($parentPhone === '') {
+            $flash = 'Parent phone is required.';
+        } elseif (!in_array($plan, ['Term-wise', 'Half-yearly', 'Yearly'], true)) {
+            $flash = 'Invalid fee plan selected.';
+        } elseif (empty($campusSelection) || array_diff($campusSelection, $allowedCampusChoices)) {
+            $flash = 'Please select at least one valid campus.';
+        } else {
+            try {
+                $pdo->beginTransaction();
+                $parentId = 0;
+
+                $parentFind = $pdo->prepare("SELECT id FROM parents WHERE LOWER(email)=:e LIMIT 1");
+                $parentFind->execute([':e' => $parentEmail]);
+                $parentRow = $parentFind->fetch(PDO::FETCH_ASSOC);
+                if ($parentRow) {
+                    $parentId = (int)$parentRow['id'];
+                    $pdo->prepare("
+                        UPDATE parents
+                        SET full_name = :n, phone = :ph, address = :ad, username = COALESCE(NULLIF(username,''), :un)
+                        WHERE id = :id
+                    ")->execute([
+                        ':n' => $parentName,
+                        ':ph' => $parentPhone,
+                        ':ad' => ($parentAddress !== '' ? $parentAddress : null),
+                        ':un' => $parentEmail,
+                        ':id' => $parentId
+                    ]);
+                } else {
+                    $insParent = $pdo->prepare("
+                        INSERT INTO parents (full_name, email, phone, address, username, status)
+                        VALUES (:n, :e, :ph, :ad, :un, 'Active')
+                    ");
+                    $insParent->execute([
+                        ':n' => $parentName,
+                        ':e' => $parentEmail,
+                        ':ph' => $parentPhone,
+                        ':ad' => ($parentAddress !== '' ? $parentAddress : null),
+                        ':un' => $parentEmail
+                    ]);
+                    $parentId = (int)$pdo->lastInsertId();
+                }
+
+                if ($parentId <= 0) {
+                    throw new Exception('Failed to create/find parent.');
+                }
+
+                $studentCode = pcm_next_student_id($pdo);
+                $studentParentCol = pcm_students_parent_column($pdo);
+                $insStudent = $pdo->prepare("
+                    INSERT INTO students (student_id, student_name, dob, gender, approval_status, parentId, parent_id, status)
+                    VALUES (:scode, :sname, :dob, :gender, 'Pending', :pid1, :pid2, 'Active')
+                ");
+                $insStudent->execute([
+                    ':scode' => $studentCode,
+                    ':sname' => $childName,
+                    ':dob' => ($childDob !== '' ? $childDob : null),
+                    ':gender' => ($childGender !== '' ? $childGender : null),
+                    ':pid1' => $parentId,
+                    ':pid2' => $parentId
+                ]);
+                $studentDbId = (int)$pdo->lastInsertId();
+
+                $campusStored = implode(',', $campusSelection);
+                $feeAmount = pcm_plan_amount($plan);
+                $insEnrol = $pdo->prepare("
+                    INSERT INTO pcm_enrolments
+                    (student_id, parent_id, fee_plan, campus_preference, fee_amount, payment_ref, proof_path, status, admin_note, reviewed_by, reviewed_at, submitted_at)
+                    VALUES
+                    (:sid, :pid, :plan, :campus, :amt, :ref, NULL, 'Pending', 'Manual enrollment created by admin.', NULL, NULL, NOW())
+                ");
+                $insEnrol->execute([
+                    ':sid' => $studentDbId,
+                    ':pid' => $parentId,
+                    ':plan' => $plan,
+                    ':campus' => $campusStored,
+                    ':amt' => $feeAmount,
+                    ':ref' => ($ref !== '' ? $ref : null)
+                ]);
+                $enrolmentId = (int)$pdo->lastInsertId();
+
+                pcm_log_enrolment_event($pdo, $studentDbId, $enrolmentId, 'manual_enrolment_created', $currentActor, 'Created manually by admin.');
+                $pdo->commit();
+
+                bbcc_notify_username(
+                    $pdo,
+                    $parentEmail,
+                    'Enrollment Draft Created for ' . $childName,
+                    'An enrollment record was created by admin. You can log in to Parent Portal to track status and upload payment proof if needed.',
+                    'children-enrollment'
+                );
+
+                $flash = 'Manual enrollment created for <strong>' . h($childName) . '</strong> (' . h($studentCode) . ').';
+                $ok = true;
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                $flash = 'Error: ' . $e->getMessage();
+            }
+        }
+    } elseif ($action === 'assign_class') {
         $eid = (int)($_POST['enrolment_id'] ?? 0);
         $classId = (int)($_POST['class_id'] ?? 0);
         if ($eid <= 0 || $classId <= 0) {
@@ -289,10 +406,95 @@ document.addEventListener('DOMContentLoaded',()=>{
         <h1 class="h3 mb-0 text-gray-800 font-weight-bold">Enrollment Management</h1>
         <p class="text-muted mb-0" style="font-size:.88rem;">Review, approve, reject, or request updates on parent enrollment submissions.</p>
     </div>
-    <div>
+    <div class="d-flex align-items-center">
+        <button type="button" class="btn btn-sm btn-primary mr-2" style="border-radius:8px;" data-toggle="modal" data-target="#manualEnrolModal">
+            <i class="fas fa-plus-circle mr-1"></i> Manual Enrollment
+        </button>
         <a href="dzoClassManagement" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;">
             <i class="fas fa-user-plus mr-1"></i> Child Registration
         </a>
+    </div>
+</div>
+
+<div class="modal fade" id="manualEnrolModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <form method="POST">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="manual_enrol">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Manual Enrollment (Admin)</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6 form-group">
+                            <label>Parent Full Name</label>
+                            <input type="text" class="form-control" name="parent_name" required maxlength="150">
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label>Parent Email</label>
+                            <input type="email" class="form-control" name="parent_email" required maxlength="150">
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label>Parent Phone</label>
+                            <input type="text" class="form-control" name="parent_phone" required maxlength="50">
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label>Parent Address</label>
+                            <input type="text" class="form-control" name="parent_address" maxlength="255">
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label>Child Name</label>
+                            <input type="text" class="form-control" name="child_name" required maxlength="150">
+                        </div>
+                        <div class="col-md-3 form-group">
+                            <label>Child DOB</label>
+                            <input type="date" class="form-control" name="child_dob" max="<?= date('Y-m-d') ?>">
+                        </div>
+                        <div class="col-md-3 form-group">
+                            <label>Child Gender</label>
+                            <select class="form-control" name="child_gender">
+                                <option value="">Select</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 form-group">
+                            <label>Fee Plan</label>
+                            <select class="form-control" name="fee_plan" required>
+                                <option value="Term-wise">Term-wise</option>
+                                <option value="Half-yearly">Half-yearly</option>
+                                <option value="Yearly">Yearly</option>
+                            </select>
+                        </div>
+                        <div class="col-md-8 form-group">
+                            <label>Payment Reference (optional)</label>
+                            <input type="text" class="form-control" name="payment_ref" maxlength="150" placeholder="e.g. ChildName_TERM1">
+                        </div>
+                        <div class="col-md-12 form-group mb-1">
+                            <label class="d-block">Campus Selection</label>
+                            <div class="custom-control custom-checkbox custom-control-inline">
+                                <input type="checkbox" class="custom-control-input" id="manualCampusC1" name="campus_choice[]" value="c1">
+                                <label class="custom-control-label" for="manualCampusC1"><?= h($campusChoices['c1'] ?? 'Campus 1') ?></label>
+                            </div>
+                            <div class="custom-control custom-checkbox custom-control-inline">
+                                <input type="checkbox" class="custom-control-input" id="manualCampusC2" name="campus_choice[]" value="c2">
+                                <label class="custom-control-label" for="manualCampusC2"><?= h($campusChoices['c2'] ?? 'Campus 2') ?></label>
+                            </div>
+                            <small class="form-text text-muted">Select one or both campuses.</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Enrollment</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
