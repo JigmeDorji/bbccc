@@ -172,8 +172,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
         if ($eid <= 0 || $classId <= 0) {
             $flash = 'Please select a valid class.';
         } else {
-                $row = $pdo->prepare("
-                SELECT e.id, e.student_id, e.status, s.student_name, p.email AS parent_email
+            $row = $pdo->prepare("
+                SELECT e.id, e.student_id, e.status, s.student_name, p.email AS parent_email,
+                       EXISTS(
+                           SELECT 1 FROM pcm_enrolment_audit a
+                           WHERE a.enrolment_id = e.id
+                             AND a.event_type = 'manual_enrolment_created'
+                           LIMIT 1
+                       ) AS is_manual_enrolment
                 FROM pcm_enrolments e
                 JOIN students s ON s.id = e.student_id
                 LEFT JOIN parents p ON p.id = e.parent_id
@@ -183,7 +189,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
             $en = $row->fetch();
             if (!$en) {
                 $flash = 'Enrolment not found.';
-            } elseif (!in_array(strtolower(trim((string)($en['status'] ?? ''))), ['approved', 'pending'], true)) {
+            } elseif (
+                (int)($en['is_manual_enrolment'] ?? 0) !== 1
+                && !in_array(strtolower(trim((string)($en['status'] ?? ''))), ['approved', 'pending'], true)
+            ) {
                 $flash = 'Class can be assigned only for approved or pending enrollments.';
             } else {
                 $exist = $pdo->prepare("SELECT id FROM class_assignments WHERE student_id = :sid LIMIT 1");
@@ -311,7 +320,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
 $all = $pdo->query("
     SELECT e.*, s.student_id AS stu_code, s.student_name, s.dob, s.class_option,
            p.full_name AS parent_name, p.email AS parent_email, p.phone AS parent_phone,
-           ca.class_id AS assigned_class_id, c.class_name AS assigned_class_name
+           ca.class_id AS assigned_class_id, c.class_name AS assigned_class_name,
+           EXISTS(
+               SELECT 1 FROM pcm_enrolment_audit a
+               WHERE a.enrolment_id = e.id
+                 AND a.event_type = 'manual_enrolment_created'
+               LIMIT 1
+           ) AS is_manual_enrolment
     FROM pcm_enrolments e
     JOIN students s ON s.id = e.student_id
     JOIN parents  p ON p.id = e.parent_id
@@ -605,7 +620,8 @@ document.addEventListener('DOMContentLoaded',()=>{
                     if (empty($matchingClasses)) {
                         $matchingClasses = $allClasses;
                     }
-                    $canAssignClass = in_array($rowStatusNorm, ['pending', 'approved'], true);
+                    $isManualEnrolment = (int)($e['is_manual_enrolment'] ?? 0) === 1;
+                    $canAssignClass = $isManualEnrolment || in_array($rowStatusNorm, ['pending', 'approved'], true);
                 ?>
                 <tr data-status="<?= $e['status'] ?>">
                     <td><?= $i+1 ?></td>
