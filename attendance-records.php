@@ -290,14 +290,12 @@ $dateHeadersMap = [];
 $gridRows = [];
 foreach ($rows as $r) {
     $dateKey = (string)($r['attendance_date'] ?? '');
-    $markedAt = (string)($r['marked_at'] ?? '');
     $sessionKey = '';
     if ($dateKey !== '') {
-        $batchId = (string)($r['batch_id'] ?? '');
-        $sessionKey = $batchId !== '' ? ('batch:' . $batchId) : ($dateKey . '|' . $markedAt);
+        // Display grid by date only (one column per date regardless of time/batch).
+        $sessionKey = $dateKey;
         $dateHeadersMap[$sessionKey] = [
             'date' => $dateKey,
-            'time' => $markedAt,
             'key'  => $sessionKey,
         ];
     }
@@ -313,20 +311,23 @@ foreach ($rows as $r) {
     }
 
     if ($sessionKey !== '') {
-        $gridRows[$rowKey]['cells'][$sessionKey] = [
-            'id'     => (int)$r['id'],
-            'status' => (string)($r['status'] ?? ''),
-            'notes'  => (string)($r['notes'] ?? ''),
-            'date'   => $dateKey,
-            'time'   => $markedAt,
-        ];
+        // Rows are ordered DESC by date/id, so first seen per date is latest for that day.
+        if (!isset($gridRows[$rowKey]['cells'][$sessionKey])) {
+            $gridRows[$rowKey]['cells'][$sessionKey] = [
+                'id'     => (int)$r['id'],
+                'status' => (string)($r['status'] ?? ''),
+                'notes'  => (string)($r['notes'] ?? ''),
+                'date'   => $dateKey,
+                'time'   => (string)($r['marked_at'] ?? ''),
+            ];
+        }
     }
 }
 
 $dateHeaders = array_values($dateHeadersMap);
 usort($dateHeaders, function ($a, $b) {
-    $ta = strtotime((string)($a['time'] ?? '') ?: (string)($a['date'] ?? ''));
-    $tb = strtotime((string)($b['time'] ?? '') ?: (string)($b['date'] ?? ''));
+    $ta = strtotime((string)($a['date'] ?? ''));
+    $tb = strtotime((string)($b['date'] ?? ''));
     if ($ta === $tb) return 0;
     return ($ta > $tb) ? -1 : 1;
 });
@@ -547,13 +548,8 @@ if ($viewMode === 'parent') {
                                         <?php foreach ($dateHeaders as $hdr): ?>
                                             <?php
                                                 $d = (string)($hdr['date'] ?? '');
-                                                $timeRaw = (string)($hdr['time'] ?? '');
-                                                $timeLabel = $timeRaw ? date('h:i A', strtotime($timeRaw)) : '--:--';
                                             ?>
-                                            <th class="sticky-head" style="min-width:140px;">
-                                                <div><?= htmlspecialchars(date('d M Y', strtotime($d))) ?></div>
-                                                <div style="font-size:.72rem;color:#6c757d;line-height:1.2;"><?= htmlspecialchars($timeLabel) ?></div>
-                                            </th>
+                                            <th class="sticky-head" style="min-width:120px;"><?= htmlspecialchars(date('d M Y', strtotime($d))) ?></th>
                                         <?php endforeach; ?>
                                     </tr>
                                     </thead>

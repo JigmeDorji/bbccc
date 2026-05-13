@@ -403,7 +403,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
     <?php if (!isParent() && !isTeacher() && !isPatron()) { ?>
         <?php
             $websiteActive = in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','serviceSetup.php','ourTeamSetup.php','viewFeedback.php'], true);
-            $dzoActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','update-payments.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php'], true);
+            $dzoActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','update-payments.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php','admin-class-students.php'], true);
             $eventsActive = in_array($currentPage, ['eventManagement.php','bookingManagement.php'], true);
             $adminSettingsActive = in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php','audit-logs.php','run-migration.php','module-access.php'], true);
             $canWebsiteManage = function_exists('bbcc_can') ? bbcc_can('website', 'manage') : false;
@@ -451,7 +451,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                     <?php
                         $dzoEnrollActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','admin-assign-class.php'], true);
                         $dzoFeesActive = in_array($currentPage, ['feesManagement.php','update-payments.php','admin-fee-verification.php'], true);
-                        $dzoOpsActive = in_array($currentPage, ['dzongkha-classroom.php','attendanceManagement.php','attendance-records.php','parent-email.php','admin-attendance.php'], true);
+                        $dzoOpsActive = in_array($currentPage, ['dzongkha-classroom.php','attendanceManagement.php','attendance-records.php','parent-email.php','admin-attendance.php','admin-class-students.php'], true);
                         $dzoConfigActive = in_array($currentPage, ['admin-class-setup.php','feesSetting.php','admin-parent-pins.php'], true);
                     ?>
 
@@ -479,6 +479,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                         <a class="collapse-item <?= ($currentPage == 'attendance-records.php') ? 'active' : '' ?>" href="attendance-records"><i class="fas fa-table fa-sm mr-1 text-muted"></i> Attendance Records</a>
                         <a class="collapse-item <?= ($currentPage == 'parent-email.php') ? 'active' : '' ?>" href="parent-email"><i class="fas fa-envelope-open-text fa-sm mr-1 text-muted"></i> Send Parent Email</a>
                         <a class="collapse-item <?= ($currentPage == 'admin-attendance.php') ? 'active' : '' ?>" href="admin-attendance"><i class="fas fa-door-open fa-sm mr-1 text-muted"></i> Kiosk Sign In/Out</a>
+                        <a class="collapse-item <?= ($currentPage == 'admin-class-students.php') ? 'active' : '' ?>" href="admin-class-students"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Class Student List</a>
                     </div>
 
                     <h6 class="collapse-header dzo-group-header d-none d-lg-block">Configuration</h6>
