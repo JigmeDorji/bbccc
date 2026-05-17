@@ -20,6 +20,7 @@
 <script src="vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script src="vendor/jquery-easing/jquery.easing.min.js"></script>
 <script src="js/sb-admin-2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <?php
 /**
@@ -52,9 +53,50 @@ endif;
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    function showConfirm(message, onYes) {
+        if (window.Swal && typeof window.Swal.fire === 'function') {
+            window.Swal.fire({
+                icon: 'question',
+                text: message || 'Are you sure?',
+                showCancelButton: true,
+                confirmButtonText: 'Yes',
+                cancelButtonText: 'Cancel'
+            }).then(function (res) {
+                if (res.isConfirmed) onYes();
+            });
+            return;
+        }
+        if (window.confirm(message || 'Are you sure?')) onYes();
+    }
+
+    document.addEventListener('click', function (e) {
+        var link = e.target.closest('a[data-confirm]');
+        if (!link) return;
+        if (link.dataset.confirmed === '1') {
+            link.dataset.confirmed = '';
+            return;
+        }
+        e.preventDefault();
+        var msg = link.getAttribute('data-confirm') || 'Are you sure?';
+        showConfirm(msg, function () {
+            link.dataset.confirmed = '1';
+            window.location.href = link.getAttribute('href');
+        });
+    });
+
     var forms = document.querySelectorAll('form');
     forms.forEach(function (form) {
-        form.addEventListener('submit', function () {
+        form.addEventListener('submit', function (ev) {
+            var confirmMsg = form.getAttribute('data-confirm');
+            if (confirmMsg && form.dataset.confirmed !== '1') {
+                ev.preventDefault();
+                showConfirm(confirmMsg, function () {
+                    form.dataset.confirmed = '1';
+                    form.requestSubmit ? form.requestSubmit() : form.submit();
+                });
+                return false;
+            }
+            form.dataset.confirmed = '';
             if (form.dataset.submitting === '1') {
                 return false;
             }

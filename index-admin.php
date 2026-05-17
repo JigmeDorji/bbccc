@@ -157,9 +157,11 @@ try {
             $myChildren = $stmtKids->fetchAll(PDO::FETCH_ASSOC);
 
             if (bbcc_table_exists($pdo, 'pcm_fee_payments')) {
+                $parentPlansUsed = [];
                 $stmtParentFees = $pdo->prepare("
                     SELECT
                         s.student_name,
+                        f.plan_type,
                         f.instalment_label,
                         f.status,
                         COALESCE(f.due_amount, 0) AS due_amount,
@@ -195,15 +197,26 @@ try {
                     $label = trim((string)($fr['instalment_label'] ?? 'Installment'));
                     $studentName = trim((string)($fr['student_name'] ?? 'Child'));
                     $slot = $labelToKey($label);
+                    $planTypeRaw = trim((string)($fr['plan_type'] ?? ''));
+                    if ($planTypeRaw !== '') {
+                        $parentPlansUsed[strtolower($planTypeRaw)] = true;
+                    }
 
                     if (!isset($parentFeeMatrix[$studentName])) {
                         $parentFeeMatrix[$studentName] = [
                             'term1' => null, 'term2' => null, 'term3' => null, 'term4' => null,
                             'half1' => null, 'half2' => null, 'yearly' => null,
+                            'additional' => [],
                         ];
                     }
                     if ($slot !== '') {
                         $parentFeeMatrix[$studentName][$slot] = [
+                            'amount' => $due,
+                            'status' => ucfirst($status ?: 'unpaid'),
+                        ];
+                    } elseif (strtolower(trim((string)($fr['plan_type'] ?? ''))) === 'additional') {
+                        $parentFeeMatrix[$studentName]['additional'][] = [
+                            'label' => $label,
                             'amount' => $due,
                             'status' => ucfirst($status ?: 'unpaid'),
                         ];
@@ -235,6 +248,20 @@ try {
                             ];
                         }
                     }
+                }
+
+                $parentFeePlanColumns = [];
+                if (isset($parentPlansUsed['term-wise'])) {
+                    $parentFeePlanColumns = array_merge($parentFeePlanColumns, ['term1','term2','term3','term4']);
+                }
+                if (isset($parentPlansUsed['half-yearly'])) {
+                    $parentFeePlanColumns = array_merge($parentFeePlanColumns, ['half1','half2']);
+                }
+                if (isset($parentPlansUsed['yearly'])) {
+                    $parentFeePlanColumns[] = 'yearly';
+                }
+                if (empty($parentFeePlanColumns)) {
+                    $parentFeePlanColumns = ['term1','term2','term3','term4','half1','half2','yearly'];
                 }
             }
 
@@ -1197,20 +1224,31 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                                         <thead>
                                         <tr>
                                             <th>Child Name</th>
-                                            <th>Term 1</th>
-                                            <th>Term 2</th>
-                                            <th>Term 3</th>
-                                            <th>Term 4</th>
-                                            <th>Half-year 1</th>
-                                            <th>Half-year 2</th>
-                                            <th>Yearly</th>
+                                            <?php
+                                                $feeColLabel = static function (string $k): string {
+                                                    return match ($k) {
+                                                        'term1' => 'Term 1',
+                                                        'term2' => 'Term 2',
+                                                        'term3' => 'Term 3',
+                                                        'term4' => 'Term 4',
+                                                        'half1' => 'Half-year 1',
+                                                        'half2' => 'Half-year 2',
+                                                        'yearly' => 'Yearly',
+                                                        default => ucfirst($k),
+                                                    };
+                                                };
+                                            ?>
+                                            <?php foreach (($parentFeePlanColumns ?? ['term1','term2','term3','term4','half1','half2','yearly']) as $k): ?>
+                                                <th><?= htmlspecialchars($feeColLabel((string)$k)) ?></th>
+                                            <?php endforeach; ?>
+                                            <th>Additional</th>
                                         </tr>
                                         </thead>
                                         <tbody>
                                         <?php foreach ($parentFeeMatrix as $childName => $slots): ?>
                                             <tr>
                                                 <td><?= htmlspecialchars((string)$childName) ?></td>
-                                                <?php foreach (['term1','term2','term3','term4','half1','half2','yearly'] as $k): ?>
+                                                <?php foreach (($parentFeePlanColumns ?? ['term1','term2','term3','term4','half1','half2','yearly']) as $k): ?>
                                                     <?php $cell = $slots[$k] ?? null; ?>
                                                     <td>
                                                         <?php if ($cell === null): ?>
@@ -1229,6 +1267,28 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                                                         <?php endif; ?>
                                                     </td>
                                                 <?php endforeach; ?>
+                                                <td>
+                                                    <?php $extra = $slots['additional'] ?? []; ?>
+                                                    <?php if (empty($extra)): ?>
+                                                        <span class="text-muted">-</span>
+                                                    <?php else: ?>
+                                                        <?php foreach ($extra as $ex): ?>
+                                                            <?php
+                                                                $feeSt = strtolower((string)($ex['status'] ?? 'Unpaid'));
+                                                                $feeBadge = 'secondary';
+                                                                if ($feeSt === 'unpaid') $feeBadge = 'warning';
+                                                                elseif ($feeSt === 'pending') $feeBadge = 'info';
+                                                                elseif (in_array($feeSt, ['verified','approved'], true)) $feeBadge = 'success';
+                                                                elseif ($feeSt === 'rejected') $feeBadge = 'danger';
+                                                            ?>
+                                                            <div class="mb-1">
+                                                                <div style="font-size:.78rem;"><?= htmlspecialchars((string)($ex['label'] ?? 'Additional')) ?></div>
+                                                                <div>$<?= number_format((float)($ex['amount'] ?? 0), 2) ?></div>
+                                                                <span class="badge badge-<?= $feeBadge ?>"><?= htmlspecialchars((string)($ex['status'] ?? 'Unpaid')) ?></span>
+                                                            </div>
+                                                        <?php endforeach; ?>
+                                                    <?php endif; ?>
+                                                </td>
                                             </tr>
                                         <?php endforeach; ?>
                                         </tbody>

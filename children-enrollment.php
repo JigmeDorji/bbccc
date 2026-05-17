@@ -367,7 +367,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                             </td>
                             <td>
                                 <?php if (strtolower($c['approval_status'] ?? '') === 'pending' && !$enrolled): ?>
-                                <form method="POST" class="d-inline" onsubmit="return confirm('Remove this child?')">
+                                <form method="POST" class="d-inline" data-confirm="Remove this child?">
                                     <?= csrf_field() ?>
                                     <input type="hidden" name="action" value="remove_child">
                                     <input type="hidden" name="child_id" value="<?= (int)$c['id'] ?>">

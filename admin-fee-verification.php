@@ -6,6 +6,7 @@ require_once "include/role_helpers.php";
 require_once "include/csrf.php";
 require_once "include/pcm_helpers.php";
 require_once "include/notifications.php";
+require_once "include/mailer.php";
 require_login();
 
 if (!is_admin_role()) { header("Location: unauthorized"); exit; }
@@ -58,6 +59,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
         );
         $flash = "Payment <strong>{$newStatus}</strong> — {$fee['student_name']} ({$fee['instalment_label']}).";
         $ok = true;
+    }
+}
+
+// ── POST: send custom email for one fee row ──
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_custom_email') {
+    verify_csrf();
+    $fid = (int)($_POST['fee_id'] ?? 0);
+    $subjectTpl = trim((string)($_POST['email_subject'] ?? 'Fee Update for {child_name}'));
+    $bodyTpl = trim((string)($_POST['email_body'] ?? 'Dear {parent_name},'));
+    try {
+        if ($fid <= 0) throw new Exception('Invalid fee record.');
+        if ($subjectTpl === '' || $bodyTpl === '') throw new Exception('Subject and message are required.');
+        $row = $pdo->prepare("
+            SELECT f.*, s.student_name, p.full_name AS parent_name, p.email AS parent_email
+            FROM pcm_fee_payments f
+            JOIN students s ON s.id = f.student_id
+            JOIN parents p ON p.id = f.parent_id
+            WHERE f.id = :id LIMIT 1
+        ");
+        $row->execute([':id' => $fid]);
+        $fee = $row->fetch(PDO::FETCH_ASSOC);
+        if (!$fee) throw new Exception('Record not found.');
+        $toEmail = trim((string)($fee['parent_email'] ?? ''));
+        if ($toEmail === '') throw new Exception('Parent email not available.');
+
+        $vars = [
+            '{parent_name}' => (string)($fee['parent_name'] ?? 'Parent'),
+            '{child_name}' => (string)($fee['student_name'] ?? 'Student'),
+            '{plan_type}' => (string)($fee['plan_type'] ?? ''),
+            '{instalment_label}' => (string)($fee['instalment_label'] ?? ''),
+            '{due_amount}' => number_format((float)($fee['due_amount'] ?? 0), 2),
+            '{paid_amount}' => number_format((float)($fee['paid_amount'] ?? 0), 2),
+            '{status}' => (string)($fee['status'] ?? ''),
+        ];
+        $subject = strtr($subjectTpl, $vars);
+        $bodyText = strtr($bodyTpl, $vars);
+        $html = '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;">' . nl2br(htmlspecialchars($bodyText, ENT_QUOTES, 'UTF-8')) . '</div>';
+        $sent = @send_mail($toEmail, (string)($fee['parent_name'] ?? 'Parent'), $subject, $html, 8);
+        if (!$sent) throw new Exception('Email send failed.');
+
+        $flash = 'Email sent successfully to ' . h($toEmail) . '.';
+        $ok = true;
+    } catch (Throwable $e) {
+        $flash = 'Error: ' . $e->getMessage();
+        $ok = false;
     }
 }
 
@@ -130,6 +176,16 @@ document.addEventListener('DOMContentLoaded',()=>{
     <button class="btn btn-sm btn-success filter-btn" data-filter="Verified">Verified</button>
     <button class="btn btn-sm btn-danger filter-btn"  data-filter="Rejected">Rejected</button>
 </div>
+<div class="mb-3" style="max-width:260px;">
+    <label class="small text-muted mb-1">Filter by Plan</label>
+    <select id="planFilter" class="form-control form-control-sm">
+        <option value="">All Plans</option>
+        <option value="Term-wise">Term-wise</option>
+        <option value="Half-yearly">Half-yearly</option>
+        <option value="Yearly">Yearly</option>
+        <option value="Additional">Additional</option>
+    </select>
+</div>
 
 <!-- Table -->
 <div class="card shadow mb-4">
@@ -157,11 +213,11 @@ document.addEventListener('DOMContentLoaded',()=>{
                 <td><?= $f['submitted_at'] ? date('d M Y', strtotime($f['submitted_at'])) : '—' ?></td>
                 <td>
                     <?php if ($f['status'] === 'Pending'): ?>
-                    <form method="POST" class="d-inline">
+                    <form method="POST" class="d-inline" data-confirm="Verify this payment?">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="verify">
                         <input type="hidden" name="fee_id" value="<?= $f['id'] ?>">
-                        <button class="btn btn-success btn-sm" onclick="return confirm('Verify this payment?')"><i class="fas fa-check mr-1"></i>Verify</button>
+                        <button class="btn btn-success btn-sm"><i class="fas fa-check mr-1"></i>Verify</button>
                     </form>
                     <button class="btn btn-danger btn-sm" data-toggle="modal" data-target="#rejectFee<?= $f['id'] ?>"><i class="fas fa-times mr-1"></i>Reject</button>
 
@@ -183,6 +239,41 @@ document.addEventListener('DOMContentLoaded',()=>{
                     <?php else: ?>
                         <span class="text-muted small"><?= h($f['verified_by'] ?? '') ?></span>
                     <?php endif; ?>
+                    <button class="btn btn-info btn-sm mt-1" data-toggle="modal" data-target="#emailFee<?= $f['id'] ?>">
+                        <i class="fas fa-envelope mr-1"></i>Email
+                    </button>
+
+                    <div class="modal fade" id="emailFee<?= $f['id'] ?>" tabindex="-1">
+                        <div class="modal-dialog"><div class="modal-content">
+                            <form method="POST">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" value="send_custom_email">
+                                <input type="hidden" name="fee_id" value="<?= $f['id'] ?>">
+                                <div class="modal-header bg-info text-white"><h5 class="modal-title">Send Parent Email</h5><button class="close text-white" data-dismiss="modal">&times;</button></div>
+                                <div class="modal-body">
+                                    <div class="mini mb-2">Variables: {parent_name}, {child_name}, {plan_type}, {instalment_label}, {due_amount}, {paid_amount}, {status}</div>
+                                    <div class="form-group">
+                                        <label>Subject</label>
+                                        <input type="text" name="email_subject" class="form-control" value="Fee Update for {child_name}" required>
+                                    </div>
+                                    <div class="form-group mb-0">
+                                        <label>Message</label>
+                                        <textarea name="email_body" class="form-control" rows="6" required>Dear {parent_name},
+
+This is an update for {child_name}:
+- Plan: {plan_type}
+- Instalment: {instalment_label}
+- Due: ${due_amount}
+- Paid: ${paid_amount}
+- Status: {status}
+
+Thank you.</textarea>
+                                    </div>
+                                </div>
+                                <div class="modal-footer"><button class="btn btn-secondary" data-dismiss="modal">Cancel</button><button class="btn btn-info" type="submit">Send Email</button></div>
+                            </form>
+                        </div></div>
+                    </div>
                 </td>
             </tr>
             <?php endforeach; ?>
@@ -201,11 +292,19 @@ document.addEventListener('DOMContentLoaded',()=>{
 <script>
 $(function(){
     var dt = $('#feeTable').DataTable({pageLength:25, order:[[10,'desc']]});
+    var activeStatus = 'all';
+    function applyFilters() {
+        dt.column(9).search(activeStatus === 'all' ? '' : '^' + activeStatus + '$', true, false);
+        var plan = ($('#planFilter').val() || '').trim();
+        dt.column(3).search(plan === '' ? '' : '^' + plan + '$', true, false);
+        dt.draw();
+    }
     $('.filter-btn').on('click',function(){
         $('.filter-btn').removeClass('active'); $(this).addClass('active');
-        var f = $(this).data('filter');
-        dt.column(9).search(f==='all'?'':'^'+f+'$', true, false).draw();
+        activeStatus = ($(this).data('filter') || 'all').toString();
+        applyFilters();
     });
+    $('#planFilter').on('change', applyFilters);
 });
 </script>
 </body>

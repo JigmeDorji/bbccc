@@ -183,7 +183,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                             $hasEnrol->execute([':id'=>$c['id']]);
                             if (strtolower($c['approval_status'] ?? '') === 'pending' && !$hasEnrol->fetch()):
                             ?>
-                            <form method="POST" class="d-inline" onsubmit="return confirm('Remove this child?')">
+                            <form method="POST" class="d-inline" data-confirm="Remove this child?">
                                 <?= csrf_field() ?>
                                 <?= bbcc_form_nonce_field('parent_remove_child') ?>
                                 <input type="hidden" name="action" value="remove_child">

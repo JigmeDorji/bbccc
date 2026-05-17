@@ -341,6 +341,117 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    if ($action === 'update_announcement' && in_array($viewMode, ['admin', 'teacher'], true)) {
+        $announcementId = (int)($_POST['announcement_id'] ?? 0);
+        $title = trim((string)($_POST['title'] ?? ''));
+        $message = trim((string)($_POST['message'] ?? ''));
+        $category = trim((string)($_POST['category'] ?? 'Announcement'));
+
+        try {
+            if ($announcementId <= 0) throw new Exception('Invalid announcement.');
+            if ($title === '') throw new Exception('Title is required.');
+            if ($message === '') throw new Exception('Message is required.');
+            if (!in_array($category, ['Announcement', 'Instruction', 'General'], true)) {
+                $category = 'Announcement';
+            }
+
+            $stmtOwn = $pdo->prepare("
+                SELECT id, posted_by_user_id, posted_by_username
+                FROM classroom_announcements
+                WHERE id = :id
+                LIMIT 1
+            ");
+            $stmtOwn->execute([':id' => $announcementId]);
+            $rowOwn = $stmtOwn->fetch(PDO::FETCH_ASSOC);
+            if (!$rowOwn) throw new Exception('Announcement not found.');
+
+            if ($viewMode === 'teacher') {
+                $sessionUid = (string)($_SESSION['userid'] ?? '');
+                $sessionUname = strtolower(trim((string)($_SESSION['username'] ?? '')));
+                $ownerUid = trim((string)($rowOwn['posted_by_user_id'] ?? ''));
+                $ownerUname = strtolower(trim((string)($rowOwn['posted_by_username'] ?? '')));
+                $isOwner = ($ownerUid !== '' && $sessionUid !== '' && $ownerUid === $sessionUid)
+                    || ($ownerUname !== '' && $sessionUname !== '' && $ownerUname === $sessionUname);
+                if (!$isOwner) throw new Exception('You can only update your own announcements.');
+            }
+
+            $updA = $pdo->prepare("
+                UPDATE classroom_announcements
+                SET title = :title, message = :message, category = :category
+                WHERE id = :id
+                LIMIT 1
+            ");
+            $updA->execute([
+                ':title' => $title,
+                ':message' => $message,
+                ':category' => $category,
+                ':id' => $announcementId,
+            ]);
+
+            if (function_exists('bbcc_audit_log')) {
+                bbcc_audit_log('classroom_announcement_updated', 'classroom_announcements', [
+                    'announcement_id' => $announcementId,
+                ], 'success');
+            }
+
+            $flashType = 'success';
+            $flashMsg = 'Announcement updated successfully.';
+            $tab = 'announcements';
+        } catch (Throwable $e) {
+            $flashType = 'danger';
+            $flashMsg = 'Error: ' . $e->getMessage();
+            $tab = 'announcements';
+        }
+    }
+
+    if ($action === 'delete_announcement' && in_array($viewMode, ['admin', 'teacher'], true)) {
+        $announcementId = (int)($_POST['announcement_id'] ?? 0);
+
+        try {
+            if ($announcementId <= 0) throw new Exception('Invalid announcement.');
+
+            $stmtOwn = $pdo->prepare("
+                SELECT id, posted_by_user_id, posted_by_username
+                FROM classroom_announcements
+                WHERE id = :id
+                LIMIT 1
+            ");
+            $stmtOwn->execute([':id' => $announcementId]);
+            $rowOwn = $stmtOwn->fetch(PDO::FETCH_ASSOC);
+            if (!$rowOwn) throw new Exception('Announcement not found.');
+
+            if ($viewMode === 'teacher') {
+                $sessionUid = (string)($_SESSION['userid'] ?? '');
+                $sessionUname = strtolower(trim((string)($_SESSION['username'] ?? '')));
+                $ownerUid = trim((string)($rowOwn['posted_by_user_id'] ?? ''));
+                $ownerUname = strtolower(trim((string)($rowOwn['posted_by_username'] ?? '')));
+                $isOwner = ($ownerUid !== '' && $sessionUid !== '' && $ownerUid === $sessionUid)
+                    || ($ownerUname !== '' && $sessionUname !== '' && $ownerUname === $sessionUname);
+                if (!$isOwner) throw new Exception('You can only delete your own announcements.');
+            }
+
+            $pdo->beginTransaction();
+            $pdo->prepare("DELETE FROM classroom_announcement_classes WHERE announcement_id = :id")->execute([':id' => $announcementId]);
+            $pdo->prepare("DELETE FROM classroom_announcements WHERE id = :id LIMIT 1")->execute([':id' => $announcementId]);
+            $pdo->commit();
+
+            if (function_exists('bbcc_audit_log')) {
+                bbcc_audit_log('classroom_announcement_deleted', 'classroom_announcements', [
+                    'announcement_id' => $announcementId,
+                ], 'success');
+            }
+
+            $flashType = 'success';
+            $flashMsg = 'Announcement deleted successfully.';
+            $tab = 'announcements';
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $flashType = 'danger';
+            $flashMsg = 'Error: ' . $e->getMessage();
+            $tab = 'announcements';
+        }
+    }
+
     if ($action === 'create_report' && $viewMode === 'teacher') {
         $classId = (int)($_POST['class_id'] ?? 0);
         $studentId = (int)($_POST['student_id'] ?? 0);
@@ -633,7 +744,7 @@ if ($viewMode === 'admin') {
     $visibleWhere[] = ')';
 }
 
-$sqlA = "\n    SELECT\n        a.id, a.title, a.message, a.category, a.scope_type, a.posted_by_name, a.posted_by_role, a.created_at,\n        CASE\n            WHEN a.scope_type = 'all_classes' THEN 'All Classes'\n            ELSE COALESCE(cls.class_list, 'Selected Classes')\n        END AS target_classes\n    FROM classroom_announcements a\n    LEFT JOIN (\n        SELECT ac.announcement_id, GROUP_CONCAT(DISTINCT c.class_name ORDER BY c.class_name SEPARATOR ', ') AS class_list\n        FROM classroom_announcement_classes ac\n        INNER JOIN classes c ON c.id = ac.class_id\n        GROUP BY ac.announcement_id\n    ) cls ON cls.announcement_id = a.id\n    WHERE " . implode('', $visibleWhere) . "\n    ORDER BY a.created_at DESC, a.id DESC\n    LIMIT 300\n";
+$sqlA = "\n    SELECT\n        a.id, a.title, a.message, a.category, a.scope_type, a.posted_by_name, a.posted_by_role, a.created_at,\n        a.posted_by_user_id, a.posted_by_username,\n        CASE\n            WHEN a.scope_type = 'all_classes' THEN 'All Classes'\n            ELSE COALESCE(cls.class_list, 'Selected Classes')\n        END AS target_classes\n    FROM classroom_announcements a\n    LEFT JOIN (\n        SELECT ac.announcement_id, GROUP_CONCAT(DISTINCT c.class_name ORDER BY c.class_name SEPARATOR ', ') AS class_list\n        FROM classroom_announcement_classes ac\n        INNER JOIN classes c ON c.id = ac.class_id\n        GROUP BY ac.announcement_id\n    ) cls ON cls.announcement_id = a.id\n    WHERE " . implode('', $visibleWhere) . "\n    ORDER BY a.created_at DESC, a.id DESC\n    LIMIT 300\n";
 $stmtA = $pdo->prepare($sqlA);
 $stmtA->execute();
 $announcements = $stmtA->fetchAll();
@@ -792,6 +903,17 @@ if ($reportIds) {
                                 <div class="text-muted">No announcements found for your class scope.</div>
                             <?php else: ?>
                                 <?php foreach ($announcements as $a): ?>
+                                    <?php
+                                        $canManageAnnouncement = $viewMode === 'admin';
+                                        if ($viewMode === 'teacher') {
+                                            $sessionUid = (string)($_SESSION['userid'] ?? '');
+                                            $sessionUname = strtolower(trim((string)($_SESSION['username'] ?? '')));
+                                            $ownerUid = trim((string)($a['posted_by_user_id'] ?? ''));
+                                            $ownerUname = strtolower(trim((string)($a['posted_by_username'] ?? '')));
+                                            $canManageAnnouncement = ($ownerUid !== '' && $sessionUid !== '' && $ownerUid === $sessionUid)
+                                                || ($ownerUname !== '' && $sessionUname !== '' && $ownerUname === $sessionUname);
+                                        }
+                                    ?>
                                     <div class="border rounded p-3 mb-3">
                                         <div class="d-flex justify-content-between align-items-start flex-wrap">
                                             <div>
@@ -808,6 +930,28 @@ if ($reportIds) {
                                             </div>
                                         </div>
                                         <div class="mt-3" style="white-space:pre-wrap;"><?= dc_h((string)$a['message']) ?></div>
+                                        <?php if ($canManageAnnouncement): ?>
+                                            <div class="mt-3 d-flex flex-wrap gap-2">
+                                                <button
+                                                    type="button"
+                                                    class="btn btn-sm btn-outline-primary js-edit-announcement"
+                                                    data-announcement-id="<?= (int)$a['id'] ?>"
+                                                    data-title="<?= dc_h((string)$a['title']) ?>"
+                                                    data-category="<?= dc_h((string)$a['category']) ?>"
+                                                    data-message="<?= dc_h((string)$a['message']) ?>"
+                                                >
+                                                    <i class="fas fa-edit mr-1"></i> Edit
+                                                </button>
+                                                <form method="POST" class="d-inline" data-confirm="Delete this announcement?">
+                                                    <?= csrf_field() ?>
+                                                    <input type="hidden" name="action" value="delete_announcement">
+                                                    <input type="hidden" name="announcement_id" value="<?= (int)$a['id'] ?>">
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                        <i class="fas fa-trash mr-1"></i> Delete
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        <?php endif; ?>
                                     </div>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -913,7 +1057,7 @@ if ($reportIds) {
                                                         data-feedback-text="<?= dc_h((string)$r['feedback_text']) ?>">
                                                     <i class="fas fa-edit mr-1"></i> Edit
                                                 </button>
-                                                <form method="POST" class="d-inline" onsubmit="return confirm('Delete this report and all comments?');">
+                                                <form method="POST" class="d-inline" data-confirm="Delete this report and all comments?">
                                                     <?= csrf_field() ?>
                                                     <input type="hidden" name="action" value="teacher_delete_report">
                                                     <input type="hidden" name="report_id" value="<?= (int)$r['id'] ?>">
@@ -993,6 +1137,46 @@ if ($reportIds) {
     </div>
 </div>
 
+<div class="modal fade" id="editAnnouncementModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="POST">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="update_announcement">
+                <input type="hidden" name="announcement_id" id="editAnnouncementId" value="">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Edit Announcement</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select name="category" id="editAnnouncementCategory" class="form-control" required>
+                            <option value="Announcement">Announcement</option>
+                            <option value="Instruction">Instruction</option>
+                            <option value="General">General</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Title</label>
+                        <input type="text" name="title" id="editAnnouncementTitle" class="form-control" maxlength="200" required>
+                    </div>
+                    <div class="form-group mb-0">
+                        <label>Message</label>
+                        <textarea name="message" id="editAnnouncementMessage" rows="5" class="form-control" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="editReportModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
         <form method="POST" class="modal-content">
@@ -1062,6 +1246,15 @@ $(function () {
         });
     }
     $('#reportClass').on('change', filterStudentsByClass);
+
+    $('.js-edit-announcement').on('click', function () {
+        var $btn = $(this);
+        $('#editAnnouncementId').val($btn.data('announcement-id') || '');
+        $('#editAnnouncementCategory').val($btn.data('category') || 'Announcement');
+        $('#editAnnouncementTitle').val($btn.data('title') || '');
+        $('#editAnnouncementMessage').val($btn.data('message') || '');
+        $('#editAnnouncementModal').modal('show');
+    });
 
     $('.js-edit-report').on('click', function () {
         var $btn = $(this);

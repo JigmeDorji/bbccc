@@ -1,6 +1,7 @@
 <?php
 require_once "include/config.php";
 require_once "include/auth.php";
+require_once "include/mailer.php";
 require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
@@ -527,6 +528,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
     }
 }
 
+// ---------------- BULK EMAIL: UNPAID FEES ----------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_unpaid_fee_email') {
+    try {
+        $ids = array_values(array_unique(array_map('intval', (array)($_POST['payment_ids'] ?? []))));
+        $subjectTpl = trim((string)($_POST['email_subject'] ?? 'Unpaid Fee Reminder for {child_name}'));
+        $bodyTpl = trim((string)($_POST['email_body'] ?? "Dear {parent_name},\n\nThis is a reminder that {child_name} has unpaid fee for {instalment_label} ({plan_type}).\nAmount due: \${due_amount}\n\nPlease complete the payment in parent portal.\n\nThank you."));
+
+        if (empty($ids)) throw new Exception("Please select at least one unpaid fee.");
+        if ($subjectTpl === '' || $bodyTpl === '') throw new Exception("Email subject and body are required.");
+
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $stmtMail = $pdo->prepare("
+            SELECT f.id, f.plan_type, f.instalment_label, f.due_amount, f.status,
+                   s.student_name, p.full_name AS parent_name, p.email AS parent_email
+            FROM pcm_fee_payments f
+            INNER JOIN students s ON s.id = f.student_id
+            INNER JOIN parents p ON p.id = f.parent_id
+            WHERE f.id IN ($in) AND f.status IN ('Unpaid','Rejected')
+        ");
+        $stmtMail->execute($ids);
+        $targets = $stmtMail->fetchAll(PDO::FETCH_ASSOC);
+        if (empty($targets)) throw new Exception("No eligible unpaid/rejected rows found.");
+
+        $sent = 0; $failed = 0;
+        foreach ($targets as $t) {
+            $toEmail = trim((string)($t['parent_email'] ?? ''));
+            if ($toEmail === '') { $failed++; continue; }
+            $vars = [
+                '{parent_name}' => (string)($t['parent_name'] ?? 'Parent'),
+                '{child_name}' => (string)($t['student_name'] ?? 'Student'),
+                '{plan_type}' => (string)($t['plan_type'] ?? ''),
+                '{instalment_label}' => (string)($t['instalment_label'] ?? ''),
+                '{due_amount}' => number_format((float)($t['due_amount'] ?? 0), 2),
+                '{status}' => (string)($t['status'] ?? ''),
+            ];
+            $subject = strtr($subjectTpl, $vars);
+            $bodyText = strtr($bodyTpl, $vars);
+            $html = '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;">' . nl2br(htmlspecialchars($bodyText, ENT_QUOTES, 'UTF-8')) . '</div>';
+            $okMail = @send_mail($toEmail, (string)($t['parent_name'] ?? 'Parent'), $subject, $html, 8);
+            if ($okMail) $sent++; else $failed++;
+        }
+
+        $message = "Unpaid reminder email sent. Success: {$sent}, Failed: {$failed}.";
+        $success = $sent > 0;
+        $reload = true;
+    } catch (Throwable $e) {
+        $message = "Error: " . $e->getMessage();
+        $success = false;
+        $reload = false;
+    }
+}
+
 // ---------------- LOAD ALL FEE DATA ----------------
 // Parent column can be either parentId (legacy) or parent_id (newer)
 $studentParentColumn = 'parentId';
@@ -777,6 +830,18 @@ $classCharges = $pdo->query("
     ORDER BY cc.created_at DESC, cc.id DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
+$unpaidEmailRows = $pdo->query("
+    SELECT
+        f.id, f.plan_type, f.instalment_label, f.due_amount, f.status,
+        s.student_name, p.full_name AS parent_name, p.email AS parent_email
+    FROM pcm_fee_payments f
+    INNER JOIN students s ON s.id = f.student_id
+    INNER JOIN parents p ON p.id = f.parent_id
+    WHERE f.status IN ('Unpaid','Rejected')
+    ORDER BY s.student_name ASC, f.id DESC
+    LIMIT 400
+")->fetchAll(PDO::FETCH_ASSOC);
+
 // ---------------- Unified fees overview table data ----------------
 
 $updatePayments = [];
@@ -940,109 +1005,6 @@ if ($updateOnlyMode) {
                     });
                 </script>
 
-                <div class="card shadow mb-4">
-                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-book mr-1"></i>Class-Based Additional Charges</h6>
-                        <span class="mini">Example: Textbook charge by class</span>
-                    </div>
-                    <div class="card-body">
-                        <form method="POST" class="mb-3">
-                            <input type="hidden" name="class_charge_action" value="add">
-                            <div class="form-row">
-                                <div class="form-group col-lg-3">
-                                    <label class="mb-1">Class</label>
-                                    <select name="charge_class_id" class="form-control" required>
-                                        <option value="">Select class...</option>
-                                        <?php foreach ($classOptions as $co): ?>
-                                            <option value="<?php echo (int)$co['id']; ?>"><?php echo h($co['class_name']); ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div class="form-group col-lg-3">
-                                    <label class="mb-1">Charge Name</label>
-                                    <input type="text" name="charge_title" class="form-control" maxlength="120" placeholder="Textbook Charge" required>
-                                </div>
-                                <div class="form-group col-lg-2">
-                                    <label class="mb-1">Amount</label>
-                                    <input type="number" step="0.01" min="0.01" name="charge_amount" class="form-control" required>
-                                </div>
-                                <div class="form-group col-lg-2">
-                                    <label class="mb-1">Due Date</label>
-                                    <input type="date" name="charge_due_date" class="form-control">
-                                </div>
-                                <div class="form-group col-lg-2 d-flex align-items-end">
-                                    <button type="submit" class="btn btn-primary btn-block"><i class="fas fa-plus-circle mr-1"></i>Add & Apply</button>
-                                </div>
-                            </div>
-                            <div class="form-group mb-0">
-                                <label class="mb-1">Description (optional)</label>
-                                <input type="text" name="charge_description" class="form-control" maxlength="500" placeholder="Optional note shown for admin reference">
-                            </div>
-                        </form>
-
-                        <div class="table-responsive">
-                            <table class="table table-bordered table-sm mb-0">
-                                <thead class="thead-light">
-                                    <tr>
-                                        <th>#</th>
-                                        <th>Class</th>
-                                        <th>Charge</th>
-                                        <th>Amount</th>
-                                        <th>Due Date</th>
-                                        <th>Applied Students</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                <?php if (empty($classCharges)): ?>
-                                    <tr><td colspan="8" class="text-center text-muted">No class-based charges added yet.</td></tr>
-                                <?php else: ?>
-                                    <?php foreach ($classCharges as $i => $cc): ?>
-                                        <tr>
-                                            <td><?php echo (int)$i + 1; ?></td>
-                                            <td><?php echo h((string)($cc['class_name'] ?? 'Unknown Class')); ?></td>
-                                            <td><?php echo h((string)$cc['charge_title']); ?></td>
-                                            <td>$<?php echo number_format((float)$cc['amount'], 2); ?></td>
-                                            <td><?php echo h((string)($cc['due_date'] ?? '-')); ?></td>
-                                            <td><?php echo (int)($cc['applied_students'] ?? 0); ?></td>
-                                            <td>
-                                                <span class="badge badge-<?php echo ((int)$cc['is_active'] === 1) ? 'success' : 'secondary'; ?>">
-                                                    <?php echo ((int)$cc['is_active'] === 1) ? 'Active' : 'Inactive'; ?>
-                                                </span>
-                                            </td>
-                                            <td class="nowrap">
-                                                <button type="button"
-                                                        class="btn btn-sm btn-outline-info class-charge-edit-btn"
-                                                        data-charge-id="<?php echo (int)$cc['id']; ?>"
-                                                        data-charge-title="<?php echo h((string)$cc['charge_title']); ?>"
-                                                        data-charge-amount="<?php echo h((string)$cc['amount']); ?>"
-                                                        data-charge-due="<?php echo h((string)($cc['due_date'] ?? '')); ?>"
-                                                        data-charge-desc="<?php echo h((string)($cc['description'] ?? '')); ?>">
-                                                    Edit
-                                                </button>
-                                                <form method="POST" class="d-inline">
-                                                    <input type="hidden" name="class_charge_action" value="apply">
-                                                    <input type="hidden" name="charge_id" value="<?php echo (int)$cc['id']; ?>">
-                                                    <button type="submit" class="btn btn-sm btn-outline-primary">Apply Missing</button>
-                                                </form>
-                                                <form method="POST" class="d-inline">
-                                                    <input type="hidden" name="class_charge_action" value="toggle">
-                                                    <input type="hidden" name="charge_id" value="<?php echo (int)$cc['id']; ?>">
-                                                    <button type="submit" class="btn btn-sm btn-outline-secondary">
-                                                        <?php echo ((int)$cc['is_active'] === 1) ? 'Deactivate' : 'Activate'; ?>
-                                                    </button>
-                                                </form>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- ✅ SUMMARY: COLLECTED FEES + PAID STUDENTS -->
                 <div class="row mb-3">
                     <div class="col-xl-3 col-md-6 mb-3">
@@ -1150,6 +1112,87 @@ if ($updateOnlyMode) {
                     </div>
                 </div>
 
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-envelope mr-1"></i>Send Unpaid Fee Reminder</h6>
+                        <span class="mini">Choose unpaid fees and send reminder email</span>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST">
+                            <input type="hidden" name="action" value="send_unpaid_fee_email">
+                            <div class="mb-3">
+                                <button type="button" class="btn btn-sm btn-primary unpaid-plan-filter-btn active" data-plan="all">All</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary unpaid-plan-filter-btn" data-plan="Term-wise">Term-wise</button>
+                                <button type="button" class="btn btn-sm btn-outline-info unpaid-plan-filter-btn" data-plan="Half-yearly">Half-yearly</button>
+                                <button type="button" class="btn btn-sm btn-outline-success unpaid-plan-filter-btn" data-plan="Yearly">Yearly</button>
+                                <button type="button" class="btn btn-sm btn-outline-dark unpaid-plan-filter-btn" data-plan="Additional">Additional</button>
+                            </div>
+                            <div class="mb-3" id="unpaidInstallmentFilters" style="display:none;">
+                                <div class="small text-muted mb-1">Select installment</div>
+                                <div id="unpaidTermFilters" style="display:none;">
+                                    <button type="button" class="btn btn-sm btn-outline-primary unpaid-inst-filter-btn active" data-inst="all">All Terms</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary unpaid-inst-filter-btn" data-inst="term 1">Term 1</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary unpaid-inst-filter-btn" data-inst="term 2">Term 2</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary unpaid-inst-filter-btn" data-inst="term 3">Term 3</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary unpaid-inst-filter-btn" data-inst="term 4">Term 4</button>
+                                </div>
+                                <div id="unpaidHalfFilters" style="display:none;">
+                                    <button type="button" class="btn btn-sm btn-outline-info unpaid-inst-filter-btn active" data-inst="all">All Halves</button>
+                                    <button type="button" class="btn btn-sm btn-outline-info unpaid-inst-filter-btn" data-inst="half 1">Half 1</button>
+                                    <button type="button" class="btn btn-sm btn-outline-info unpaid-inst-filter-btn" data-inst="half 2">Half 2</button>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group col-md-6">
+                                    <label>Subject Template</label>
+                                    <input type="text" name="email_subject" class="form-control" value="Unpaid Fee Reminder for {child_name}">
+                                </div>
+                                <div class="form-group col-md-6">
+                                    <label>Template Variables</label>
+                                    <div class="mini">{parent_name}, {child_name}, {plan_type}, {instalment_label}, {due_amount}, {status}</div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Email Body Template</label>
+                                <textarea name="email_body" rows="5" class="form-control">Dear {parent_name},
+
+This is a reminder that {child_name} has unpaid fee for {instalment_label} ({plan_type}).
+Amount due: ${due_amount}
+
+Please complete the payment in parent portal.
+
+Thank you.</textarea>
+                            </div>
+                            <div class="table-responsive mb-3" style="max-height:280px;">
+                                <table class="table table-sm table-bordered mb-0">
+                                    <thead class="thead-light">
+                                        <tr>
+                                            <th style="width:40px"><input type="checkbox" id="checkAllUnpaid"></th>
+                                            <th>Child</th><th>Parent Email</th><th>Plan</th><th>Instalment</th><th>Due</th><th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    <?php if (empty($unpaidEmailRows)): ?>
+                                        <tr><td colspan="7" class="text-center text-muted">No unpaid/rejected fee rows found.</td></tr>
+                                    <?php else: foreach ($unpaidEmailRows as $ur): ?>
+                                        <tr data-plan="<?= h((string)$ur['plan_type']) ?>" data-inst="<?= h(strtolower((string)$ur['instalment_label'])) ?>">
+                                            <td><input type="checkbox" name="payment_ids[]" value="<?= (int)$ur['id'] ?>" class="unpaid-check"></td>
+                                            <td><?= h((string)$ur['student_name']) ?></td>
+                                            <td><?= h((string)$ur['parent_email']) ?></td>
+                                            <td><?= h((string)$ur['plan_type']) ?></td>
+                                            <td><?= h((string)$ur['instalment_label']) ?></td>
+                                            <td>$<?= number_format((float)$ur['due_amount'],2) ?></td>
+                                            <td><span class="badge badge-<?= ((string)$ur['status'] === 'Rejected' ? 'danger' : 'warning') ?>"><?= h((string)$ur['status']) ?></span></td>
+                                        </tr>
+                                    <?php endforeach; endif; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane mr-1"></i>Send Reminder Email</button>
+                        </form>
+                    </div>
+                </div>
+
                 <?php if ($updateOnlyMode): ?>
                     <div class="card shadow mb-4">
                         <div class="card-header py-3 d-flex justify-content-between align-items-center">
@@ -1193,9 +1236,8 @@ if ($updateOnlyMode) {
                                                 </td>
                                                 <td><?= !empty($up['proof_path']) ? '<a href="'.h((string)$up['proof_path']).'" target="_blank">View</a>' : '—' ?></td>
                                                 <td class="nowrap">
-                                                    <input type="hidden" name="action" value="update_payment_row">
                                                     <input type="hidden" name="payment_id" value="<?= (int)$up['id'] ?>">
-                                                    <button class="btn btn-sm btn-primary" type="submit"><i class="fas fa-save mr-1"></i>Save</button>
+                                                    <button class="btn btn-sm btn-primary" type="submit" name="action" value="update_payment_row"><i class="fas fa-save mr-1"></i>Save</button>
                                                 </td>
                                             </form>
                                         </tr>
@@ -1409,17 +1451,80 @@ if ($updateOnlyMode) {
     <input type="hidden" name="new_status" id="new_status" value="">
 </form>
 
-<form id="editClassChargeForm" method="POST" style="display:none;">
-    <input type="hidden" name="class_charge_action" value="edit">
-    <input type="hidden" name="charge_id" id="edit_charge_id" value="">
-    <input type="hidden" name="charge_title" id="edit_charge_title" value="">
-    <input type="hidden" name="charge_amount" id="edit_charge_amount" value="">
-    <input type="hidden" name="charge_due_date" id="edit_charge_due_date" value="">
-    <input type="hidden" name="charge_description" id="edit_charge_description" value="">
-</form>
-
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const checkAllUnpaid = document.getElementById('checkAllUnpaid');
+    if (checkAllUnpaid) {
+        checkAllUnpaid.addEventListener('change', function () {
+            document.querySelectorAll('.unpaid-check').forEach(cb => { cb.checked = checkAllUnpaid.checked; });
+        });
+    }
+
+    // ---------- Unpaid reminder plan filter ----------
+    let currentUnpaidPlan = 'all';
+    let currentUnpaidInst = 'all';
+
+    function applyUnpaidPlanFilter(plan) {
+        const p = (plan || 'all').toLowerCase();
+        currentUnpaidPlan = p;
+        document.querySelectorAll('.unpaid-plan-filter-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelectorAll('.unpaid-plan-filter-btn').forEach(btn => {
+            const bPlan = ((btn.getAttribute('data-plan') || 'all') + '').toLowerCase();
+            if (bPlan === p) btn.classList.add('active');
+        });
+
+        document.querySelectorAll('table .unpaid-check').forEach(cb => {
+            cb.checked = false;
+        });
+        if (checkAllUnpaid) checkAllUnpaid.checked = false;
+
+        const wrap = document.getElementById('unpaidInstallmentFilters');
+        const termWrap = document.getElementById('unpaidTermFilters');
+        const halfWrap = document.getElementById('unpaidHalfFilters');
+        if (wrap && termWrap && halfWrap) {
+            wrap.style.display = (p === 'term-wise' || p === 'half-yearly') ? '' : 'none';
+            termWrap.style.display = (p === 'term-wise') ? '' : 'none';
+            halfWrap.style.display = (p === 'half-yearly') ? '' : 'none';
+        }
+        currentUnpaidInst = 'all';
+        document.querySelectorAll('.unpaid-inst-filter-btn').forEach(btn => btn.classList.remove('active'));
+        const defaultInstBtn = (p === 'half-yearly')
+            ? document.querySelector('#unpaidHalfFilters .unpaid-inst-filter-btn[data-inst="all"]')
+            : document.querySelector('#unpaidTermFilters .unpaid-inst-filter-btn[data-inst="all"]');
+        if (defaultInstBtn) defaultInstBtn.classList.add('active');
+
+        applyUnpaidRowsFilter();
+    }
+
+    function applyUnpaidRowsFilter() {
+        document.querySelectorAll('tr[data-plan]').forEach(tr => {
+            const rowPlan = ((tr.getAttribute('data-plan') || '') + '').toLowerCase();
+            const rowInst = ((tr.getAttribute('data-inst') || '') + '').toLowerCase();
+            const planOk = (currentUnpaidPlan === 'all' || rowPlan === currentUnpaidPlan);
+            const instOk = (currentUnpaidInst === 'all' || rowInst.indexOf(currentUnpaidInst) !== -1);
+            tr.style.display = (planOk && instOk) ? '' : 'none';
+        });
+    }
+    document.querySelectorAll('.unpaid-plan-filter-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            applyUnpaidPlanFilter((this.getAttribute('data-plan') || 'all'));
+        });
+    });
+    document.querySelectorAll('.unpaid-inst-filter-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const group = this.closest('#unpaidHalfFilters, #unpaidTermFilters');
+            if (group) group.querySelectorAll('.unpaid-inst-filter-btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            currentUnpaidInst = ((this.getAttribute('data-inst') || 'all') + '').toLowerCase();
+            if (checkAllUnpaid) checkAllUnpaid.checked = false;
+            document.querySelectorAll('table .unpaid-check').forEach(cb => { cb.checked = false; });
+            applyUnpaidRowsFilter();
+        });
+    });
+    applyUnpaidPlanFilter('all');
+
     // ---------- Payment method tabs ----------
     const methodPills = document.querySelectorAll('.js-method-pill');
     const planSections = document.querySelectorAll('.fee-plan-section');
@@ -1544,70 +1649,6 @@ document.addEventListener('DOMContentLoaded', function () {
             const name = this.getAttribute('data-name') || 'proof';
             if (!path) return;
             openProofModal(path, type, name);
-        });
-    });
-
-    // ---------- Edit additional class charge ----------
-    document.querySelectorAll('.class-charge-edit-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const chargeId = this.getAttribute('data-charge-id') || '';
-            const title = this.getAttribute('data-charge-title') || '';
-            const amount = this.getAttribute('data-charge-amount') || '';
-            const due = this.getAttribute('data-charge-due') || '';
-            const desc = this.getAttribute('data-charge-desc') || '';
-
-            Swal.fire({
-                title: 'Edit Additional Fee',
-                html: `
-                    <div class="text-left">
-                        <label class="mini mb-1">Charge Name</label>
-                        <input id="swChargeTitle" class="form-control mb-2" maxlength="120">
-                        <label class="mini mb-1">Amount</label>
-                        <input id="swChargeAmount" type="number" step="0.01" min="0.01" class="form-control mb-2">
-                        <label class="mini mb-1">Due Date</label>
-                        <input id="swChargeDue" type="date" class="form-control mb-2">
-                        <label class="mini mb-1">Description</label>
-                        <input id="swChargeDesc" class="form-control" maxlength="500">
-                    </div>
-                `,
-                showCancelButton: true,
-                confirmButtonText: 'Save Changes',
-                cancelButtonText: 'Cancel',
-                didOpen: () => {
-                    const t = document.getElementById('swChargeTitle');
-                    const a = document.getElementById('swChargeAmount');
-                    const d = document.getElementById('swChargeDue');
-                    const x = document.getElementById('swChargeDesc');
-                    if (t) t.value = title;
-                    if (a) a.value = amount;
-                    if (d) d.value = due;
-                    if (x) x.value = desc;
-                },
-                preConfirm: () => {
-                    const cTitle = (document.getElementById('swChargeTitle')?.value || '').trim();
-                    const cAmountRaw = (document.getElementById('swChargeAmount')?.value || '').trim();
-                    const cAmount = parseFloat(cAmountRaw);
-                    const cDue = (document.getElementById('swChargeDue')?.value || '').trim();
-                    const cDesc = (document.getElementById('swChargeDesc')?.value || '').trim();
-                    if (!cTitle) {
-                        Swal.showValidationMessage('Charge name is required.');
-                        return false;
-                    }
-                    if (!(cAmount > 0)) {
-                        Swal.showValidationMessage('Amount must be greater than zero.');
-                        return false;
-                    }
-                    return { cTitle, cAmountRaw, cDue, cDesc };
-                }
-            }).then((res) => {
-                if (!res.isConfirmed || !res.value) return;
-                document.getElementById('edit_charge_id').value = chargeId;
-                document.getElementById('edit_charge_title').value = res.value.cTitle;
-                document.getElementById('edit_charge_amount').value = res.value.cAmountRaw;
-                document.getElementById('edit_charge_due_date').value = res.value.cDue;
-                document.getElementById('edit_charge_description').value = res.value.cDesc;
-                document.getElementById('editClassChargeForm').submit();
-            });
         });
     });
 

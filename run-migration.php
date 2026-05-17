@@ -118,10 +118,10 @@ function m_h(string $v): string {
                         <p class="mb-3 text-muted">
                             This runs SQL files in <code>/migrations</code> that are not yet recorded in <code>db_migrations</code>.
                         </p>
-                        <form method="POST">
+                        <form method="POST" data-confirm="Run pending migrations now?">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="run_pending">
-                            <button type="submit" class="btn btn-primary" onclick="return confirm('Run pending migrations now?');">
+                            <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-play mr-1"></i> Run Pending Migrations
                             </button>
                         </form>
@@ -186,4 +186,3 @@ function m_h(string $v): string {
 </div>
 </body>
 </html>
-

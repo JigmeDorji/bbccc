@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                                placeholder="PIN for bulk save"
                                pattern="\d{4,}"
                                inputmode="numeric">
-                        <form method="POST" class="form-inline" onsubmit="return confirm('Set this PIN?')">
+                        <form method="POST" class="form-inline" data-confirm="Set this PIN?">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="set_pin">
                             <input type="hidden" name="parent_id" value="<?= $p['id'] ?>">
@@ -190,7 +190,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                             <button class="btn btn-primary btn-sm mr-1"><i class="fas fa-save"></i></button>
                         </form>
                         <?php if ($p['pin_hash']): ?>
-                        <form method="POST" class="d-inline mt-1" onsubmit="return confirm('Clear PIN for this parent?')">
+                        <form method="POST" class="d-inline mt-1" data-confirm="Clear PIN for this parent?">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="clear_pin">
                             <input type="hidden" name="parent_id" value="<?= $p['id'] ?>">
@@ -212,7 +212,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 <?php include 'include/admin-footer.php'; ?>
 </div>
 </div>
-<form method="POST" id="bulkPinSubmitForm" style="display:none;">
+<form method="POST" id="bulkPinSubmitForm" style="display:none;" data-confirm="Save PIN for selected parents?">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="bulk_set_pin">
     <div id="bulkPinHiddenInputs"></div>
@@ -249,8 +249,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     if (bulkSaveBtn && bulkForm && bulkHidden) {
         bulkSaveBtn.addEventListener('click', function () {
-            if (!confirm('Save PIN for selected parents?')) return;
-
             const selected = Array.from(document.querySelectorAll('.bulk-parent-check:checked'));
             bulkHidden.innerHTML = '';
             selected.forEach((cb) => {

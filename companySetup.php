@@ -184,7 +184,7 @@ echo "<script>
                                         <td><?= $row['gst'] ?></td>
                                         <td>
                                             <a href="companySetup?edit=<?= $row['companyID'] ?>" class="btn btn-info btn-sm">Edit</a>
-                                            <a href="companySetup?delete=<?= $row['companyID'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this company?')">Delete</a>
+                                            <a href="companySetup?delete=<?= $row['companyID'] ?>" class="btn btn-danger btn-sm" data-confirm="Delete this company?">Delete</a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>

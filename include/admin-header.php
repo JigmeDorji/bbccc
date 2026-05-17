@@ -89,6 +89,7 @@ $_pageTitles = [
     'dzoClassManagement'   => 'Child Registration',
     'dzongkha-classroom'   => 'Dzongkha Classroom',
     'feesManagement'       => 'Fees Management',
+    'manual-payments'      => 'Manual Payments',
     'feesSetting'          => 'Fees Settings',
     'attendanceManagement' => 'Attendance',
     'attendance-records'  => 'Attendance Records',

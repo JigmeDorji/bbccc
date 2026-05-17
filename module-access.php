@@ -283,7 +283,7 @@ if ($selectedUser) {
                                 </div>
                             </form>
 
-                            <form method="POST" class="mt-2" onsubmit="return confirm('Reset all overrides for this user?');">
+                            <form method="POST" class="mt-2" data-confirm="Reset all overrides for this user?">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="reset_overrides">
                                 <input type="hidden" name="target_user_id" value="<?= ma_h((string)$selectedUser['userid']) ?>">

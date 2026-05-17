@@ -1227,9 +1227,8 @@ if ($updateOnlyMode) {
                                                     <?php endif; ?>
                                                 </td>
                                                 <td class="nowrap">
-                                                    <input type="hidden" name="action" value="update_payment_row">
                                                     <input type="hidden" name="payment_id" value="<?= (int)$up['id'] ?>">
-                                                    <button class="btn btn-sm btn-primary" type="submit"><i class="fas fa-save mr-1"></i>Save</button>
+                                                    <button class="btn btn-sm btn-primary" type="submit" name="action" value="update_payment_row"><i class="fas fa-save mr-1"></i>Save</button>
                                                 </td>
                                             </form>
                                         </tr>
@@ -1402,12 +1401,12 @@ if ($updateOnlyMode) {
                                                                 <div class="btn-group btn-group-sm" role="group">
                                                                     <a class="btn btn-success"
                                                                        href="feesManagement?fee_action=approve&fee_id=<?php echo (int)$feeId; ?>"
-                                                                       onclick="return confirm('Approve this installment?');">
+                                                                       data-confirm="Approve this installment?">
                                                                         Approve
                                                                     </a>
                                                                     <a class="btn btn-warning"
                                                                        href="feesManagement?fee_action=reject&fee_id=<?php echo (int)$feeId; ?>"
-                                                                       onclick="return confirm('Reject this installment?');">
+                                                                       data-confirm="Reject this installment?">
                                                                         Reject
                                                                     </a>
                                                                 </div>

@@ -172,7 +172,7 @@ echo "<script>
                                         <td>
                                             <a href="?edit=<?= urlencode($p['projectID']); ?>" class="btn btn-sm btn-info">Edit</a>
                                             <a href="?delete=<?= urlencode($p['projectID']); ?>" class="btn btn-sm btn-danger"
-                                               onclick="return confirm('Delete this project?');">Delete</a>
+                                               data-confirm="Delete this project?">Delete</a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>

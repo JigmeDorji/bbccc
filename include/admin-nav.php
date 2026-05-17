@@ -403,7 +403,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
     <?php if (!isParent() && !isTeacher() && !isPatron()) { ?>
         <?php
             $websiteActive = in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','serviceSetup.php','ourTeamSetup.php','viewFeedback.php'], true);
-            $dzoActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','update-payments.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php','admin-class-students.php'], true);
+            $dzoActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','update-payments.php','manual-payments.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php','admin-class-students.php'], true);
             $eventsActive = in_array($currentPage, ['eventManagement.php','bookingManagement.php'], true);
             $adminSettingsActive = in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php','audit-logs.php','run-migration.php','module-access.php'], true);
             $canWebsiteManage = function_exists('bbcc_can') ? bbcc_can('website', 'manage') : false;
@@ -450,8 +450,9 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                 <div class="bg-white py-2 collapse-inner rounded">
                     <?php
                         $dzoEnrollActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','admin-assign-class.php'], true);
-                        $dzoFeesActive = in_array($currentPage, ['feesManagement.php','update-payments.php','admin-fee-verification.php'], true);
-                        $dzoOpsActive = in_array($currentPage, ['dzongkha-classroom.php','attendanceManagement.php','attendance-records.php','parent-email.php','admin-attendance.php','admin-class-students.php'], true);
+                        $dzoFeesActive = in_array($currentPage, ['feesManagement.php','update-payments.php','manual-payments.php','admin-fee-verification.php','feesSetting.php'], true);
+                        $dzoOpsActive = in_array($currentPage, ['dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-students.php'], true);
+                        $dzoAttendanceActive = in_array($currentPage, ['attendanceManagement.php','attendance-records.php'], true);
                         $dzoConfigActive = in_array($currentPage, ['admin-class-setup.php','feesSetting.php','admin-parent-pins.php'], true);
                     ?>
 
@@ -467,7 +468,9 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                     <a class="collapse-item dzo-subgroup-trigger <?= $dzoFeesActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseDzoFees" aria-expanded="<?= $dzoFeesActive ? 'true' : 'false' ?>" aria-controls="collapseDzoFees">Fees Management</a>
                     <div id="collapseDzoFees" class="collapse dzo-subgroup-links <?= $dzoFeesActive ? 'show' : '' ?>" data-parent="#collapseOrders">
                         <a class="collapse-item <?= ($currentPage == 'feesManagement.php') ? 'active' : '' ?>" href="feesManagement"><i class="fas fa-money-check-alt fa-sm mr-1 text-muted"></i> Fees Overview</a>
+                        <a class="collapse-item <?= ($currentPage == 'feesSetting.php') ? 'active' : '' ?>" href="feesSetting"><i class="fas fa-cog fa-sm mr-1 text-muted"></i> Fees Settings</a>
                         <a class="collapse-item <?= ($currentPage == 'update-payments.php') ? 'active' : '' ?>" href="update-payments"><i class="fas fa-edit fa-sm mr-1 text-muted"></i> Update Payments</a>
+                        <a class="collapse-item <?= ($currentPage == 'manual-payments.php') ? 'active' : '' ?>" href="manual-payments"><i class="fas fa-hand-holding-usd fa-sm mr-1 text-muted"></i> Manual Payments</a>
                         <a class="collapse-item <?= ($currentPage == 'admin-fee-verification.php') ? 'active' : '' ?>" href="admin-fee-verification"><i class="fas fa-check-double fa-sm mr-1 text-muted"></i> Verify Payments</a>
                     </div>
 
@@ -475,18 +478,22 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                     <a class="collapse-item dzo-subgroup-trigger <?= $dzoOpsActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseDzoOps" aria-expanded="<?= $dzoOpsActive ? 'true' : 'false' ?>" aria-controls="collapseDzoOps">Classroom Operations</a>
                     <div id="collapseDzoOps" class="collapse dzo-subgroup-links <?= $dzoOpsActive ? 'show' : '' ?>" data-parent="#collapseOrders">
                         <a class="collapse-item <?= ($currentPage == 'dzongkha-classroom.php') ? 'active' : '' ?>" href="dzongkha-classroom"><i class="fas fa-bullhorn fa-sm mr-1 text-muted"></i> Dzongkha Classroom</a>
-                        <a class="collapse-item <?= ($currentPage == 'attendanceManagement.php') ? 'active' : '' ?>" href="attendanceManagement"><i class="fas fa-clipboard-check fa-sm mr-1 text-muted"></i> Attendance</a>
-                        <a class="collapse-item <?= ($currentPage == 'attendance-records.php') ? 'active' : '' ?>" href="attendance-records"><i class="fas fa-table fa-sm mr-1 text-muted"></i> Attendance Records</a>
                         <a class="collapse-item <?= ($currentPage == 'parent-email.php') ? 'active' : '' ?>" href="parent-email"><i class="fas fa-envelope-open-text fa-sm mr-1 text-muted"></i> Send Parent Email</a>
                         <a class="collapse-item <?= ($currentPage == 'admin-attendance.php') ? 'active' : '' ?>" href="admin-attendance"><i class="fas fa-door-open fa-sm mr-1 text-muted"></i> Kiosk Sign In/Out</a>
                         <a class="collapse-item <?= ($currentPage == 'admin-class-students.php') ? 'active' : '' ?>" href="admin-class-students"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Class Student List</a>
+                    </div>
+
+                    <h6 class="collapse-header dzo-group-header d-none d-lg-block">Attendance Management</h6>
+                    <a class="collapse-item dzo-subgroup-trigger <?= $dzoAttendanceActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseDzoAttendance" aria-expanded="<?= $dzoAttendanceActive ? 'true' : 'false' ?>" aria-controls="collapseDzoAttendance">Attendance Management</a>
+                    <div id="collapseDzoAttendance" class="collapse dzo-subgroup-links <?= $dzoAttendanceActive ? 'show' : '' ?>" data-parent="#collapseOrders">
+                        <a class="collapse-item <?= ($currentPage == 'attendanceManagement.php') ? 'active' : '' ?>" href="attendanceManagement"><i class="fas fa-clipboard-check fa-sm mr-1 text-muted"></i> Attendance</a>
+                        <a class="collapse-item <?= ($currentPage == 'attendance-records.php') ? 'active' : '' ?>" href="attendance-records"><i class="fas fa-table fa-sm mr-1 text-muted"></i> Attendance Records</a>
                     </div>
 
                     <h6 class="collapse-header dzo-group-header d-none d-lg-block">Configuration</h6>
                     <a class="collapse-item dzo-subgroup-trigger <?= $dzoConfigActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseDzoConfig" aria-expanded="<?= $dzoConfigActive ? 'true' : 'false' ?>" aria-controls="collapseDzoConfig">Configuration</a>
                     <div id="collapseDzoConfig" class="collapse dzo-subgroup-links <?= $dzoConfigActive ? 'show' : '' ?>" data-parent="#collapseOrders">
                         <a class="collapse-item <?= ($currentPage === 'admin-class-setup.php') ? 'active' : '' ?>" href="admin-class-setup"><i class="fas fa-chalkboard fa-sm mr-1 text-muted"></i> Classes & Teachers</a>
-                        <a class="collapse-item <?= ($currentPage == 'feesSetting.php') ? 'active' : '' ?>" href="feesSetting"><i class="fas fa-dollar-sign fa-sm mr-1 text-muted"></i> Fees Settings</a>
                         <a class="collapse-item <?= ($currentPage == 'admin-parent-pins.php') ? 'active' : '' ?>" href="admin-parent-pins"><i class="fas fa-key fa-sm mr-1 text-muted"></i> Parent Kiosk PINs</a>
                     </div>
                 </div>

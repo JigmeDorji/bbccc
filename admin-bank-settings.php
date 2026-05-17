@@ -195,7 +195,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                         </td>
                         <td>
                             <a href="?edit=<?= $b['id'] ?>" class="btn btn-info btn-sm"><i class="fas fa-edit"></i></a>
-                            <form method="POST" class="d-inline" onsubmit="return confirm('Delete this bank account?')">
+                            <form method="POST" class="d-inline" data-confirm="Delete this bank account?">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="delete">
                                 <input type="hidden" name="bank_id" value="<?= $b['id'] ?>">
