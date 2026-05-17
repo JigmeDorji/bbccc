@@ -228,6 +228,66 @@ function normalize_status($v): string {
     return strtolower(trim((string)$v));
 }
 
+function legacy_code_to_pcm_label(string $code): string {
+    return match (strtoupper(trim($code))) {
+        'TERM1' => 'Term 1',
+        'TERM2' => 'Term 2',
+        'TERM3' => 'Term 3',
+        'TERM4' => 'Term 4',
+        'HALF1' => 'Half 1',
+        'HALF2' => 'Half 2',
+        'YEARLY' => 'Yearly',
+        default => ''
+    };
+}
+
+function sync_legacy_fee_to_pcm(PDO $pdo, int $legacyFeeId): void {
+    $legacy = $pdo->prepare("SELECT * FROM fees_payments WHERE id = :id LIMIT 1");
+    $legacy->execute([':id' => $legacyFeeId]);
+    $r = $legacy->fetch(PDO::FETCH_ASSOC);
+    if (!$r) return;
+
+    $sid = (int)($r['student_id'] ?? 0);
+    $label = legacy_code_to_pcm_label((string)($r['installment_code'] ?? ''));
+    if ($sid <= 0 || $label === '') return;
+
+    $legacyStatus = strtolower(trim((string)($r['status'] ?? '')));
+    $pcmStatus = match ($legacyStatus) {
+        'approved', 'verified' => 'Verified',
+        'rejected' => 'Rejected',
+        'pending' => 'Pending',
+        default => 'Unpaid'
+    };
+    $due = (float)($r['due_amount'] ?? 0);
+    $paid = ($pcmStatus === 'Verified') ? $due : 0.0;
+    $ref = trim((string)($r['payment_reference'] ?? ''));
+    $by = (string)($r['verified_by'] ?? '');
+    $at = (string)($r['verified_at'] ?? '');
+
+    $upd = $pdo->prepare("
+        UPDATE pcm_fee_payments
+        SET due_amount = :due,
+            paid_amount = :paid,
+            payment_ref = :ref,
+            status = :st,
+            verified_by = :vb,
+            verified_at = :va
+        WHERE student_id = :sid
+          AND instalment_label = :lbl
+        LIMIT 1
+    ");
+    $upd->execute([
+        ':due' => $due,
+        ':paid' => $paid,
+        ':ref' => ($ref !== '' ? $ref : null),
+        ':st' => $pcmStatus,
+        ':vb' => ($pcmStatus === 'Pending' || $pcmStatus === 'Unpaid') ? null : ($by !== '' ? $by : null),
+        ':va' => ($pcmStatus === 'Pending' || $pcmStatus === 'Unpaid' || $at === '' || $at === '0000-00-00 00:00:00') ? null : $at,
+        ':sid' => $sid,
+        ':lbl' => $label
+    ]);
+}
+
 fm_ensure_class_charge_schema($pdo);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['class_charge_action'])) {
@@ -400,6 +460,7 @@ if (isset($_GET['fee_action'], $_GET['fee_id'])) {
                 WHERE id = :id
             ");
             $stmt->execute([':st'=>$newStatus, ':vb'=>$verifiedBy, ':id'=>$feeId]);
+            sync_legacy_fee_to_pcm($pdo, $feeId);
 
             $message = "Installment {$newStatus} successfully.";
             $success = true;
@@ -442,6 +503,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
                 WHERE id = :id
             ");
             $stmt->execute([':st'=>$dbStatus, ':id'=>$feeId]);
+            sync_legacy_fee_to_pcm($pdo, $feeId);
         } else {
             $stmt = $pdo->prepare("
                 UPDATE fees_payments
@@ -451,6 +513,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
                 WHERE id = :id
             ");
             $stmt->execute([':st'=>$dbStatus, ':vb'=>$verifiedBy, ':id'=>$feeId]);
+            sync_legacy_fee_to_pcm($pdo, $feeId);
         }
 
         $message = "Installment updated successfully.";
