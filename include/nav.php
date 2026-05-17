@@ -28,7 +28,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
         <a href="index" class="bbcc-navbar__brand">
             <img src="bbccassests/img/logo/logo5.jpg" alt="BBCC Logo">
             <div class="bbcc-navbar__brand-text">
-                Bhutanese Buddhist &amp; Cultural Center
+                Bhutanese Buddhist &amp; Cultural Centre
                 <small>Canberra, Australian Capital Territory</small>
             </div>
         </a>
