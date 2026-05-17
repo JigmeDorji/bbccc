@@ -24,3 +24,6 @@
 2026-04-08T09:12:59+00:00 ADMIN MAIL OK: enrolment notify to tsheringkoney@gmail.com for child Palden Dorji
 2026-04-08T09:29:23+00:00 ADMIN MAIL OK: absence notify to tsheringkoney@gmail.com for child Palden Dorji
 2026-04-08T12:01:22+00:00 ADMIN MAIL OK: absence notify to tsheringkoney@gmail.com for child Karma Lhazin Tshering
+2026-05-17T04:04:51+00:00 MAIL ERROR: SMTP Error: Could not connect to SMTP host. Failed to connect to server SMTP server error: Failed to connect to server SMTP code: 60 Additional SMTP info: Operation timed out | EX: SMTP Error: Could not connect to SMTP host. Failed to connect to server
+2026-05-17T04:04:51+00:00 ADMIN MAIL FAIL: student registration notify to tsheringkoney@gmail.com for child Kayden Yeetsho Wangchuk
+2026-05-17T04:04:55+00:00 MAIL ERROR: SMTP Error: Could not connect to SMTP host. Failed to connect to server SMTP server error: Failed to connect to server SMTP code: 60 Additional SMTP info: Operation timed out | EX: SMTP Error: Could not connect to SMTP host. Failed to connect to server
