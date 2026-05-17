@@ -92,6 +92,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $eid = (int)$pdo->lastInsertId();
                     pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_enrolment_created_from_child_reg', (string)$reviewer, 'Created from child registration page.');
                 }
+
+                // Ensure fees tables can display this manual enrollment immediately.
+                $feeCountStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE enrolment_id = :eid");
+                $feeCountStmt->execute([':eid' => $eid]);
+                $feeCount = (int)$feeCountStmt->fetchColumn();
+                if ($feeCount === 0) {
+                    pcm_create_fee_rows($pdo, $eid, $studentDbId, $parentId, $plan, null);
+                    pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_fee_rows_created', (string)$reviewer, 'Fee instalment rows created for manual enrollment.');
+                }
                 $flash = 'Enrollment updated for <strong>' . h((string)$student['student_name']) . '</strong>.';
                 $ok = true;
             } elseif ($action === 'delete') {
