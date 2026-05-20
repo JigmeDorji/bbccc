@@ -315,14 +315,14 @@ body.bbcc-public {
     background: var(--gold-light); border-radius: 50%; z-index: -1; opacity: .5;
 }
 
-/* Hero Animations */
-@keyframes heroFadeUp { from { opacity:0; transform:translateY(30px); } to { opacity:1; transform:translateY(0); } }
-@keyframes heroScaleIn { from { opacity:0; transform:scale(1.1); } to { opacity:1; transform:scale(1); } }
-.bbcc-hero__slide.active .hero-badge { animation: heroFadeUp .6s .1s both; }
-.bbcc-hero__slide.active h1 { animation: heroFadeUp .6s .25s both; }
-.bbcc-hero__slide.active p { animation: heroFadeUp .6s .4s both; }
-.bbcc-hero__slide.active .bbcc-hero__actions { animation: heroFadeUp .6s .55s both; }
-.bbcc-hero__slide.active .bbcc-hero__image img { animation: heroScaleIn 1.2s .2s both; }
+/* Hero Animations: keep subtle motion, but avoid hiding LCP text/image on first paint */
+@keyframes heroSlideUp { from { transform:translateY(16px); } to { transform:translateY(0); } }
+@keyframes heroScaleIn { from { transform:scale(1.03); } to { transform:scale(1); } }
+.bbcc-hero__slide.active .hero-badge { animation: heroSlideUp .35s .03s both; }
+.bbcc-hero__slide.active h1 { animation: heroSlideUp .4s .05s both; }
+.bbcc-hero__slide.active p { animation: heroSlideUp .45s .1s both; }
+.bbcc-hero__slide.active .bbcc-hero__actions { animation: heroSlideUp .5s .12s both; }
+.bbcc-hero__slide.active .bbcc-hero__image img { animation: heroScaleIn .9s .05s both; }
 
 /* Hero Dots */
 .bbcc-hero__dots {

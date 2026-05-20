@@ -12,11 +12,17 @@ try {
             id INT AUTO_INCREMENT PRIMARY KEY,
             title VARCHAR(255) NOT NULL,
             description TEXT NULL,
+            original_name VARCHAR(255) NULL,
             file_path VARCHAR(255) NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
-    $downloadItems = $pdo->query("SELECT title, description, file_path FROM download_files ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+    try {
+        $pdo->exec("ALTER TABLE download_files ADD COLUMN original_name VARCHAR(255) NULL AFTER description");
+    } catch (Throwable $e) {
+        // ignore if column exists
+    }
+    $downloadItems = $pdo->query("SELECT title, description, original_name, file_path FROM download_files ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     $downloadItems = [];
 }
@@ -54,7 +60,7 @@ try {
                     </div>
                     <h3><?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8'); ?></h3>
                     <p><?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></p>
-                    <a class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" href="<?= htmlspecialchars((string)$item['file_path'], ENT_QUOTES, 'UTF-8'); ?>" download>
+                    <a class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" href="<?= htmlspecialchars((string)$item['file_path'], ENT_QUOTES, 'UTF-8'); ?>" download="<?= htmlspecialchars((string)($item['original_name'] ?? basename((string)$item['file_path'])), ENT_QUOTES, 'UTF-8'); ?>">
                         Download <i class="fa-solid fa-arrow-down"></i>
                     </a>
                 </div>

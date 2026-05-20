@@ -35,10 +35,16 @@ try {
             id INT AUTO_INCREMENT PRIMARY KEY,
             title VARCHAR(255) NOT NULL,
             description TEXT NULL,
+            original_name VARCHAR(255) NULL,
             file_path VARCHAR(255) NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+    try {
+        $pdo->exec("ALTER TABLE download_files ADD COLUMN original_name VARCHAR(255) NULL AFTER description");
+    } catch (Throwable $e) {
+        // ignore if column exists
+    }
 
     if (isset($_GET['delete'])) {
         $id = (int)$_GET['delete'];
@@ -85,6 +91,8 @@ try {
         $size = (int)$_FILES['download_file']['size'];
         if ($size > 15728640) throw new Exception("File too large. Max 15MB.");
 
+        $originalName = preg_replace('/[^\w.\- ]/u', '', $fileName);
+        if ($originalName === '') $originalName = 'download_file';
         $safeName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $fileName);
         $dirAbs = __DIR__ . '/uploads/downloads';
         if (!is_dir($dirAbs)) @mkdir($dirAbs, 0775, true);
@@ -94,10 +102,11 @@ try {
         if (!move_uploaded_file($tmp, $pathAbs)) throw new Exception("Failed to upload file.");
         $rel = 'uploads/downloads/' . $safeName;
 
-        $ins = $pdo->prepare("INSERT INTO download_files (title, description, file_path) VALUES (:title, :description, :file_path)");
+        $ins = $pdo->prepare("INSERT INTO download_files (title, description, original_name, file_path) VALUES (:title, :description, :original_name, :file_path)");
         $ins->execute([
             ':title' => $title,
             ':description' => $description,
+            ':original_name' => $originalName,
             ':file_path' => $rel,
         ]);
 
@@ -171,7 +180,7 @@ try {
                             <td><?= $i + 1 ?></td>
                             <td><?= htmlspecialchars((string)$f['title']) ?></td>
                             <td><?= htmlspecialchars((string)$f['description']) ?></td>
-                            <td><a href="<?= htmlspecialchars((string)$f['file_path']) ?>" target="_blank"><?= htmlspecialchars(basename((string)$f['file_path'])) ?></a></td>
+                            <td><a href="<?= htmlspecialchars((string)$f['file_path']) ?>" target="_blank"><?= htmlspecialchars((string)($f['original_name'] ?? basename((string)$f['file_path']))) ?></a></td>
                             <td><a href="downloadFileSetup?delete=<?= (int)$f['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this file?')"><i class="fas fa-trash"></i></a></td>
                         </tr>
                     <?php endforeach; ?>

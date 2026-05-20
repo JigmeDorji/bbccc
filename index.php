@@ -1,5 +1,6 @@
 <?php
 require_once "include/config.php";
+require_once "include/image_helpers.php";
 
 $message = "";
 $menus = [];
@@ -90,7 +91,17 @@ try {
                 </div>
             </div>
             <div class="bbcc-hero__image">
-                <img src="<?= htmlspecialchars($banner['imgUrl']) ?>" alt="<?= htmlspecialchars($banner['title']) ?>">
+                <?= bbcc_render_responsive_picture(
+                    (string)$banner['imgUrl'],
+                    (string)$banner['title'],
+                    [
+                        'sizes' => '(max-width: 991px) 100vw, 45vw',
+                        'loading' => 'eager',
+                        'decoding' => 'async',
+                        'fetchpriority' => ($i === 0 ? 'high' : 'auto'),
+                        'widths' => [640, 960, 1280, 1600],
+                    ]
+                ) ?>
             </div>
         </div>
     </div>
@@ -110,9 +121,27 @@ try {
         <div class="bbcc-about" style="margin-bottom:54px;">
             <div class="bbcc-about__image fade-up">
                 <?php if (!empty($schoolContent['imgUrl'])): ?>
-                <img src="<?= htmlspecialchars($schoolContent['imgUrl']) ?>" alt="Bhutanese Language and Culture School">
+                <?= bbcc_render_responsive_picture(
+                    (string)$schoolContent['imgUrl'],
+                    'Bhutanese Language and Culture School',
+                    [
+                        'sizes' => '(max-width: 991px) 100vw, 45vw',
+                        'loading' => 'lazy',
+                        'decoding' => 'async',
+                        'widths' => [480, 768, 1200],
+                    ]
+                ) ?>
                 <?php else: ?>
-                <img src="bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png" alt="Bhutanese Language and Culture School">
+                <?= bbcc_render_responsive_picture(
+                    'bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png',
+                    'Bhutanese Language and Culture School',
+                    [
+                        'sizes' => '(max-width: 991px) 100vw, 45vw',
+                        'loading' => 'lazy',
+                        'decoding' => 'async',
+                        'widths' => [480, 768, 1200],
+                    ]
+                ) ?>
                 <?php endif; ?>
             </div>
             <div class="bbcc-about__content fade-up">
@@ -166,9 +195,27 @@ try {
         <div class="bbcc-about">
             <div class="bbcc-about__image fade-up">
                 <?php if (!empty($aboutContent['imgUrl'])): ?>
-                <img src="<?= htmlspecialchars($aboutContent['imgUrl']) ?>" alt="Beautiful view of Bhutan">
+                <?= bbcc_render_responsive_picture(
+                    (string)$aboutContent['imgUrl'],
+                    'Beautiful view of Bhutan',
+                    [
+                        'sizes' => '(max-width: 991px) 100vw, 45vw',
+                        'loading' => 'lazy',
+                        'decoding' => 'async',
+                        'widths' => [480, 768, 1200],
+                    ]
+                ) ?>
                 <?php else: ?>
-                <img src="bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png" alt="Beautiful view of Bhutan">
+                <?= bbcc_render_responsive_picture(
+                    'bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png',
+                    'Beautiful view of Bhutan',
+                    [
+                        'sizes' => '(max-width: 991px) 100vw, 45vw',
+                        'loading' => 'lazy',
+                        'decoding' => 'async',
+                        'widths' => [480, 768, 1200],
+                    ]
+                ) ?>
                 <?php endif; ?>
                 <div class="experience-badge">
                     <span class="num">BBCC</span>
@@ -209,7 +256,16 @@ try {
             ?>
             <a href="event_detail?id=<?= $menu['id'] ?>" class="bbcc-event-card fade-up">
                 <div class="bbcc-event-card__image">
-                    <img src="<?= htmlspecialchars($menu['menuImgUrl']) ?>" alt="<?= htmlspecialchars($menu['menuName']) ?>">
+                    <?= bbcc_render_responsive_picture(
+                        (string)$menu['menuImgUrl'],
+                        (string)$menu['menuName'],
+                        [
+                            'sizes' => '(max-width: 576px) 100vw, (max-width: 991px) 50vw, 33vw',
+                            'loading' => 'lazy',
+                            'decoding' => 'async',
+                            'widths' => [360, 640, 960],
+                        ]
+                    ) ?>
                 </div>
                 <div class="bbcc-event-card__body">
                     <span class="bbcc-event-card__date">
@@ -290,6 +346,5 @@ try {
 
 </body>
 </html>
-
 
 
