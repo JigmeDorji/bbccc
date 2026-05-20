@@ -30,6 +30,25 @@ require_once "include/config.php";
 <section class="bbcc-section">
     <div class="bbcc-container">
         <div class="section-header fade-up">
+            <span class="section-badge"><i class="fa-solid fa-school"></i> Language Program</span>
+            <h2>Bhutanese Language and <span>Culture School</span></h2>
+            <p>
+                Structured weekly classes that teach Dzongkha language, Bhutanese culture, and community values for children and adults.
+            </p>
+        </div>
+
+        <div class="bbcc-services-extended" style="grid-template-columns:minmax(0,1fr);max-width:760px;margin:0 auto;">
+            <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
+                <div class="bbcc-service-card-ext__icon"><i class="fa-solid fa-chalkboard-user"></i></div>
+                <h3><a href="bhutanese-language-and-culture-school" style="color:inherit;text-decoration:none;">Bhutanese Language and Culture School</a></h3>
+                <p>Comprehensive language and culture learning program covering Dzongkha reading, writing, speaking, Bhutanese traditions, and values.</p>
+                <a href="bhutanese-language-and-culture-school" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#881b12;text-decoration:none;">View School Details <i class="fa-solid fa-arrow-right"></i></a>
+            </div>
+        </div>
+
+        <hr style="margin:42px 0;border:none;border-top:1px solid #e5e7eb;">
+
+        <div class="section-header fade-up" style="margin-top:0;">
             <span class="section-badge"><i class="fa-solid fa-hands-praying"></i> Core Services</span>
             <h2>Our Four <span>Core Services</span></h2>
             <p>BBCC provides key spiritual and community services for Bhutanese families and the wider Canberra community.</p>
@@ -65,24 +84,6 @@ require_once "include/config.php";
             </div>
         </div>
 
-        <hr style="margin:42px 0;border:none;border-top:1px solid #e5e7eb;">
-
-        <div class="section-header fade-up" style="margin-top:0;">
-            <span class="section-badge"><i class="fa-solid fa-school"></i> Language Program</span>
-            <h2>Bhutanese Language and <span>Culture School</span></h2>
-            <p>
-                Structured weekly classes that teach Dzongkha language, Bhutanese culture, and community values for children and adults.
-            </p>
-        </div>
-
-        <div class="bbcc-services-extended" style="grid-template-columns:minmax(0,1fr);max-width:760px;margin:0 auto;">
-            <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
-                <div class="bbcc-service-card-ext__icon"><i class="fa-solid fa-chalkboard-user"></i></div>
-                <h3><a href="bhutanese-language-and-culture-school" style="color:inherit;text-decoration:none;">Bhutanese Language and Culture School</a></h3>
-                <p>Comprehensive language and culture learning program covering Dzongkha reading, writing, speaking, Bhutanese traditions, and values.</p>
-                <a href="bhutanese-language-and-culture-school" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#881b12;text-decoration:none;">View School Details <i class="fa-solid fa-arrow-right"></i></a>
-            </div>
-        </div>
     </div>
 </section>
 

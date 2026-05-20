@@ -24,6 +24,7 @@ echo '
                     <li><a href="about-us">About Us</a></li>
                     <li><a href="services">Services</a></li>
                     <li><a href="events">Events</a></li>
+                    <li><a href="downloads">Downloads</a></li>
                 </ul>
             </div>
 

@@ -180,6 +180,25 @@ body.bbcc-public {
     width: 20px; height: 3px; background: var(--brand); border-radius: 3px;
 }
 
+.bbcc-nav__has-submenu { position: relative; }
+.bbcc-nav__submenu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 220px;
+    list-style: none;
+    margin: 0;
+    padding: 8px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--gray-200);
+    background: var(--white);
+    box-shadow: var(--shadow-md);
+    z-index: 1200;
+}
+.bbcc-nav__has-submenu:hover .bbcc-nav__submenu { display: block; }
+.bbcc-nav__submenu li a { padding: 10px 12px; }
+
 .bbcc-nav__login {
     display: inline-flex; align-items: center; gap: 8px;
     background: var(--brand); color: #fff !important; padding: 10px 24px !important;
@@ -212,6 +231,17 @@ body.bbcc-public {
     .bbcc-nav li a { padding: 14px 16px; border-radius: var(--radius-sm); }
     .bbcc-nav li.active a::after { display: none; }
     .bbcc-nav__login { margin-top: 8px; justify-content: center; }
+    .bbcc-nav__submenu {
+        display: block;
+        position: static;
+        min-width: 0;
+        margin: 6px 0 0 12px;
+        padding: 0;
+        border: 0;
+        box-shadow: none;
+        background: transparent;
+    }
+    .bbcc-nav__submenu li a { padding: 10px 14px; }
 }
 @media (max-width: 576px) {
     .bbcc-topbar { display: block; padding: 6px 0; }

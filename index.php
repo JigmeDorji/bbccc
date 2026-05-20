@@ -4,6 +4,8 @@ require_once "include/config.php";
 $message = "";
 $menus = [];
 $banners = [];
+$schoolContent = [];
+$aboutContent = [];
 
 try {
     $pdo = new PDO("mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME . ";charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
@@ -12,9 +14,25 @@ try {
     ]);
 
     // Fetch banner data
-    $stmt = $pdo->prepare("SELECT * FROM banner ORDER BY id ASC");
+    $stmt = $pdo->prepare("SELECT * FROM banner ORDER BY COALESCE(sort_order, id) ASC, id ASC");
     $stmt->execute();
     $banners = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $stmt = $pdo->prepare("SELECT * FROM about ORDER BY id DESC LIMIT 1");
+    $stmt->execute();
+    $aboutContent = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS school_content (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            description TEXT NULL,
+            imgUrl VARCHAR(255) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $stmt = $pdo->prepare("SELECT * FROM school_content ORDER BY id DESC LIMIT 1");
+    $stmt->execute();
+    $schoolContent = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
     // Fetch menu/event data
     $stmt = $pdo->prepare("SELECT * FROM menu");
@@ -89,6 +107,28 @@ try {
 <!-- ═══ FEATURES ═══ -->
 <section class="bbcc-section">
     <div class="bbcc-container">
+        <div class="bbcc-about" style="margin-bottom:54px;">
+            <div class="bbcc-about__image fade-up">
+                <?php if (!empty($schoolContent['imgUrl'])): ?>
+                <img src="<?= htmlspecialchars($schoolContent['imgUrl']) ?>" alt="Bhutanese Language and Culture School">
+                <?php else: ?>
+                <img src="bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png" alt="Bhutanese Language and Culture School">
+                <?php endif; ?>
+            </div>
+            <div class="bbcc-about__content fade-up">
+                <span class="section-badge"><i class="fa-solid fa-school"></i> Language Program</span>
+                <h2>Bhutanese Language and <span>Culture School</span></h2>
+                <?php if (!empty($schoolContent['description'])): ?>
+                <p><?= nl2br(htmlspecialchars($schoolContent['description'])) ?></p>
+                <?php else: ?>
+                <p>Weekly structured classes in Dzongkha language, Bhutanese culture, and community values for children and adults.</p>
+                <?php endif; ?>
+                <a href="bhutanese-language-and-culture-school" class="bbcc-btn bbcc-btn--primary bbcc-btn--sm" style="margin-top:16px;">
+                    View School Details <i class="fa-solid fa-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+
         <div class="section-header fade-up">
             <span class="section-badge"><i class="fa-solid fa-hands-praying"></i> What We Do</span>
             <h2>Our Core <span>Services</span></h2>
@@ -125,7 +165,11 @@ try {
     <div class="bbcc-container">
         <div class="bbcc-about">
             <div class="bbcc-about__image fade-up">
+                <?php if (!empty($aboutContent['imgUrl'])): ?>
+                <img src="<?= htmlspecialchars($aboutContent['imgUrl']) ?>" alt="Beautiful view of Bhutan">
+                <?php else: ?>
                 <img src="bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png" alt="Beautiful view of Bhutan">
+                <?php endif; ?>
                 <div class="experience-badge">
                     <span class="num">BBCC</span>
                     <span class="label">Canberra, ACT</span>
@@ -246,11 +290,6 @@ try {
 
 </body>
 </html>
-
-
-
-
-
 
 
 

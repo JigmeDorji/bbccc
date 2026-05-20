@@ -11,7 +11,19 @@ if (!is_admin_role() && !is_website_admin_role()) {
 $message = "";
 $msgType = "success";
 $existing_description = "";
-$existing_imgUrl = "";
+$default_about_img = "bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png";
+$existing_imgUrl = $default_about_img;
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+if (isset($_SESSION['about_setup_flash']) && is_array($_SESSION['about_setup_flash'])) {
+    $message = (string)($_SESSION['about_setup_flash']['message'] ?? '');
+    $msgType = (string)($_SESSION['about_setup_flash']['type'] ?? 'success');
+    unset($_SESSION['about_setup_flash']);
+}
+$aboutSetupRedirectTarget = strtok((string)($_SERVER['REQUEST_URI'] ?? 'aboutPageSetup'), '?') ?: 'aboutPageSetup';
 
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
@@ -25,7 +37,10 @@ try {
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($row) {
         $existing_description = $row['description'];
-        $existing_imgUrl      = $row['imgUrl'];
+        $existing_imgUrl      = (string)($row['imgUrl'] ?? '');
+        if ($existing_imgUrl === '') {
+            $existing_imgUrl = $default_about_img;
+        }
     }
 
     // Form submission
@@ -33,18 +48,36 @@ try {
         $description = $_POST['description'] ?? '';
 
         // Image handling
-        if (isset($_FILES['image']) && $_FILES['image']['error'] === 0) {
+        $uploadErr = isset($_FILES['image']) ? (int)($_FILES['image']['error'] ?? UPLOAD_ERR_NO_FILE) : UPLOAD_ERR_NO_FILE;
+        if (isset($_FILES['image']) && $uploadErr === UPLOAD_ERR_OK) {
             $image_name = $_FILES['image']['name'];
             $image_size = $_FILES['image']['size'];
             $image_tmp  = $_FILES['image']['tmp_name'];
             if ($image_size > 5242880) throw new Exception("File too large. Max 5MB.");
-            $allowed = ['jpg','jpeg','png','gif'];
+            $allowed = ['jpg','jpeg','png','gif','webp'];
             $ext = strtolower(pathinfo($image_name, PATHINFO_EXTENSION));
-            if (!in_array($ext, $allowed)) throw new Exception("Only JPG, JPEG, PNG, GIF allowed.");
+            if (!in_array($ext, $allowed)) throw new Exception("Only JPG, JPEG, PNG, GIF, WEBP allowed.");
             $safeName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $image_name);
-            $upload_path = "uploads/" . $safeName;
-            if (!move_uploaded_file($image_tmp, $upload_path)) throw new Exception("Failed to upload image.");
-            $imgUrl = $upload_path;
+            $upload_rel = "uploads/about/" . $safeName;
+            $upload_dir_abs = __DIR__ . "/uploads/about";
+            $upload_path_abs = $upload_dir_abs . "/" . $safeName;
+
+            if (!is_dir($upload_dir_abs)) {
+                @mkdir($upload_dir_abs, 0775, true);
+            }
+
+            // Fallback to root uploads folder if creating uploads/about is not allowed.
+            if (!is_dir($upload_dir_abs)) {
+                $upload_rel = "uploads/" . $safeName;
+                $upload_path_abs = __DIR__ . "/" . $upload_rel;
+            }
+
+            if (!move_uploaded_file($image_tmp, $upload_path_abs)) {
+                throw new Exception("Failed to upload image.");
+            }
+            $imgUrl = $upload_rel;
+        } elseif ($uploadErr !== UPLOAD_ERR_NO_FILE) {
+            throw new Exception("Image upload failed. Please try a JPG/PNG/WEBP image under 5MB.");
         } else {
             $imgUrl = $existing_imgUrl;
         }
@@ -52,12 +85,23 @@ try {
         $stmt = $pdo->prepare("INSERT INTO about (description, imgUrl) VALUES (:description, :imgUrl)");
         $stmt->execute([':description' => $description, ':imgUrl' => $imgUrl]);
 
-        $message = "About page updated successfully.";
-        $existing_description = $description;
-        $existing_imgUrl = $imgUrl;
+        $_SESSION['about_setup_flash'] = [
+            'type' => 'success',
+            'message' => 'About page updated successfully.',
+        ];
+        header("Location: " . $aboutSetupRedirectTarget, true, 303);
+        exit;
     }
 
 } catch (Exception $e) {
+    if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'POST') {
+        $_SESSION['about_setup_flash'] = [
+            'type' => 'error',
+            'message' => $e->getMessage(),
+        ];
+        header("Location: " . $aboutSetupRedirectTarget, true, 303);
+        exit;
+    }
     $message = $e->getMessage();
     $msgType = "error";
 }

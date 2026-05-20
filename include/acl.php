@@ -139,6 +139,8 @@ function bbcc_acl_page_rules(): array {
         'run-migration' => ['admin'],
         'bannersetup' => ['admin', 'website_admin'],
         'aboutpagesetup' => ['admin', 'website_admin'],
+        'schoolcontentsetup' => ['admin', 'website_admin'],
+        'downloadfilesetup' => ['admin', 'website_admin'],
         'servicesetup' => ['admin', 'website_admin'],
         'ourteamsetup' => ['admin', 'website_admin'],
         'viewfeedback' => ['admin', 'website_admin'],
@@ -200,6 +202,8 @@ function bbcc_acl_route_module_rules(): array {
         // Website / CMS
         'bannersetup' => ['website', 'manage'],
         'aboutpagesetup' => ['website', 'manage'],
+        'schoolcontentsetup' => ['website', 'manage'],
+        'downloadfilesetup' => ['website', 'manage'],
         'servicesetup' => ['website', 'manage'],
         'ourteamsetup' => ['website', 'manage'],
         'viewfeedback' => ['website', 'manage'],

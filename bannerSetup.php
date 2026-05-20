@@ -32,6 +32,14 @@ try {
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
 
+    // Ensure sortable column exists.
+    try {
+        $pdo->exec("ALTER TABLE banner ADD COLUMN sort_order INT NULL");
+    } catch (Throwable $e) {
+        // Ignore if column already exists.
+    }
+    $pdo->exec("UPDATE banner SET sort_order = id WHERE sort_order IS NULL OR sort_order = 0");
+
     // DELETE
     if (isset($_GET['delete'])) {
         $stmt = $pdo->prepare("DELETE FROM banner WHERE id = :id");
@@ -40,8 +48,30 @@ try {
         $reloadPage = true;
     }
 
+    // REORDER (drag and drop)
+    if ($_SERVER["REQUEST_METHOD"] === "POST" && (string)($_POST['action'] ?? '') === 'reorder') {
+        $orderRaw = (string)($_POST['order'] ?? '[]');
+        $ids = json_decode($orderRaw, true);
+        if (!is_array($ids)) {
+            throw new Exception("Invalid banner order payload.");
+        }
+        $stmtOrder = $pdo->prepare("UPDATE banner SET sort_order = :sort_order WHERE id = :id");
+        $rank = 1;
+        foreach ($ids as $id) {
+            $id = (int)$id;
+            if ($id <= 0) continue;
+            $stmtOrder->execute([
+                ':sort_order' => $rank++,
+                ':id' => $id,
+            ]);
+        }
+        header('Content-Type: application/json');
+        echo json_encode(['ok' => true, 'message' => 'Banner order updated.']);
+        exit;
+    }
+
     // INSERT / UPDATE
-    if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    if ($_SERVER["REQUEST_METHOD"] === "POST" && (string)($_POST['action'] ?? '') !== 'reorder') {
         $title    = trim($_POST['title'] ?? '');
         $subtitle = trim($_POST['subtitle'] ?? '');
         $edit_id  = $_POST['edit_id'] ?? '';
@@ -91,15 +121,16 @@ try {
             $stmt->execute([':title' => $title, ':subtitle' => $subtitle, ':imgUrl' => $imgUrl, ':id' => (int)$edit_id]);
             $message = "Banner updated successfully.";
         } else {
-            $stmt = $pdo->prepare("INSERT INTO banner (title, subtitle, imgUrl) VALUES (:title, :subtitle, :imgUrl)");
-            $stmt->execute([':title' => $title, ':subtitle' => $subtitle, ':imgUrl' => $imgUrl]);
+            $maxSort = (int)$pdo->query("SELECT COALESCE(MAX(sort_order), 0) FROM banner")->fetchColumn();
+            $stmt = $pdo->prepare("INSERT INTO banner (title, subtitle, imgUrl, sort_order) VALUES (:title, :subtitle, :imgUrl, :sort_order)");
+            $stmt->execute([':title' => $title, ':subtitle' => $subtitle, ':imgUrl' => $imgUrl, ':sort_order' => $maxSort + 1]);
             $message = "Banner created successfully.";
         }
         $reloadPage = true;
     }
 
     // Fetch all banners
-    $banners = $pdo->query("SELECT * FROM banner ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $banners = $pdo->query("SELECT * FROM banner ORDER BY sort_order ASC, id ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (Exception $e) {
     $message = $e->getMessage();
@@ -168,11 +199,14 @@ try {
             <div class="table-responsive">
                 <table class="table table-bordered table-hover" width="100%">
                     <thead class="thead-light">
-                        <tr><th>#</th><th>Title</th><th>Subtitle</th><th>Image</th><th style="min-width:120px">Actions</th></tr>
+                        <tr><th style="width:56px;">Move</th><th>#</th><th>Title</th><th>Subtitle</th><th>Image</th><th style="min-width:120px">Actions</th></tr>
                     </thead>
-                    <tbody>
+                    <tbody id="bannerSortBody">
                     <?php foreach ($banners as $i => $b): ?>
-                        <tr>
+                        <tr data-id="<?= (int)$b['id'] ?>">
+                            <td class="text-center align-middle">
+                                <span class="banner-drag-handle" title="Drag to reorder" aria-label="Drag to reorder" style="cursor:grab;color:#6c757d;"><i class="fas fa-grip-vertical"></i></span>
+                            </td>
                             <td><?= $i+1 ?></td>
                             <td><?= htmlspecialchars($b['title']) ?></td>
                             <td><?= htmlspecialchars(mb_strimwidth($b['subtitle'], 0, 60, '...')) ?></td>
@@ -251,6 +285,72 @@ try {
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@10"></script>
 <script>
 $(document).ready(function(){
+    var dragSrc = null;
+    function wireDragRows() {
+        var rows = document.querySelectorAll('#bannerSortBody tr');
+        rows.forEach(function(row){
+            row.draggable = true;
+            row.addEventListener('dragstart', function(e){
+                dragSrc = row;
+                row.style.opacity = '0.5';
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            row.addEventListener('dragend', function(){
+                row.style.opacity = '1';
+            });
+            row.addEventListener('dragover', function(e){
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+            });
+            row.addEventListener('drop', function(e){
+                e.preventDefault();
+                if (!dragSrc || dragSrc === row) return;
+                var tbody = document.getElementById('bannerSortBody');
+                var rect = row.getBoundingClientRect();
+                var shouldInsertAfter = (e.clientY - rect.top) > (rect.height / 2);
+                if (shouldInsertAfter) {
+                    tbody.insertBefore(dragSrc, row.nextSibling);
+                } else {
+                    tbody.insertBefore(dragSrc, row);
+                }
+                persistBannerOrder();
+            });
+        });
+    }
+
+    function persistBannerOrder() {
+        var ids = [];
+        document.querySelectorAll('#bannerSortBody tr[data-id]').forEach(function(r){
+            ids.push(parseInt(r.getAttribute('data-id'), 10));
+        });
+        $.ajax({
+            url: 'bannerSetup',
+            method: 'POST',
+            dataType: 'json',
+            data: { action: 'reorder', order: JSON.stringify(ids) },
+            success: function(resp){
+                if (resp && resp.ok) {
+                    Swal.fire({ icon:'success', title:'Order saved', showConfirmButton:false, timer:900 });
+                    renumberRows();
+                } else {
+                    Swal.fire({ icon:'error', title:'Failed to save order' });
+                }
+            },
+            error: function(){
+                Swal.fire({ icon:'error', title:'Failed to save order' });
+            }
+        });
+    }
+
+    function renumberRows() {
+        document.querySelectorAll('#bannerSortBody tr').forEach(function(r, idx){
+            var nCell = r.children[1];
+            if (nCell) nCell.textContent = String(idx + 1);
+        });
+    }
+
+    wireDragRows();
+
     // NEW
     $('#btnNewBanner').on('click', function(){
         $('#b_edit_id').val('');

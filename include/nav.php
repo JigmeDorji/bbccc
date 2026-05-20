@@ -1,5 +1,14 @@
 <?php
 $currentPage = basename($_SERVER['PHP_SELF']);
+$servicePages = [
+    'services.php',
+    'spiritual-services.php',
+    'cultural-preservation.php',
+    'pastoral-care.php',
+    'community-events.php',
+    'bhutanese-language-and-culture-school.php',
+];
+$isServicesPage = in_array($currentPage, $servicePages, true);
 ?>
 
 <!-- Top Bar -->
@@ -41,14 +50,14 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             <li class="<?= ($currentPage === 'about-us.php') ? 'active' : '' ?>">
                 <a href="about-us">About</a>
             </li>
-            <li class="<?= ($currentPage === 'services.php') ? 'active' : '' ?>">
+            <li class="<?= $isServicesPage ? 'active' : '' ?>">
                 <a href="services">Services</a>
-            </li>
-            <li class="<?= ($currentPage === 'bhutanese-language-and-culture-school.php') ? 'active' : '' ?>">
-                <a href="bhutanese-language-and-culture-school">BLCS</a>
             </li>
             <li class="<?= ($currentPage === 'events.php' || $currentPage === 'event_detail.php' || $currentPage === 'book-event.php') ? 'active' : '' ?>">
                 <a href="events">Events</a>
+            </li>
+            <li class="<?= ($currentPage === 'downloads.php') ? 'active' : '' ?>">
+                <a href="downloads">Downloads</a>
             </li>
             <li class="<?= ($currentPage === 'contact-us.php') ? 'active' : '' ?>">
                 <a href="contact-us">Contact</a>
