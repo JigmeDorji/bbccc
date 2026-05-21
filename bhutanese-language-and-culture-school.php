@@ -179,40 +179,57 @@ if (empty($termColumns) || (count($termColumns) > 0 && array_sum(array_map(fn($t
             gap: 16px;
             margin-top: 12px;
         }
-        .blcs-info-card {
-            background:
-                radial-gradient(1200px 220px at -10% -20%, rgba(136,27,18,0.06) 0%, transparent 60%),
-                #fff;
-            border: 1px solid #e5e7eb;
+        .blcs-highlight {
+            margin-top: 18px;
+            background: linear-gradient(135deg, #fef2f2 0%, #fff7ed 100%);
+            color: #7f1d1d;
+            border: 1px solid #f5d0d0;
             border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+            padding: 20px 22px;
+            box-shadow: 0 8px 18px rgba(127, 29, 29, 0.08);
+        }
+        .blcs-highlight p {
+            margin: 0;
+            font-size: 1.02rem;
+            line-height: 1.75;
+            font-weight: 600;
+            letter-spacing: .1px;
         }
         .blcs-flow-content {
-            margin-top: 12px;
-            color: #374151;
-            line-height: 1.85;
+            margin-top: 28px;
+            color: #4b5563;
+            line-height: 1.9;
             font-size: 1rem;
+            max-width: 860px;
         }
         .blcs-flow-content h2,
         .blcs-flow-content h3,
         .blcs-flow-content h4 {
-            margin: 20px 0 10px;
+            margin: 22px 0 10px;
             color: #111827;
-            line-height: 1.35;
-            font-weight: 800;
-            letter-spacing: .2px;
-            border-left: 4px solid #881b12;
-            padding-left: 10px;
+            line-height: 1.4;
+            font-weight: 700;
+            font-size: 1.18rem;
+            letter-spacing: 0;
+            border-left: 0;
+            padding-left: 0;
         }
         .blcs-flow-content ul,
         .blcs-flow-content ol {
-            margin: 0 0 14px;
-            padding-left: 22px;
+            margin: 4px 0 14px;
+            padding-left: 20px;
         }
         .blcs-flow-content li { margin-bottom: 6px; }
         .blcs-flow-content p {
             margin: 0 0 12px;
+        }
+        .blcs-flow-content > p:first-child {
+            margin-top: 14px;
+        }
+        .blcs-flow-content h2 + p,
+        .blcs-flow-content h3 + p,
+        .blcs-flow-content h4 + p {
+            margin-top: 2px;
         }
         .blcs-info-card h3 {
             margin: 0 0 10px;
@@ -275,8 +292,8 @@ if (empty($termColumns) || (count($termColumns) > 0 && array_sum(array_map(fn($t
         .blcs-empty-cell { color: #9ca3af; }
         .blcs-subsection-title {
             margin: 0 0 12px;
-            font-size: 1.15rem;
-            font-weight: 800;
+            font-size: 1.12rem;
+            font-weight: 700;
             color: #111827;
             display: flex;
             align-items: center;
@@ -284,11 +301,11 @@ if (empty($termColumns) || (count($termColumns) > 0 && array_sum(array_map(fn($t
         }
         .blcs-subsection-title i { color: #881b12; }
         @media (max-width: 768px) {
-            .blcs-info-card { padding: 18px; border-radius: 14px; }
+            .blcs-highlight { padding: 16px; border-radius: 14px; }
             .blcs-flow-content { font-size: .96rem; }
             .blcs-flow-content h2,
             .blcs-flow-content h3,
-            .blcs-flow-content h4 { margin-top: 16px; font-size: 1rem; }
+            .blcs-flow-content h4 { margin-top: 16px; font-size: 1.04rem; }
             .blcs-subsection-title { font-size: 1.05rem; }
         }
     </style>
@@ -313,79 +330,81 @@ if (empty($termColumns) || (count($termColumns) > 0 && array_sum(array_map(fn($t
 
 <section class="bbcc-section">
     <div class="bbcc-container" style="max-width:980px;">
-        <div class="section-header fade-up" style="text-align:left;max-width:none;">
+        <div class="section-header fade-up" style="text-align:left;max-width:none;margin-bottom:20px;">
             <span class="section-badge"><i class="fa-solid fa-book-open"></i> Bhutanese Language and Culture School Overview</span>
             <h2>About Our <span>School Program</span></h2>
         </div>
 
-        <div class="blcs-info-card fade-up" style="margin-top:12px;">
-            <div class="blcs-flow-content" style="margin-top:0;">
-                <?= bbcc_blcs_format_text((string)($blcsSchedule['page_text'] ?? '')) ?>
-            </div>
+        <div class="blcs-highlight fade-up">
+            <p><?= htmlspecialchars((string)($blcsSchedule['highlight_text'] ?? '')) ?></p>
+        </div>
 
-            <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb;">
-                <h3 class="blcs-subsection-title"><i class="fa-solid fa-user-plus"></i>Enrollment</h3>
-                <p style="margin:0 0 14px;color:#4b5563;">
-                    Create a parent account to register your child for classes.
-                </p>
-                <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                    <a href="parentAccountSetup" class="bbcc-btn bbcc-btn--primary">
-                        <i class="fa-solid fa-user-plus"></i> Register Now
-                    </a>
-                    <a href="contact-us" class="bbcc-btn bbcc-btn--outline">
-                        Contact Us <i class="fa-solid fa-arrow-right"></i>
-                    </a>
-                </div>
-            </div>
+        <div class="blcs-flow-content fade-up" style="margin-top:0;">
+            <?= bbcc_blcs_format_text((string)($blcsSchedule['page_text'] ?? '')) ?>
+        </div>
 
-            <div class="blcs-schedule-wrap">
-                <h3 class="blcs-subsection-title"><i class="fa-solid fa-calendar-days"></i>Class Schedule</h3>
-                <p style="margin:0 0 16px;color:#4b5563;"><?= htmlspecialchars((string)$blcsSchedule['intro_text']) ?></p>
-                <?php if (!empty($dateLines)): ?>
-                    <?php if (!empty($termColumns)): ?>
-                        <div class="blcs-schedule-table-wrap">
-                            <table class="blcs-schedule-table">
-                                <thead>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb;" class="fade-up">
+            <h3 class="blcs-subsection-title"><i class="fa-solid fa-user-plus"></i>Enrollment</h3>
+            <p style="margin:0 0 14px;color:#4b5563;">
+                Create a parent account to register your child for classes.
+            </p>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                <a href="parentAccountSetup" class="bbcc-btn bbcc-btn--primary">
+                    <i class="fa-solid fa-user-plus"></i> Register Now
+                </a>
+                <a href="contact-us" class="bbcc-btn bbcc-btn--outline">
+                    Contact Us <i class="fa-solid fa-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+
+        <div class="blcs-schedule-wrap fade-up">
+            <h3 class="blcs-subsection-title"><i class="fa-solid fa-calendar-days"></i>Class Schedule</h3>
+            <p style="margin:0 0 16px;color:#4b5563;"><?= htmlspecialchars((string)$blcsSchedule['intro_text']) ?></p>
+            <?php if (!empty($dateLines)): ?>
+                <?php if (!empty($termColumns)): ?>
+                    <div class="blcs-schedule-table-wrap">
+                        <table class="blcs-schedule-table">
+                            <thead>
+                                <tr>
+                                    <?php foreach ($termColumns as $idx => $col): ?>
+                                        <th>
+                                            <?= htmlspecialchars($col['label']) ?>
+                                        </th>
+                                    <?php endforeach; ?>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($scheduleRows as $r): ?>
                                     <tr>
-                                        <?php foreach ($termColumns as $idx => $col): ?>
-                                            <th>
-                                                <?= htmlspecialchars($col['label']) ?>
-                                            </th>
+                                        <?php foreach ($r as $cell): ?>
+                                            <td>
+                                                <?= $cell !== '' ? htmlspecialchars($cell) : '<span class="blcs-empty-cell">—</span>' ?>
+                                            </td>
                                         <?php endforeach; ?>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($scheduleRows as $r): ?>
-                                        <tr>
-                                            <?php foreach ($r as $cell): ?>
-                                                <td>
-                                                    <?= $cell !== '' ? htmlspecialchars($cell) : '<span class="blcs-empty-cell">—</span>' ?>
-                                                </td>
-                                            <?php endforeach; ?>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                        <?php if (!empty($unmatchedDates)): ?>
-                            <div style="margin-top:12px;">
-                                <h4 style="margin:0 0 8px;font-size:.95rem;color:#374151;">Other Dates</h4>
-                                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;">
-                                    <?php foreach ($unmatchedDates as $d): ?>
-                                        <div style="padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;font-size:.92rem;color:#374151;"><?= htmlspecialchars($d) ?></div>
-                                    <?php endforeach; ?>
-                                </div>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <?php if (!empty($unmatchedDates)): ?>
+                        <div style="margin-top:12px;">
+                            <h4 style="margin:0 0 8px;font-size:.95rem;color:#374151;">Other Dates</h4>
+                            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;">
+                                <?php foreach ($unmatchedDates as $d): ?>
+                                    <div style="padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;font-size:.92rem;color:#374151;"><?= htmlspecialchars($d) ?></div>
+                                <?php endforeach; ?>
                             </div>
-                        <?php endif; ?>
-                    <?php else: ?>
-                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;">
-                            <?php foreach ($dateLines as $d): ?>
-                                <div style="padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#fafafa;font-size:.92rem;color:#374151;"><?= htmlspecialchars($d) ?></div>
-                            <?php endforeach; ?>
                         </div>
                     <?php endif; ?>
+                <?php else: ?>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;">
+                        <?php foreach ($dateLines as $d): ?>
+                            <div style="padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#fafafa;font-size:.92rem;color:#374151;"><?= htmlspecialchars($d) ?></div>
+                        <?php endforeach; ?>
+                    </div>
                 <?php endif; ?>
-            </div>
+            <?php endif; ?>
         </div>
     </div>
 </section>

@@ -69,6 +69,10 @@ function bbcc_blcs_default_page_text(): string {
     ]);
 }
 
+function bbcc_blcs_default_highlight_text(): string {
+    return "Bhutanese Language and Culture School nurtures language, values, and identity through weekly Sunday learning for children and families.";
+}
+
 function bbcc_blcs_ensure_schedule_table(PDO $pdo): void {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS blcs_schedule_settings (
@@ -77,6 +81,7 @@ function bbcc_blcs_ensure_schedule_table(PDO $pdo): void {
             terms_text TEXT NULL,
             sunday_dates_text LONGTEXT NULL,
             page_text LONGTEXT NULL,
+            highlight_text TEXT NULL,
             updated_by VARCHAR(190) NULL,
             updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
@@ -86,11 +91,16 @@ function bbcc_blcs_ensure_schedule_table(PDO $pdo): void {
     } catch (Throwable $e) {
         // ignore if exists
     }
+    try {
+        $pdo->exec("ALTER TABLE blcs_schedule_settings ADD COLUMN highlight_text TEXT NULL AFTER page_text");
+    } catch (Throwable $e) {
+        // ignore if exists
+    }
 }
 
 function bbcc_blcs_load_schedule(PDO $pdo): array {
     bbcc_blcs_ensure_schedule_table($pdo);
-    $stmt = $pdo->prepare("SELECT intro_text, terms_text, sunday_dates_text, page_text FROM blcs_schedule_settings WHERE id = 1 LIMIT 1");
+    $stmt = $pdo->prepare("SELECT intro_text, terms_text, sunday_dates_text, page_text, highlight_text FROM blcs_schedule_settings WHERE id = 1 LIMIT 1");
     $stmt->execute();
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
     return [
@@ -98,5 +108,6 @@ function bbcc_blcs_load_schedule(PDO $pdo): array {
         'terms_text' => trim((string)($row['terms_text'] ?? '')) !== '' ? (string)$row['terms_text'] : bbcc_blcs_default_terms_text(),
         'sunday_dates_text' => trim((string)($row['sunday_dates_text'] ?? '')) !== '' ? (string)$row['sunday_dates_text'] : bbcc_blcs_default_sunday_dates_text(),
         'page_text' => trim((string)($row['page_text'] ?? '')) !== '' ? (string)$row['page_text'] : bbcc_blcs_default_page_text(),
+        'highlight_text' => trim((string)($row['highlight_text'] ?? '')) !== '' ? (string)$row['highlight_text'] : bbcc_blcs_default_highlight_text(),
     ];
 }

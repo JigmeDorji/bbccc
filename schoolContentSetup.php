@@ -20,6 +20,7 @@ $blcsSchedule = [
     'terms_text' => bbcc_blcs_default_terms_text(),
     'sunday_dates_text' => bbcc_blcs_default_sunday_dates_text(),
     'page_text' => bbcc_blcs_default_page_text(),
+    'highlight_text' => bbcc_blcs_default_highlight_text(),
 ];
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -65,21 +66,24 @@ try {
             $termsText = trim((string)($_POST['blcs_terms_text'] ?? ''));
             $datesText = trim((string)($_POST['blcs_dates_text'] ?? ''));
             $pageText = trim((string)($_POST['blcs_page_text'] ?? ''));
+            $highlightText = trim((string)($_POST['blcs_highlight_text'] ?? ''));
 
             if ($introText === '') $introText = bbcc_blcs_default_intro_text();
             if ($termsText === '') $termsText = bbcc_blcs_default_terms_text();
             if ($datesText === '') $datesText = bbcc_blcs_default_sunday_dates_text();
             if ($pageText === '') $pageText = bbcc_blcs_default_page_text();
+            if ($highlightText === '') $highlightText = bbcc_blcs_default_highlight_text();
 
             bbcc_blcs_ensure_schedule_table($pdo);
             $stmtUp = $pdo->prepare("
-                INSERT INTO blcs_schedule_settings (id, intro_text, terms_text, sunday_dates_text, page_text, updated_by)
-                VALUES (1, :intro, :terms, :dates, :page_text, :updated_by)
+                INSERT INTO blcs_schedule_settings (id, intro_text, terms_text, sunday_dates_text, page_text, highlight_text, updated_by)
+                VALUES (1, :intro, :terms, :dates, :page_text, :highlight_text, :updated_by)
                 ON DUPLICATE KEY UPDATE
                     intro_text = VALUES(intro_text),
                     terms_text = VALUES(terms_text),
                     sunday_dates_text = VALUES(sunday_dates_text),
                     page_text = VALUES(page_text),
+                    highlight_text = VALUES(highlight_text),
                     updated_by = VALUES(updated_by)
             ");
             $stmtUp->execute([
@@ -87,6 +91,7 @@ try {
                 ':terms' => $termsText,
                 ':dates' => $datesText,
                 ':page_text' => $pageText,
+                ':highlight_text' => $highlightText,
                 ':updated_by' => (string)($_SESSION['username'] ?? 'admin'),
             ]);
             $_SESSION['school_setup_flash'] = [
@@ -213,6 +218,10 @@ try {
         <div class="card-body">
             <form method="POST" action="schoolContentSetup">
                 <input type="hidden" name="action" value="update_blcs_schedule">
+                <div class="form-group">
+                    <label>BLCS Highlight Text</label>
+                    <textarea name="blcs_highlight_text" rows="3" class="form-control"><?= htmlspecialchars((string)$blcsSchedule['highlight_text']) ?></textarea>
+                </div>
                 <div class="form-group">
                     <label>Intro Line</label>
                     <input type="text" name="blcs_intro_text" class="form-control" value="<?= htmlspecialchars((string)$blcsSchedule['intro_text']) ?>">
