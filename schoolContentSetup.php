@@ -15,6 +15,11 @@ $msgType = "success";
 $existing_description = "";
 $default_school_img = "bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png";
 $existing_imgUrl = $default_school_img;
+$existing_students_count = "80+";
+$existing_teachers_count = "8";
+$existing_campuses_count = "2";
+$existing_year_levels = "Age 6 years and above";
+$existing_stats_heading = "BLCS Snapshot - Term 1, 2026";
 $blcsSchedule = [
     'intro_text' => bbcc_blcs_default_intro_text(),
     'terms_text' => bbcc_blcs_default_terms_text(),
@@ -44,9 +49,27 @@ try {
             id INT AUTO_INCREMENT PRIMARY KEY,
             description TEXT NULL,
             imgUrl VARCHAR(255) DEFAULT NULL,
+            students_count VARCHAR(50) NULL,
+            teachers_count VARCHAR(50) NULL,
+            campuses_count VARCHAR(50) NULL,
+            year_levels VARCHAR(120) NULL,
+            stats_heading VARCHAR(180) NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+    $cols = [
+        'students_count' => "ALTER TABLE school_content ADD COLUMN students_count VARCHAR(50) NULL AFTER imgUrl",
+        'teachers_count' => "ALTER TABLE school_content ADD COLUMN teachers_count VARCHAR(50) NULL AFTER students_count",
+        'campuses_count' => "ALTER TABLE school_content ADD COLUMN campuses_count VARCHAR(50) NULL AFTER teachers_count",
+        'year_levels' => "ALTER TABLE school_content ADD COLUMN year_levels VARCHAR(120) NULL AFTER campuses_count",
+        'stats_heading' => "ALTER TABLE school_content ADD COLUMN stats_heading VARCHAR(180) NULL AFTER year_levels",
+    ];
+    foreach ($cols as $col => $sql) {
+        $chk = $pdo->query("SHOW COLUMNS FROM school_content LIKE " . $pdo->quote($col));
+        if (!$chk || !$chk->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec($sql);
+        }
+    }
 
     $stmt = $pdo->prepare("SELECT * FROM school_content ORDER BY id DESC LIMIT 1");
     $stmt->execute();
@@ -54,6 +77,11 @@ try {
     if ($row) {
         $existing_description = (string)($row['description'] ?? '');
         $existing_imgUrl = (string)($row['imgUrl'] ?? '');
+        $existing_students_count = trim((string)($row['students_count'] ?? '')) !== '' ? (string)$row['students_count'] : $existing_students_count;
+        $existing_teachers_count = trim((string)($row['teachers_count'] ?? '')) !== '' ? (string)$row['teachers_count'] : $existing_teachers_count;
+        $existing_campuses_count = trim((string)($row['campuses_count'] ?? '')) !== '' ? (string)$row['campuses_count'] : $existing_campuses_count;
+        $existing_year_levels = trim((string)($row['year_levels'] ?? '')) !== '' ? (string)$row['year_levels'] : $existing_year_levels;
+        $existing_stats_heading = trim((string)($row['stats_heading'] ?? '')) !== '' ? (string)$row['stats_heading'] : $existing_stats_heading;
         if ($existing_imgUrl === '') {
             $existing_imgUrl = $default_school_img;
         }
@@ -103,7 +131,17 @@ try {
         }
 
         $description = trim((string)($_POST['description'] ?? ''));
+        $studentsCount = trim((string)($_POST['students_count'] ?? ''));
+        $teachersCount = trim((string)($_POST['teachers_count'] ?? ''));
+        $campusesCount = trim((string)($_POST['campuses_count'] ?? ''));
+        $yearLevels = trim((string)($_POST['year_levels'] ?? ''));
+        $statsHeading = trim((string)($_POST['stats_heading'] ?? ''));
         $imgUrl = $existing_imgUrl;
+        if ($studentsCount === '') $studentsCount = $existing_students_count;
+        if ($teachersCount === '') $teachersCount = $existing_teachers_count;
+        if ($campusesCount === '') $campusesCount = $existing_campuses_count;
+        if ($yearLevels === '') $yearLevels = $existing_year_levels;
+        if ($statsHeading === '') $statsHeading = $existing_stats_heading;
 
         if (isset($_FILES['image']) && (int)($_FILES['image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
             $image_name = (string)$_FILES['image']['name'];
@@ -128,10 +166,15 @@ try {
             $imgUrl = "uploads/school/" . $safeName;
         }
 
-        $stmt = $pdo->prepare("INSERT INTO school_content (description, imgUrl) VALUES (:description, :imgUrl)");
+        $stmt = $pdo->prepare("INSERT INTO school_content (description, imgUrl, students_count, teachers_count, campuses_count, year_levels, stats_heading) VALUES (:description, :imgUrl, :students_count, :teachers_count, :campuses_count, :year_levels, :stats_heading)");
         $stmt->execute([
             ':description' => $description,
             ':imgUrl' => $imgUrl,
+            ':students_count' => $studentsCount,
+            ':teachers_count' => $teachersCount,
+            ':campuses_count' => $campusesCount,
+            ':year_levels' => $yearLevels,
+            ':stats_heading' => $statsHeading,
         ]);
 
         $_SESSION['school_setup_flash'] = [
@@ -206,6 +249,14 @@ try {
                 <?php else: ?>
                     <p class="text-muted mb-0">No school content set yet.</p>
                 <?php endif; ?>
+                <hr>
+                <p class="text-muted mb-2"><strong><?= htmlspecialchars($existing_stats_heading) ?></strong></p>
+                <div class="row text-center">
+                    <div class="col-md-3 col-6 mb-2"><strong><?= htmlspecialchars($existing_students_count) ?></strong><div class="small text-muted">Students</div></div>
+                    <div class="col-md-3 col-6 mb-2"><strong><?= htmlspecialchars($existing_teachers_count) ?></strong><div class="small text-muted">Teachers</div></div>
+                    <div class="col-md-3 col-6 mb-2"><strong><?= htmlspecialchars($existing_campuses_count) ?></strong><div class="small text-muted">Campuses</div></div>
+                    <div class="col-md-3 col-12 mb-2"><strong><?= htmlspecialchars($existing_year_levels) ?></strong><div class="small text-muted">Age Group</div></div>
+                </div>
             </div>
         </div>
     </div>
@@ -263,6 +314,29 @@ try {
                     <div class="form-group">
                         <label>School Description</label>
                         <textarea name="description" class="form-control" rows="8" placeholder="Write school section content..."><?= htmlspecialchars($existing_description) ?></textarea>
+                    </div>
+                    <div class="section-divider">School Panel Statistics</div>
+                    <div class="form-group">
+                        <label>Stats Heading (Term/Year)</label>
+                        <input type="text" name="stats_heading" class="form-control" value="<?= htmlspecialchars($existing_stats_heading) ?>" placeholder="e.g. BLCS Snapshot - Term 2, 2026">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-3 col-6">
+                            <label>Students</label>
+                            <input type="text" name="students_count" class="form-control" value="<?= htmlspecialchars($existing_students_count) ?>" placeholder="e.g. 80+">
+                        </div>
+                        <div class="form-group col-md-3 col-6">
+                            <label>Teachers</label>
+                            <input type="text" name="teachers_count" class="form-control" value="<?= htmlspecialchars($existing_teachers_count) ?>" placeholder="e.g. 8">
+                        </div>
+                        <div class="form-group col-md-3 col-6">
+                            <label>Campuses</label>
+                            <input type="text" name="campuses_count" class="form-control" value="<?= htmlspecialchars($existing_campuses_count) ?>" placeholder="e.g. 2">
+                        </div>
+                        <div class="form-group col-md-3 col-6">
+                            <label>Age Group</label>
+                            <input type="text" name="year_levels" class="form-control" value="<?= htmlspecialchars($existing_year_levels) ?>" placeholder="e.g. Age 6 years and above">
+                        </div>
                     </div>
                     <div class="section-divider">School Image</div>
                     <?php if ($existing_imgUrl): ?>

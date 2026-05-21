@@ -7,6 +7,13 @@ $blcsSchedule = [
     'terms_text' => bbcc_blcs_default_terms_text(),
     'sunday_dates_text' => bbcc_blcs_default_sunday_dates_text(),
 ];
+$schoolStats = [
+    'heading' => 'BLCS Snapshot - Term 1, 2026',
+    'students' => '80+',
+    'teachers' => '8',
+    'campuses' => '2',
+    'year_levels' => 'Age 6 years and above',
+];
 $termLines = [];
 $dateLines = [];
 try {
@@ -15,6 +22,16 @@ try {
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
     $blcsSchedule = bbcc_blcs_load_schedule($pdo);
+    $stmt = $pdo->prepare("SELECT stats_heading, students_count, teachers_count, campuses_count, year_levels FROM school_content ORDER BY id DESC LIMIT 1");
+    $stmt->execute();
+    $schoolRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    if (!empty($schoolRow)) {
+        $schoolStats['heading'] = trim((string)($schoolRow['stats_heading'] ?? '')) !== '' ? (string)$schoolRow['stats_heading'] : $schoolStats['heading'];
+        $schoolStats['students'] = trim((string)($schoolRow['students_count'] ?? '')) !== '' ? (string)$schoolRow['students_count'] : $schoolStats['students'];
+        $schoolStats['teachers'] = trim((string)($schoolRow['teachers_count'] ?? '')) !== '' ? (string)$schoolRow['teachers_count'] : $schoolStats['teachers'];
+        $schoolStats['campuses'] = trim((string)($schoolRow['campuses_count'] ?? '')) !== '' ? (string)$schoolRow['campuses_count'] : $schoolStats['campuses'];
+        $schoolStats['year_levels'] = trim((string)($schoolRow['year_levels'] ?? '')) !== '' ? (string)$schoolRow['year_levels'] : $schoolStats['year_levels'];
+    }
 } catch (Throwable $e) {
     // Keep defaults.
 }
@@ -300,6 +317,50 @@ if (empty($termColumns) || (count($termColumns) > 0 && array_sum(array_map(fn($t
             gap: 8px;
         }
         .blcs-subsection-title i { color: #881b12; }
+        .blcs-metrics-panel {
+            margin-top: 20px;
+            padding: 18px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 40%, #fef3c7 100%);
+            border: 1px solid #fed7aa;
+            box-shadow: 0 14px 30px rgba(180, 83, 9, 0.12);
+        }
+        .blcs-metrics-heading {
+            margin: 0 0 12px;
+            font-size: .94rem;
+            font-weight: 700;
+            letter-spacing: .2px;
+            color: #7c2d12;
+        }
+        .blcs-metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(120px, 1fr));
+            gap: 12px;
+        }
+        .blcs-metric-item {
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(251, 191, 36, 0.35);
+            border-radius: 14px;
+            padding: 12px 10px;
+            text-align: center;
+        }
+        .blcs-metric-value {
+            display: block;
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: #9a3412;
+            line-height: 1.2;
+            letter-spacing: 0.2px;
+        }
+        .blcs-metric-label {
+            display: block;
+            margin-top: 4px;
+            font-size: .78rem;
+            color: #7c2d12;
+            text-transform: uppercase;
+            letter-spacing: .8px;
+            font-weight: 700;
+        }
         @media (max-width: 768px) {
             .blcs-highlight { padding: 16px; border-radius: 14px; }
             .blcs-flow-content { font-size: .96rem; }
@@ -307,6 +368,7 @@ if (empty($termColumns) || (count($termColumns) > 0 && array_sum(array_map(fn($t
             .blcs-flow-content h3,
             .blcs-flow-content h4 { margin-top: 16px; font-size: 1.04rem; }
             .blcs-subsection-title { font-size: 1.05rem; }
+            .blcs-metrics-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
         }
     </style>
 </head>
@@ -355,6 +417,28 @@ if (empty($termColumns) || (count($termColumns) > 0 && array_sum(array_map(fn($t
                 <a href="contact-us" class="bbcc-btn bbcc-btn--outline">
                     Contact Us <i class="fa-solid fa-arrow-right"></i>
                 </a>
+            </div>
+        </div>
+
+        <div class="blcs-metrics-panel fade-up">
+            <p class="blcs-metrics-heading"><?= htmlspecialchars((string)$schoolStats['heading']) ?></p>
+            <div class="blcs-metrics-grid">
+                <div class="blcs-metric-item">
+                    <span class="blcs-metric-value"><?= htmlspecialchars((string)$schoolStats['students']) ?></span>
+                    <span class="blcs-metric-label">Students Enrolled</span>
+                </div>
+                <div class="blcs-metric-item">
+                    <span class="blcs-metric-value"><?= htmlspecialchars((string)$schoolStats['teachers']) ?></span>
+                    <span class="blcs-metric-label">Teachers</span>
+                </div>
+                <div class="blcs-metric-item">
+                    <span class="blcs-metric-value"><?= htmlspecialchars((string)$schoolStats['campuses']) ?></span>
+                    <span class="blcs-metric-label">Campuses</span>
+                </div>
+                <div class="blcs-metric-item">
+                    <span class="blcs-metric-value"><?= htmlspecialchars((string)$schoolStats['year_levels']) ?></span>
+                    <span class="blcs-metric-label">Age Group</span>
+                </div>
             </div>
         </div>
 

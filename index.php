@@ -7,6 +7,13 @@ $menus = [];
 $banners = [];
 $schoolContent = [];
 $aboutContent = [];
+$schoolStats = [
+    'heading' => 'BLCS Snapshot - Term 1, 2026',
+    'students' => '80+',
+    'teachers' => '8',
+    'campuses' => '2',
+    'year_levels' => 'Age 6 years and above',
+];
 
 try {
     $pdo = new PDO("mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME . ";charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
@@ -34,6 +41,13 @@ try {
     $stmt = $pdo->prepare("SELECT * FROM school_content ORDER BY id DESC LIMIT 1");
     $stmt->execute();
     $schoolContent = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    if (!empty($schoolContent)) {
+        $schoolStats['heading'] = trim((string)($schoolContent['stats_heading'] ?? '')) !== '' ? (string)$schoolContent['stats_heading'] : $schoolStats['heading'];
+        $schoolStats['students'] = trim((string)($schoolContent['students_count'] ?? '')) !== '' ? (string)$schoolContent['students_count'] : $schoolStats['students'];
+        $schoolStats['teachers'] = trim((string)($schoolContent['teachers_count'] ?? '')) !== '' ? (string)$schoolContent['teachers_count'] : $schoolStats['teachers'];
+        $schoolStats['campuses'] = trim((string)($schoolContent['campuses_count'] ?? '')) !== '' ? (string)$schoolContent['campuses_count'] : $schoolStats['campuses'];
+        $schoolStats['year_levels'] = trim((string)($schoolContent['year_levels'] ?? '')) !== '' ? (string)$schoolContent['year_levels'] : $schoolStats['year_levels'];
+    }
 
     // Fetch menu/event data
     $stmt = $pdo->prepare("SELECT * FROM menu");
@@ -69,6 +83,57 @@ try {
     }
     </script>
     <?php include_once 'include/global_css.php'; ?>
+    <style>
+        .blcs-metrics-panel {
+            margin-top: 22px;
+            padding: 18px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 40%, #fef3c7 100%);
+            border: 1px solid #fed7aa;
+            box-shadow: 0 14px 30px rgba(180, 83, 9, 0.12);
+        }
+        .blcs-metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(120px, 1fr));
+            gap: 12px;
+        }
+        .blcs-metrics-heading {
+            margin: 0 0 12px;
+            font-size: .94rem;
+            font-weight: 700;
+            letter-spacing: .2px;
+            color: #7c2d12;
+        }
+        .blcs-metric-item {
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(251, 191, 36, 0.35);
+            border-radius: 14px;
+            padding: 12px 10px;
+            text-align: center;
+        }
+        .blcs-metric-value {
+            display: block;
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: #9a3412;
+            line-height: 1.2;
+            letter-spacing: 0.2px;
+        }
+        .blcs-metric-label {
+            display: block;
+            margin-top: 4px;
+            font-size: .78rem;
+            color: #7c2d12;
+            text-transform: uppercase;
+            letter-spacing: .8px;
+            font-weight: 700;
+        }
+        @media (max-width: 767.98px) {
+            .blcs-metrics-grid {
+                grid-template-columns: repeat(2, minmax(120px, 1fr));
+            }
+        }
+    </style>
 </head>
 <body class="bbcc-public">
 
@@ -152,6 +217,27 @@ try {
                 <?php else: ?>
                 <p>Weekly structured classes in Dzongkha language, Bhutanese culture, and community values for children and adults.</p>
                 <?php endif; ?>
+                <div class="blcs-metrics-panel fade-up">
+                    <p class="blcs-metrics-heading"><?= htmlspecialchars((string)$schoolStats['heading']) ?></p>
+                    <div class="blcs-metrics-grid">
+                        <div class="blcs-metric-item">
+                            <span class="blcs-metric-value"><?= htmlspecialchars((string)$schoolStats['students']) ?></span>
+                            <span class="blcs-metric-label">Students Enrolled</span>
+                        </div>
+                        <div class="blcs-metric-item">
+                            <span class="blcs-metric-value"><?= htmlspecialchars((string)$schoolStats['teachers']) ?></span>
+                            <span class="blcs-metric-label">Teachers</span>
+                        </div>
+                        <div class="blcs-metric-item">
+                            <span class="blcs-metric-value"><?= htmlspecialchars((string)$schoolStats['campuses']) ?></span>
+                            <span class="blcs-metric-label">Campuses</span>
+                        </div>
+                        <div class="blcs-metric-item">
+                            <span class="blcs-metric-value"><?= htmlspecialchars((string)$schoolStats['year_levels']) ?></span>
+                            <span class="blcs-metric-label">Age Group</span>
+                        </div>
+                    </div>
+                </div>
                 <a href="bhutanese-language-and-culture-school" class="bbcc-btn bbcc-btn--primary bbcc-btn--sm" style="margin-top:16px;">
                     View School Details <i class="fa-solid fa-arrow-right"></i>
                 </a>
@@ -346,4 +432,3 @@ try {
 
 </body>
 </html>
-
