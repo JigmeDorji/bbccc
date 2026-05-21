@@ -85,8 +85,8 @@ try {
                 <h1><?= htmlspecialchars($banner['title']) ?></h1>
                 <p><?= htmlspecialchars($banner['subtitle']) ?></p>
                 <div class="bbcc-hero__actions">
-                    <a href="about-us" class="bbcc-btn bbcc-btn--outline">
-                        Learn More <i class="fa-solid fa-arrow-right"></i>
+                    <a href="about-us" class="bbcc-btn bbcc-btn--outline" aria-label="Learn about the Bhutanese Buddhist and Cultural Centre">
+                        Learn About BBCC <i class="fa-solid fa-arrow-right"></i>
                     </a>
                 </div>
             </div>
@@ -228,8 +228,8 @@ try {
                 <p class="subtitle">Serving the Bhutanese Community in Canberra</p>
                 <p>The Bhutanese Buddhist and Cultural Centre (BBCC) is dedicated to providing spiritual guidance, cultural preservation, and pastoral support to Bhutanese residents in Canberra and nearby NSW towns.</p>
                 <p>Our focus is on fostering unity, harmony, and the preservation of Bhutanese identity within a diverse community.</p>
-                <a href="about-us" class="bbcc-btn bbcc-btn--primary bbcc-btn--sm" style="margin-top:16px;">
-                    Read More <i class="fa-solid fa-arrow-right"></i>
+                <a href="about-us" class="bbcc-btn bbcc-btn--primary bbcc-btn--sm" style="margin-top:16px;" aria-label="Read about the mission and story of BBCC">
+                    Read About Our Mission <i class="fa-solid fa-arrow-right"></i>
                 </a>
             </div>
         </div>
@@ -346,5 +346,4 @@ try {
 
 </body>
 </html>
-
 

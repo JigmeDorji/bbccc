@@ -1,6 +1,7 @@
 <?php
 require_once "include/config.php";
 require_once "include/image_helpers.php";
+require_once "include/blcs_schedule.php";
 require_once "include/auth.php";
 require_once "include/role_helpers.php";
 require_login();
@@ -14,6 +15,12 @@ $msgType = "success";
 $existing_description = "";
 $default_school_img = "bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png";
 $existing_imgUrl = $default_school_img;
+$blcsSchedule = [
+    'intro_text' => bbcc_blcs_default_intro_text(),
+    'terms_text' => bbcc_blcs_default_terms_text(),
+    'sunday_dates_text' => bbcc_blcs_default_sunday_dates_text(),
+    'page_text' => bbcc_blcs_default_page_text(),
+];
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -52,6 +59,44 @@ try {
     }
 
     if ($_SERVER["REQUEST_METHOD"] === "POST") {
+        $action = trim((string)($_POST['action'] ?? 'update_school_content'));
+        if ($action === 'update_blcs_schedule') {
+            $introText = trim((string)($_POST['blcs_intro_text'] ?? ''));
+            $termsText = trim((string)($_POST['blcs_terms_text'] ?? ''));
+            $datesText = trim((string)($_POST['blcs_dates_text'] ?? ''));
+            $pageText = trim((string)($_POST['blcs_page_text'] ?? ''));
+
+            if ($introText === '') $introText = bbcc_blcs_default_intro_text();
+            if ($termsText === '') $termsText = bbcc_blcs_default_terms_text();
+            if ($datesText === '') $datesText = bbcc_blcs_default_sunday_dates_text();
+            if ($pageText === '') $pageText = bbcc_blcs_default_page_text();
+
+            bbcc_blcs_ensure_schedule_table($pdo);
+            $stmtUp = $pdo->prepare("
+                INSERT INTO blcs_schedule_settings (id, intro_text, terms_text, sunday_dates_text, page_text, updated_by)
+                VALUES (1, :intro, :terms, :dates, :page_text, :updated_by)
+                ON DUPLICATE KEY UPDATE
+                    intro_text = VALUES(intro_text),
+                    terms_text = VALUES(terms_text),
+                    sunday_dates_text = VALUES(sunday_dates_text),
+                    page_text = VALUES(page_text),
+                    updated_by = VALUES(updated_by)
+            ");
+            $stmtUp->execute([
+                ':intro' => $introText,
+                ':terms' => $termsText,
+                ':dates' => $datesText,
+                ':page_text' => $pageText,
+                ':updated_by' => (string)($_SESSION['username'] ?? 'admin'),
+            ]);
+            $_SESSION['school_setup_flash'] = [
+                'type' => 'success',
+                'message' => 'BLCS schedule updated successfully.',
+            ];
+            header("Location: schoolContentSetup");
+            exit;
+        }
+
         $description = trim((string)($_POST['description'] ?? ''));
         $imgUrl = $existing_imgUrl;
 
@@ -91,6 +136,8 @@ try {
         header("Location: schoolContentSetup");
         exit;
     }
+
+    $blcsSchedule = bbcc_blcs_load_schedule($pdo);
 } catch (Exception $e) {
     $message = $e->getMessage();
     $msgType = "error";
@@ -157,6 +204,40 @@ try {
             </div>
         </div>
     </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-calendar-alt mr-1"></i> BLCS Schedule Settings</h6>
+            <small class="text-muted">Shown on Bhutanese Language and Culture School page</small>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="schoolContentSetup">
+                <input type="hidden" name="action" value="update_blcs_schedule">
+                <div class="form-group">
+                    <label>Intro Line</label>
+                    <input type="text" name="blcs_intro_text" class="form-control" value="<?= htmlspecialchars((string)$blcsSchedule['intro_text']) ?>">
+                </div>
+                <div class="form-row">
+                    <div class="form-group col-12">
+                        <label>BLCS Page Main Text</label>
+                        <textarea name="blcs_page_text" rows="14" class="form-control"><?= htmlspecialchars((string)$blcsSchedule['page_text']) ?></textarea>
+                        <small class="text-muted d-block">Formatting options:</small>
+                        <small class="text-muted d-block">`## Heading` for headings, `- item` or `• item` for bullet lists, `1. item` for numbered lists.</small>
+                        <small class="text-muted">Blank lines create paragraph breaks.</small>
+                    </div>
+                    <div class="form-group col-lg-6">
+                        <label>School Terms (one line each)</label>
+                        <textarea name="blcs_terms_text" rows="8" class="form-control"><?= htmlspecialchars((string)$blcsSchedule['terms_text']) ?></textarea>
+                    </div>
+                    <div class="form-group col-lg-6">
+                        <label>Sunday Dates (one line each)</label>
+                        <textarea name="blcs_dates_text" rows="8" class="form-control"><?= htmlspecialchars((string)$blcsSchedule['sunday_dates_text']) ?></textarea>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Save BLCS Schedule</button>
+            </form>
+        </div>
+    </div>
 </div>
 
 <div class="modal fade setup-modal" id="schoolModal" tabindex="-1" role="dialog" aria-hidden="true">
@@ -167,6 +248,7 @@ try {
                 <button type="button" class="btn-close-modal" data-dismiss="modal" aria-label="Close"><i class="fas fa-times"></i></button>
             </div>
             <form method="POST" action="schoolContentSetup" enctype="multipart/form-data" id="schoolForm">
+                <input type="hidden" name="action" value="update_school_content">
                 <div class="modal-body">
                     <div class="section-divider">Description</div>
                     <div class="form-group">
