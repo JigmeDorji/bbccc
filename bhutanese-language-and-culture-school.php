@@ -180,32 +180,39 @@ if (empty($termColumns) || (count($termColumns) > 0 && array_sum(array_map(fn($t
             margin-top: 12px;
         }
         .blcs-info-card {
-            background: #fff;
+            background:
+                radial-gradient(1200px 220px at -10% -20%, rgba(136,27,18,0.06) 0%, transparent 60%),
+                #fff;
             border: 1px solid #e5e7eb;
-            border-radius: 14px;
-            padding: 20px;
-            box-shadow: 0 6px 20px rgba(15, 23, 42, 0.04);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
         }
         .blcs-flow-content {
             margin-top: 12px;
             color: #374151;
-            line-height: 1.8;
-            font-size: 0.98rem;
+            line-height: 1.85;
+            font-size: 1rem;
         }
         .blcs-flow-content h2,
         .blcs-flow-content h3,
         .blcs-flow-content h4 {
-            margin: 14px 0 8px;
+            margin: 20px 0 10px;
             color: #111827;
             line-height: 1.35;
+            font-weight: 800;
+            letter-spacing: .2px;
+            border-left: 4px solid #881b12;
+            padding-left: 10px;
         }
         .blcs-flow-content ul,
         .blcs-flow-content ol {
-            margin: 0 0 10px;
-            padding-left: 20px;
+            margin: 0 0 14px;
+            padding-left: 22px;
         }
+        .blcs-flow-content li { margin-bottom: 6px; }
         .blcs-flow-content p {
-            margin: 0 0 10px;
+            margin: 0 0 12px;
         }
         .blcs-info-card h3 {
             margin: 0 0 10px;
@@ -239,6 +246,7 @@ if (empty($termColumns) || (count($termColumns) > 0 && array_sum(array_map(fn($t
             overflow-x: auto;
             border: 1px solid #e5e7eb;
             border-radius: 12px;
+            background: #fff;
         }
         .blcs-schedule-table {
             width: 100%;
@@ -253,6 +261,7 @@ if (empty($termColumns) || (count($termColumns) > 0 && array_sum(array_map(fn($t
             font-weight: 700;
             color: #111827;
             border-bottom: 1px solid #e5e7eb;
+            white-space: nowrap;
         }
         .blcs-schedule-table thead th:nth-child(odd) { background: #f8fafc; }
         .blcs-schedule-table thead th:nth-child(even) { background: #eef2ff; }
@@ -264,6 +273,24 @@ if (empty($termColumns) || (count($termColumns) > 0 && array_sum(array_map(fn($t
         }
         .blcs-schedule-table tbody tr:nth-child(even) td { background: #fcfcfd; }
         .blcs-empty-cell { color: #9ca3af; }
+        .blcs-subsection-title {
+            margin: 0 0 12px;
+            font-size: 1.15rem;
+            font-weight: 800;
+            color: #111827;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .blcs-subsection-title i { color: #881b12; }
+        @media (max-width: 768px) {
+            .blcs-info-card { padding: 18px; border-radius: 14px; }
+            .blcs-flow-content { font-size: .96rem; }
+            .blcs-flow-content h2,
+            .blcs-flow-content h3,
+            .blcs-flow-content h4 { margin-top: 16px; font-size: 1rem; }
+            .blcs-subsection-title { font-size: 1.05rem; }
+        }
     </style>
 </head>
 <body class="bbcc-public">
@@ -297,7 +324,7 @@ if (empty($termColumns) || (count($termColumns) > 0 && array_sum(array_map(fn($t
             </div>
 
             <div style="margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb;">
-                <h3 style="margin:0 0 12px;font-size:1.2rem;">Enrollment</h3>
+                <h3 class="blcs-subsection-title"><i class="fa-solid fa-user-plus"></i>Enrollment</h3>
                 <p style="margin:0 0 14px;color:#4b5563;">
                     Create a parent account to register your child for classes.
                 </p>
@@ -312,7 +339,7 @@ if (empty($termColumns) || (count($termColumns) > 0 && array_sum(array_map(fn($t
             </div>
 
             <div class="blcs-schedule-wrap">
-                <h3 style="margin:0 0 12px;font-size:1.2rem;"><i class="fa-solid fa-calendar-days mr-2"></i>Class Schedule</h3>
+                <h3 class="blcs-subsection-title"><i class="fa-solid fa-calendar-days"></i>Class Schedule</h3>
                 <p style="margin:0 0 16px;color:#4b5563;"><?= htmlspecialchars((string)$blcsSchedule['intro_text']) ?></p>
                 <?php if (!empty($dateLines)): ?>
                     <?php if (!empty($termColumns)): ?>
