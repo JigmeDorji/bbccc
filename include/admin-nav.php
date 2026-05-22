@@ -402,7 +402,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
 
     <?php if (!isParent() && !isTeacher() && !isPatron()) { ?>
         <?php
-            $websiteActive = in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','schoolContentSetup.php','downloadFileSetup.php','serviceSetup.php','ourTeamSetup.php','viewFeedback.php'], true);
+            $websiteActive = in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','schoolContentSetup.php','taraContentSetup.php','sponsorSetup.php','downloadFileSetup.php','serviceSetup.php','ourTeamSetup.php','viewFeedback.php'], true);
             $dzoActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','update-payments.php','manual-payments.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php','admin-class-students.php'], true);
             $eventsActive = in_array($currentPage, ['eventManagement.php','bookingManagement.php'], true);
             $adminSettingsActive = in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php','audit-logs.php','run-migration.php','module-access.php'], true);
@@ -430,6 +430,8 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                     <a class="collapse-item <?= ($currentPage == 'bannerSetup.php') ? 'active' : '' ?>" href="bannerSetup"><i class="fas fa-image fa-sm mr-1 text-muted"></i> Setup Banner</a>
                     <a class="collapse-item <?= ($currentPage == 'aboutPageSetup.php') ? 'active' : '' ?>" href="aboutPageSetup"><i class="fas fa-info-circle fa-sm mr-1 text-muted"></i> Setup About Page</a>
                     <a class="collapse-item <?= ($currentPage == 'schoolContentSetup.php') ? 'active' : '' ?>" href="schoolContentSetup"><i class="fas fa-school fa-sm mr-1 text-muted"></i> Setup School Content</a>
+                    <a class="collapse-item <?= ($currentPage == 'taraContentSetup.php') ? 'active' : '' ?>" href="taraContentSetup"><i class="fas fa-om fa-sm mr-1 text-muted"></i> Setup Tara Content</a>
+                    <a class="collapse-item <?= ($currentPage == 'sponsorSetup.php') ? 'active' : '' ?>" href="sponsorSetup"><i class="fas fa-icons fa-sm mr-1 text-muted"></i> Setup Sponsor Icons</a>
                     <a class="collapse-item <?= ($currentPage == 'downloadFileSetup.php') ? 'active' : '' ?>" href="downloadFileSetup"><i class="fas fa-file-download fa-sm mr-1 text-muted"></i> Setup Download Files</a>
                     <a class="collapse-item <?= ($currentPage == 'serviceSetup.php') ? 'active' : '' ?>" href="serviceSetup"><i class="fas fa-bullhorn fa-sm mr-1 text-muted"></i> Post Event</a>
                     <a class="collapse-item <?= ($currentPage == 'ourTeamSetup.php') ? 'active' : '' ?>" href="ourTeamSetup"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Executive &amp; Board Members</a>

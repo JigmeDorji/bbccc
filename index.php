@@ -14,6 +14,24 @@ $schoolStats = [
     'campuses' => '2',
     'year_levels' => 'Age 6 years and above',
 ];
+$sponsorIcons = [
+    'icon_one' => 'fa-calendar-day',
+    'icon_two' => 'fa-moon',
+    'icon_three' => 'fa-spa',
+];
+$sponsorImages = [
+    'image_one' => '',
+    'image_two' => '',
+    'image_three' => '',
+];
+$sponsorText = [
+    'intro_line_one' => 'We warmly welcome sponsorship from individuals, families, and groups to help sustain these monthly rituals at the Centre.',
+    'intro_line_two' => 'The following monthly rituals are available for sponsorship.',
+    'intro_line_three' => 'For sponsorship availability and further details, please contact Khenpo Sonam or Namgay (BBCC Program Coordinator) at 0434 522 720.',
+    'date_one' => '10th day of each Bhutanese month (Tshe Chutham).',
+    'date_two' => '15th day of each Bhutanese month (Tshe Chenga).',
+    'date_three' => 'Monthly (as scheduled by the Centre).',
+];
 
 try {
     $pdo = new PDO("mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME . ";charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
@@ -29,6 +47,46 @@ try {
     $stmt = $pdo->prepare("SELECT * FROM about ORDER BY id DESC LIMIT 1");
     $stmt->execute();
     $aboutContent = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS sponsor_settings (
+            id INT PRIMARY KEY,
+            icon_one VARCHAR(60) NULL,
+            icon_two VARCHAR(60) NULL,
+            icon_three VARCHAR(60) NULL,
+            image_one VARCHAR(255) NULL,
+            image_two VARCHAR(255) NULL,
+            image_three VARCHAR(255) NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+    $extraCols = [
+        'image_one' => "ALTER TABLE sponsor_settings ADD COLUMN image_one VARCHAR(255) NULL AFTER icon_three",
+        'image_two' => "ALTER TABLE sponsor_settings ADD COLUMN image_two VARCHAR(255) NULL AFTER image_one",
+        'image_three' => "ALTER TABLE sponsor_settings ADD COLUMN image_three VARCHAR(255) NULL AFTER image_two",
+    ];
+    foreach ($extraCols as $col => $sql) {
+        $chk = $pdo->query("SHOW COLUMNS FROM sponsor_settings LIKE " . $pdo->quote($col));
+        if (!$chk || !$chk->fetch(PDO::FETCH_ASSOC)) {
+            $pdo->exec($sql);
+        }
+    }
+    $stmt = $pdo->prepare("SELECT * FROM sponsor_settings WHERE id = 1 LIMIT 1");
+    $stmt->execute();
+    $iconRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    foreach (['icon_one', 'icon_two', 'icon_three'] as $k) {
+        $v = trim((string)($iconRow[$k] ?? ''));
+        if ($v !== '' && preg_match('/^fa-[a-z0-9-]+$/', $v)) {
+            $sponsorIcons[$k] = $v;
+        }
+    }
+    foreach (['image_one', 'image_two', 'image_three'] as $k) {
+        $sponsorImages[$k] = trim((string)($iconRow[$k] ?? ''));
+    }
+    foreach (array_keys($sponsorText) as $k) {
+        $v = trim((string)($iconRow[$k] ?? ''));
+        if ($v !== '') $sponsorText[$k] = $v;
+    }
 
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS school_content (
@@ -127,6 +185,12 @@ try {
             text-transform: uppercase;
             letter-spacing: .8px;
             font-weight: 700;
+        }
+        .bbcc-service-card-ext__icon .bbcc-team-card__photo {
+            width: 96px;
+            height: 96px;
+            margin: 0 auto;
+            flex: 0 0 96px;
         }
         @media (max-width: 767.98px) {
             .blcs-metrics-grid {
@@ -243,7 +307,11 @@ try {
                 </a>
             </div>
         </div>
+    </div>
+</section>
 
+<section class="bbcc-section bbcc-section--gray">
+    <div class="bbcc-container">
         <div class="section-header fade-up">
             <span class="section-badge"><i class="fa-solid fa-hands-praying"></i> What We Do</span>
             <h2>Our Core <span>Services</span></h2>
@@ -270,6 +338,63 @@ try {
                 </div>
                 <h3>Community Events</h3>
                 <p>Organizing ceremonies, rituals, and religious practices on important Buddhist days, fostering unity, harmony, and a supportive community environment.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══ SPONSORSHIP ═══ -->
+<section class="bbcc-section">
+    <div class="bbcc-container">
+        <div class="section-header fade-up" style="text-align:left;max-width:none;margin-bottom:22px;">
+            <span class="section-badge"><i class="fa-solid fa-hand-holding-heart"></i> Opportunity to Sponsor</span>
+            <h2>Support Monthly <span>Ritual Programs</span></h2>
+            <p><?= htmlspecialchars((string)$sponsorText['intro_line_one']) ?></p>
+            <p><?= htmlspecialchars((string)$sponsorText['intro_line_two']) ?></p>
+            <p><?= htmlspecialchars((string)$sponsorText['intro_line_three']) ?></p>
+        </div>
+
+        <div class="bbcc-services-extended" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));">
+            <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
+                <div class="bbcc-service-card-ext__icon">
+                    <?php if ($sponsorImages['image_one'] !== ''): ?>
+                        <div class="bbcc-team-card__photo">
+                            <img src="<?= htmlspecialchars((string)$sponsorImages['image_one']) ?>" alt="Tshe Chutham sponsor">
+                        </div>
+                    <?php else: ?>
+                        <i class="fa-solid <?= htmlspecialchars((string)$sponsorIcons['icon_one']) ?>"></i>
+                    <?php endif; ?>
+                </div>
+                <h3>10th Day of Bhutanese Month (Tshe Chutham)</h3>
+                <p><strong>Date:</strong> <?= htmlspecialchars((string)$sponsorText['date_one']) ?></p>
+            </div>
+
+            <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
+                <div class="bbcc-service-card-ext__icon">
+                    <?php if ($sponsorImages['image_two'] !== ''): ?>
+                        <div class="bbcc-team-card__photo">
+                            <img src="<?= htmlspecialchars((string)$sponsorImages['image_two']) ?>" alt="Tshe Chenga sponsor">
+                        </div>
+                    <?php else: ?>
+                        <i class="fa-solid <?= htmlspecialchars((string)$sponsorIcons['icon_two']) ?>"></i>
+                    <?php endif; ?>
+                </div>
+                <h3>15th Day of Bhutanese Month (Tshe Chenga)</h3>
+                <p><strong>Date:</strong> <?= htmlspecialchars((string)$sponsorText['date_two']) ?></p>
+            </div>
+
+            <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
+                <div class="bbcc-service-card-ext__icon">
+                    <?php if ($sponsorImages['image_three'] !== ''): ?>
+                        <div class="bbcc-team-card__photo">
+                            <img src="<?= htmlspecialchars((string)$sponsorImages['image_three']) ?>" alt="Tara and Menlha sponsor">
+                        </div>
+                    <?php else: ?>
+                        <i class="fa-solid <?= htmlspecialchars((string)$sponsorIcons['icon_three']) ?>"></i>
+                    <?php endif; ?>
+                </div>
+                <h3>Monthly Tara and Menlha Dungdrup</h3>
+                <p><strong>Date:</strong> <?= htmlspecialchars((string)$sponsorText['date_three']) ?></p>
             </div>
         </div>
     </div>
@@ -324,7 +449,7 @@ try {
 
 <!-- ═══ EVENTS ═══ -->
 <?php if (!empty($menus)): ?>
-<section class="bbcc-section">
+<section class="bbcc-section bbcc-section--gray">
     <div class="bbcc-container">
         <div class="section-header fade-up">
             <span class="section-badge"><i class="fa-solid fa-calendar-check"></i> Events</span>

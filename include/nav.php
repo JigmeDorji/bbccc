@@ -7,6 +7,7 @@ $servicePages = [
     'pastoral-care.php',
     'community-events.php',
     'bhutanese-language-and-culture-school.php',
+    'droenchoe-tara-practice.php',
 ];
 $isServicesPage = in_array($currentPage, $servicePages, true);
 ?>

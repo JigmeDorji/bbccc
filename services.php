@@ -44,6 +44,12 @@ require_once "include/config.php";
                 <p>Comprehensive language and culture learning program covering Dzongkha reading, writing, speaking, Bhutanese traditions, and values.</p>
                 <a href="bhutanese-language-and-culture-school" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#881b12;text-decoration:none;">View School Details <i class="fa-solid fa-arrow-right"></i></a>
             </div>
+            <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
+                <div class="bbcc-service-card-ext__icon"><i class="fa-solid fa-om"></i></div>
+                <h3><a href="droenchoe-tara-practice" style="color:inherit;text-decoration:none;">Droenchoe (Tara) Practice</a></h3>
+                <p>Weekly Saturday practice under guidance, welcoming new and experienced practitioners on a spiritual learning journey.</p>
+                <a href="droenchoe-tara-practice" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#881b12;text-decoration:none;">View Practice Details <i class="fa-solid fa-arrow-right"></i></a>
+            </div>
         </div>
 
         <hr style="margin:42px 0;border:none;border-top:1px solid #e5e7eb;">

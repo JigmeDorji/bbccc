@@ -40,7 +40,19 @@ try {
 <body class="bbcc-public">
 <?php include_once 'include/nav.php'; ?>
 
-<section class="bbcc-section" style="padding-top:140px;">
+<div class="bbcc-page-hero">
+    <div class="bbcc-page-hero__content">
+        <h1><i class="fa-solid fa-download"></i> Downloads</h1>
+        <p class="bbcc-page-hero__subtitle">Forms, templates, and useful resources</p>
+        <ul class="bbcc-page-hero__breadcrumb">
+            <li><a href="index">Home</a></li>
+            <li class="sep">/</li>
+            <li>Downloads</li>
+        </ul>
+    </div>
+</div>
+
+<section class="bbcc-section">
     <div class="bbcc-container">
         <div class="section-header fade-up" style="margin-bottom:24px;">
             <span class="section-badge"><i class="fa-solid fa-download"></i> Resources</span>
