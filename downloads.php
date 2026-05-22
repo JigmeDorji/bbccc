@@ -7,22 +7,12 @@ try {
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS download_files (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            title VARCHAR(255) NOT NULL,
-            description TEXT NULL,
-            original_name VARCHAR(255) NULL,
-            file_path VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
     try {
-        $pdo->exec("ALTER TABLE download_files ADD COLUMN original_name VARCHAR(255) NULL AFTER description");
+        $downloadItems = $pdo->query("SELECT title, description, original_name, file_path FROM download_files ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
-        // ignore if column exists
+        // Backward compatibility when original_name column does not exist.
+        $downloadItems = $pdo->query("SELECT title, description, NULL AS original_name, file_path FROM download_files ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
     }
-    $downloadItems = $pdo->query("SELECT title, description, original_name, file_path FROM download_files ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     $downloadItems = [];
 }

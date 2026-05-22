@@ -53,47 +53,6 @@ try {
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
 
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS school_content (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            description TEXT NULL,
-            imgUrl VARCHAR(255) DEFAULT NULL,
-            students_count VARCHAR(50) NULL,
-            teachers_count VARCHAR(50) NULL,
-            campuses_count VARCHAR(50) NULL,
-            year_levels VARCHAR(120) NULL,
-            stats_heading VARCHAR(180) NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS tara_content (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            title VARCHAR(180) NULL,
-            subtitle VARCHAR(255) NULL,
-            intro_text TEXT NULL,
-            body_text TEXT NULL,
-            schedule_text VARCHAR(255) NULL,
-            monthly_text VARCHAR(255) NULL,
-            contact_text VARCHAR(255) NULL,
-            imgUrl VARCHAR(255) DEFAULT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-    $cols = [
-        'students_count' => "ALTER TABLE school_content ADD COLUMN students_count VARCHAR(50) NULL AFTER imgUrl",
-        'teachers_count' => "ALTER TABLE school_content ADD COLUMN teachers_count VARCHAR(50) NULL AFTER students_count",
-        'campuses_count' => "ALTER TABLE school_content ADD COLUMN campuses_count VARCHAR(50) NULL AFTER teachers_count",
-        'year_levels' => "ALTER TABLE school_content ADD COLUMN year_levels VARCHAR(120) NULL AFTER campuses_count",
-        'stats_heading' => "ALTER TABLE school_content ADD COLUMN stats_heading VARCHAR(180) NULL AFTER year_levels",
-    ];
-    foreach ($cols as $col => $sql) {
-        $chk = $pdo->query("SHOW COLUMNS FROM school_content LIKE " . $pdo->quote($col));
-        if (!$chk || !$chk->fetch(PDO::FETCH_ASSOC)) {
-            $pdo->exec($sql);
-        }
-    }
-
     $stmt = $pdo->prepare("SELECT * FROM school_content ORDER BY id DESC LIMIT 1");
     $stmt->execute();
     $row = $stmt->fetch(PDO::FETCH_ASSOC);

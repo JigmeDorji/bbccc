@@ -10,7 +10,14 @@ if (!is_admin_role() && !is_website_admin_role()) {
 
 $message = "";
 $msgType = "success";
-$reloadPage = false;
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+if (isset($_SESSION['service_setup_flash']) && is_array($_SESSION['service_setup_flash'])) {
+    $message = (string)($_SESSION['service_setup_flash']['message'] ?? '');
+    $msgType = (string)($_SESSION['service_setup_flash']['type'] ?? 'success');
+    unset($_SESSION['service_setup_flash']);
+}
 
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
@@ -22,17 +29,31 @@ try {
     if (isset($_GET['delete'])) {
         $stmt = $pdo->prepare("DELETE FROM menu WHERE id = :id");
         $stmt->execute([':id' => (int)$_GET['delete']]);
-        $message = "Event deleted successfully.";
-        $reloadPage = true;
+        $_SESSION['service_setup_flash'] = ['type' => 'success', 'message' => 'Event deleted successfully.'];
+        header('Location: serviceSetup');
+        exit;
     }
 
     // INSERT / UPDATE
     if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $menuName  = trim($_POST['menuName'] ?? '');
         $menuDetail = trim($_POST['menuDetail'] ?? '');
-        $price     = trim($_POST['price'] ?? '');
-        $eventStartDateTime = $_POST['eventStartDateTime'] ?? '';
+        $priceRaw  = trim((string)($_POST['price'] ?? ''));
+        $eventStartDateTimeRaw = trim((string)($_POST['eventStartDateTime'] ?? ''));
         $edit_id   = $_POST['edit_id'] ?? '';
+
+        // Normalize price so DECIMAL columns don't fail on empty/non-numeric input.
+        $price = null;
+        if ($priceRaw !== '') {
+            $normalizedPrice = str_replace([',', ' '], '', $priceRaw);
+            if (!is_numeric($normalizedPrice)) {
+                throw new Exception("Price must be a valid number (e.g. 25 or 25.00).");
+            }
+            $price = number_format((float)$normalizedPrice, 2, '.', '');
+        }
+
+        // Normalize datetime: empty -> NULL, otherwise keep input format.
+        $eventStartDateTime = ($eventStartDateTimeRaw !== '') ? $eventStartDateTimeRaw : null;
 
         // Get existing image for edit
         $existing_img = '';
@@ -72,7 +93,9 @@ try {
             $stmt->execute([':n'=>$menuName, ':d'=>$menuDetail, ':i'=>$menuImgUrl, ':p'=>$price, ':e'=>$eventStartDateTime]);
             $message = "Event created successfully.";
         }
-        $reloadPage = true;
+        $_SESSION['service_setup_flash'] = ['type' => 'success', 'message' => $message];
+        header('Location: serviceSetup');
+        exit;
     }
 
     // Fetch all
@@ -296,8 +319,7 @@ $(document).ready(function(){
 });
 
 <?php if ($message): ?>
-Swal.fire({ icon:'<?= $msgType ?>', title:'<?= addslashes($message) ?>', showConfirmButton:false, timer:1800 })
-.then(() => { <?php if ($reloadPage): ?>window.location.href='serviceSetup';<?php endif; ?> });
+Swal.fire({ icon:'<?= $msgType ?>', title:'<?= addslashes($message) ?>', showConfirmButton:false, timer:1800 });
 <?php endif; ?>
 </script>
 </body>

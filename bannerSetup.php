@@ -33,13 +33,12 @@ try {
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
 
-    // Ensure sortable column exists.
+    $hasSortOrder = true;
     try {
-        $pdo->exec("ALTER TABLE banner ADD COLUMN sort_order INT NULL");
+        $pdo->query("SELECT sort_order FROM banner LIMIT 1");
     } catch (Throwable $e) {
-        // Ignore if column already exists.
+        $hasSortOrder = false;
     }
-    $pdo->exec("UPDATE banner SET sort_order = id WHERE sort_order IS NULL OR sort_order = 0");
 
     // DELETE
     if (isset($_GET['delete'])) {
@@ -51,6 +50,11 @@ try {
 
     // REORDER (drag and drop)
     if ($_SERVER["REQUEST_METHOD"] === "POST" && (string)($_POST['action'] ?? '') === 'reorder') {
+        if (!$hasSortOrder) {
+            header('Content-Type: application/json');
+            echo json_encode(['ok' => false, 'message' => 'Reorder is unavailable until migrations are applied.']);
+            exit;
+        }
         $orderRaw = (string)($_POST['order'] ?? '[]');
         $ids = json_decode($orderRaw, true);
         if (!is_array($ids)) {
@@ -123,16 +127,25 @@ try {
             $stmt->execute([':title' => $title, ':subtitle' => $subtitle, ':imgUrl' => $imgUrl, ':id' => (int)$edit_id]);
             $message = "Banner updated successfully.";
         } else {
-            $maxSort = (int)$pdo->query("SELECT COALESCE(MAX(sort_order), 0) FROM banner")->fetchColumn();
-            $stmt = $pdo->prepare("INSERT INTO banner (title, subtitle, imgUrl, sort_order) VALUES (:title, :subtitle, :imgUrl, :sort_order)");
-            $stmt->execute([':title' => $title, ':subtitle' => $subtitle, ':imgUrl' => $imgUrl, ':sort_order' => $maxSort + 1]);
+            if ($hasSortOrder) {
+                $maxSort = (int)$pdo->query("SELECT COALESCE(MAX(sort_order), 0) FROM banner")->fetchColumn();
+                $stmt = $pdo->prepare("INSERT INTO banner (title, subtitle, imgUrl, sort_order) VALUES (:title, :subtitle, :imgUrl, :sort_order)");
+                $stmt->execute([':title' => $title, ':subtitle' => $subtitle, ':imgUrl' => $imgUrl, ':sort_order' => $maxSort + 1]);
+            } else {
+                $stmt = $pdo->prepare("INSERT INTO banner (title, subtitle, imgUrl) VALUES (:title, :subtitle, :imgUrl)");
+                $stmt->execute([':title' => $title, ':subtitle' => $subtitle, ':imgUrl' => $imgUrl]);
+            }
             $message = "Banner created successfully.";
         }
         $reloadPage = true;
     }
 
     // Fetch all banners
-    $banners = $pdo->query("SELECT * FROM banner ORDER BY sort_order ASC, id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    if ($hasSortOrder) {
+        $banners = $pdo->query("SELECT * FROM banner ORDER BY sort_order ASC, id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $banners = $pdo->query("SELECT * FROM banner ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    }
 
 } catch (Exception $e) {
     $message = $e->getMessage();

@@ -34,24 +34,6 @@ try {
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
 
-    $columns = [
-        'detail_image_one' => "ALTER TABLE sponsor_settings ADD COLUMN detail_image_one VARCHAR(255) NULL",
-        'detail_image_two' => "ALTER TABLE sponsor_settings ADD COLUMN detail_image_two VARCHAR(255) NULL",
-        'detail_image_three' => "ALTER TABLE sponsor_settings ADD COLUMN detail_image_three VARCHAR(255) NULL",
-        'detail_one' => "ALTER TABLE sponsor_settings ADD COLUMN detail_one TEXT NULL",
-        'detail_two' => "ALTER TABLE sponsor_settings ADD COLUMN detail_two TEXT NULL",
-        'detail_three' => "ALTER TABLE sponsor_settings ADD COLUMN detail_three TEXT NULL",
-        'style_one' => "ALTER TABLE sponsor_settings ADD COLUMN style_one VARCHAR(30) NULL",
-        'style_two' => "ALTER TABLE sponsor_settings ADD COLUMN style_two VARCHAR(30) NULL",
-        'style_three' => "ALTER TABLE sponsor_settings ADD COLUMN style_three VARCHAR(30) NULL",
-    ];
-    foreach ($columns as $col => $sql) {
-        $chk = $pdo->query("SHOW COLUMNS FROM sponsor_settings LIKE " . $pdo->quote($col));
-        if (!$chk || !$chk->fetch(PDO::FETCH_ASSOC)) {
-            $pdo->exec($sql);
-        }
-    }
-
     $settings = bbcc_load_sponsor_program_settings($DB_HOST, $DB_NAME, $DB_USER, $DB_PASSWORD);
 
     $title = (string)$settings['texts'][$sel['title']];

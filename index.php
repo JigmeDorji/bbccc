@@ -49,39 +49,16 @@ try {
     $stmt->execute();
     $aboutContent = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS sponsor_settings (
-            id INT PRIMARY KEY,
-            icon_one VARCHAR(60) NULL,
-            icon_two VARCHAR(60) NULL,
-            icon_three VARCHAR(60) NULL,
-            image_one VARCHAR(255) NULL,
-            image_two VARCHAR(255) NULL,
-            image_three VARCHAR(255) NULL,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-    $extraCols = [
-        'image_one' => "ALTER TABLE sponsor_settings ADD COLUMN image_one VARCHAR(255) NULL AFTER icon_three",
-        'image_two' => "ALTER TABLE sponsor_settings ADD COLUMN image_two VARCHAR(255) NULL AFTER image_one",
-        'image_three' => "ALTER TABLE sponsor_settings ADD COLUMN image_three VARCHAR(255) NULL AFTER image_two",
-        'intro_text' => "ALTER TABLE sponsor_settings ADD COLUMN intro_text TEXT NULL AFTER image_three",
-        'title_one' => "ALTER TABLE sponsor_settings ADD COLUMN title_one VARCHAR(255) NULL AFTER intro_text",
-        'title_two' => "ALTER TABLE sponsor_settings ADD COLUMN title_two VARCHAR(255) NULL AFTER title_one",
-        'title_three' => "ALTER TABLE sponsor_settings ADD COLUMN title_three VARCHAR(255) NULL AFTER title_two",
-        'date_one' => "ALTER TABLE sponsor_settings ADD COLUMN date_one VARCHAR(255) NULL AFTER title_three",
-        'date_two' => "ALTER TABLE sponsor_settings ADD COLUMN date_two VARCHAR(255) NULL AFTER date_one",
-        'date_three' => "ALTER TABLE sponsor_settings ADD COLUMN date_three VARCHAR(255) NULL AFTER date_two",
-    ];
-    foreach ($extraCols as $col => $sql) {
-        $chk = $pdo->query("SHOW COLUMNS FROM sponsor_settings LIKE " . $pdo->quote($col));
-        if (!$chk || !$chk->fetch(PDO::FETCH_ASSOC)) {
-            $pdo->exec($sql);
-        }
+    // Load sponsor settings without runtime schema mutations.
+    // If table/columns are not ready yet, keep defaults instead of breaking index load.
+    $iconRow = [];
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM sponsor_settings WHERE id = 1 LIMIT 1");
+        $stmt->execute();
+        $iconRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    } catch (Exception $e) {
+        $iconRow = [];
     }
-    $stmt = $pdo->prepare("SELECT * FROM sponsor_settings WHERE id = 1 LIMIT 1");
-    $stmt->execute();
-    $iconRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
     foreach (['icon_one', 'icon_two', 'icon_three'] as $k) {
         $v = trim((string)($iconRow[$k] ?? ''));
         if ($v !== '' && preg_match('/^fa-[a-z0-9-]+$/', $v)) {
@@ -96,17 +73,13 @@ try {
         if ($v !== '') $sponsorText[$k] = $v;
     }
 
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS school_content (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            description TEXT NULL,
-            imgUrl VARCHAR(255) DEFAULT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-    $stmt = $pdo->prepare("SELECT * FROM school_content ORDER BY id DESC LIMIT 1");
-    $stmt->execute();
-    $schoolContent = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM school_content ORDER BY id DESC LIMIT 1");
+        $stmt->execute();
+        $schoolContent = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    } catch (Exception $e) {
+        $schoolContent = [];
+    }
     if (!empty($schoolContent)) {
         $schoolStats['heading'] = trim((string)($schoolContent['stats_heading'] ?? '')) !== '' ? (string)$schoolContent['stats_heading'] : $schoolStats['heading'];
         $schoolStats['students'] = trim((string)($schoolContent['students_count'] ?? '')) !== '' ? (string)$schoolContent['students_count'] : $schoolStats['students'];
@@ -115,21 +88,31 @@ try {
         $schoolStats['year_levels'] = trim((string)($schoolContent['year_levels'] ?? '')) !== '' ? (string)$schoolContent['year_levels'] : $schoolStats['year_levels'];
     }
 
-    // Fetch menu/event data for upcoming items only.
-    // Items with no date are kept visible for backward compatibility.
-    $stmt = $pdo->prepare("
-        SELECT *
-        FROM menu
-        WHERE eventStartDateTime IS NULL
-           OR eventStartDateTime = ''
-           OR eventStartDateTime >= NOW()
-        ORDER BY
-            CASE WHEN eventStartDateTime IS NULL OR eventStartDateTime = '' THEN 1 ELSE 0 END,
-            eventStartDateTime ASC,
-            id DESC
-    ");
+    // Fetch all menu/event data first, then filter upcoming in PHP.
+    // This avoids SQL DATE parsing edge cases across mixed datetime formats.
+    $stmt = $pdo->prepare("SELECT * FROM menu ORDER BY id DESC");
     $stmt->execute();
-    $menus = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $allMenus = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $menus = [];
+    $todayStartTs = strtotime(date('Y-m-d 00:00:00'));
+
+    foreach ($allMenus as $menuRow) {
+        $rawDate = trim((string)($menuRow['eventStartDateTime'] ?? ''));
+        if ($rawDate === '') {
+            // Keep undated legacy rows visible for backward compatibility.
+            $menus[] = $menuRow;
+            continue;
+        }
+        $eventTs = strtotime($rawDate);
+        if ($eventTs === false) {
+            // If stored format is unusual, keep it visible rather than dropping it.
+            $menus[] = $menuRow;
+            continue;
+        }
+        if ($eventTs >= $todayStartTs) {
+            $menus[] = $menuRow;
+        }
+    }
 
 } catch (Exception $e) {
     $message = "Error: " . $e->getMessage();
@@ -210,6 +193,20 @@ try {
             height: 96px;
             margin: 0 auto;
             flex: 0 0 96px;
+        }
+        .bbcc-event-card__today {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 8px;
+            padding: 5px 10px;
+            border-radius: 999px;
+            background: #ecfdf3;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+            font-size: .76rem;
+            font-weight: 700;
+            letter-spacing: .2px;
         }
         @media (max-width: 767.98px) {
             .blcs-metrics-grid {
@@ -474,7 +471,6 @@ try {
 </section>
 
 <!-- ═══ EVENTS ═══ -->
-<?php if (!empty($menus)): ?>
 <section class="bbcc-section bbcc-section--gray">
     <div class="bbcc-container">
         <div class="section-header fade-up">
@@ -482,13 +478,21 @@ try {
             <h2>Upcoming <span>Events</span></h2>
             <p>Stay connected with our community through ceremonies, teachings, and cultural celebrations.</p>
         </div>
+        <?php if (empty($menus)): ?>
+        <div class="bbcc-empty-state fade-up" style="text-align:center;padding:34px 20px;border:1px dashed #d1d5db;border-radius:14px;background:#fff;">
+            <p style="margin:0;color:#4b5563;font-weight:600;">No upcoming events available right now.</p>
+        </div>
+        <?php else: ?>
         <div class="bbcc-events-grid">
             <?php foreach ($menus as $menu): ?>
             <?php
                 $shortDetail = mb_strimwidth(strip_tags($menu['menuDetail']), 0, 140, '...');
                 $formattedDate = "No Date Set";
+                $isHappeningToday = false;
                 if (!empty($menu['eventStartDateTime'])) {
-                    $formattedDate = date("d M Y – g:i A", strtotime($menu['eventStartDateTime']));
+                    $eventTs = strtotime((string)$menu['eventStartDateTime']);
+                    $formattedDate = date("d M Y – g:i A", $eventTs);
+                    $isHappeningToday = date('Y-m-d', $eventTs) === date('Y-m-d');
                 }
             ?>
             <a href="event_detail?id=<?= $menu['id'] ?>" class="bbcc-event-card fade-up">
@@ -509,6 +513,9 @@ try {
                         <i class="fa-regular fa-calendar"></i> <?= $formattedDate ?>
                     </span>
                     <h3><?= htmlspecialchars($menu['menuName']) ?></h3>
+                    <?php if ($isHappeningToday): ?>
+                    <span class="bbcc-event-card__today"><i class="fa-solid fa-bolt"></i> Happening Today</span>
+                    <?php endif; ?>
                     <p><?= htmlspecialchars($shortDetail) ?></p>
                     <span class="bbcc-event-card__link">
                         Read More <i class="fa-solid fa-arrow-right"></i>
@@ -517,6 +524,7 @@ try {
             </a>
             <?php endforeach; ?>
         </div>
+        <?php endif; ?>
         <div style="text-align:center;margin-top:48px;">
             <a href="events" class="bbcc-btn bbcc-btn--outline">
                 View All Events <i class="fa-solid fa-arrow-right"></i>
@@ -524,7 +532,6 @@ try {
         </div>
     </div>
 </section>
-<?php endif; ?>
 
 <!-- ═══ CTA ═══ -->
 <section class="bbcc-cta">

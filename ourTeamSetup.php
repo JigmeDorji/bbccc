@@ -33,13 +33,12 @@ try {
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
 
-    // Backward-compatible schema update
+    $hasMemberType = true;
     try {
-        $col = $pdo->query("SHOW COLUMNS FROM ourteam LIKE 'member_type'")->fetch(PDO::FETCH_ASSOC);
-        if (!$col) {
-            $pdo->exec("ALTER TABLE ourteam ADD COLUMN member_type VARCHAR(30) NOT NULL DEFAULT 'executive' AFTER designation");
-        }
-    } catch (Throwable $ignoreSchema) {}
+        $pdo->query("SELECT member_type FROM ourteam LIMIT 1");
+    } catch (Throwable $ignoreSchema) {
+        $hasMemberType = false;
+    }
 
     // DELETE
     if (isset($_GET['delete'])) {
@@ -97,19 +96,33 @@ try {
         }
 
         if ($edit_id !== '') {
-            $stmt = $pdo->prepare("UPDATE ourteam SET Name=:n, designation=:d, member_type=:mt, imgUrl=:i WHERE id=:id");
-            $stmt->execute([':n'=>$name, ':d'=>$designation, ':mt'=>$memberType, ':i'=>$imgUrl, ':id'=>(int)$edit_id]);
+            if ($hasMemberType) {
+                $stmt = $pdo->prepare("UPDATE ourteam SET Name=:n, designation=:d, member_type=:mt, imgUrl=:i WHERE id=:id");
+                $stmt->execute([':n'=>$name, ':d'=>$designation, ':mt'=>$memberType, ':i'=>$imgUrl, ':id'=>(int)$edit_id]);
+            } else {
+                $stmt = $pdo->prepare("UPDATE ourteam SET Name=:n, designation=:d, imgUrl=:i WHERE id=:id");
+                $stmt->execute([':n'=>$name, ':d'=>$designation, ':i'=>$imgUrl, ':id'=>(int)$edit_id]);
+            }
             $message = "Team member updated successfully.";
         } else {
-            $stmt = $pdo->prepare("INSERT INTO ourteam (Name, designation, member_type, imgUrl) VALUES (:n,:d,:mt,:i)");
-            $stmt->execute([':n'=>$name, ':d'=>$designation, ':mt'=>$memberType, ':i'=>$imgUrl]);
+            if ($hasMemberType) {
+                $stmt = $pdo->prepare("INSERT INTO ourteam (Name, designation, member_type, imgUrl) VALUES (:n,:d,:mt,:i)");
+                $stmt->execute([':n'=>$name, ':d'=>$designation, ':mt'=>$memberType, ':i'=>$imgUrl]);
+            } else {
+                $stmt = $pdo->prepare("INSERT INTO ourteam (Name, designation, imgUrl) VALUES (:n,:d,:i)");
+                $stmt->execute([':n'=>$name, ':d'=>$designation, ':i'=>$imgUrl]);
+            }
             $message = "Team member added successfully.";
         }
         $reloadPage = true;
     }
 
     // Fetch all
-    $teams = $pdo->query("SELECT * FROM ourteam ORDER BY CASE WHEN member_type='board' THEN 0 ELSE 1 END, id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    if ($hasMemberType) {
+        $teams = $pdo->query("SELECT * FROM ourteam ORDER BY CASE WHEN member_type='board' THEN 0 ELSE 1 END, id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $teams = $pdo->query("SELECT *, 'executive' AS member_type FROM ourteam ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    }
 
 } catch (Exception $e) {
     $message = $e->getMessage();

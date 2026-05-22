@@ -1,5 +1,6 @@
 <?php
 require_once "include/config.php";
+require_once "include/image_helpers.php";
 
 $menu = null;
 try {
@@ -37,15 +38,96 @@ if (!empty($menu['eventStartDateTime'])) {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <?php include_once 'include/global_css.php'; ?>
     <style>
-        .ed-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 48px; align-items: flex-start; }
-        .ed-img { width: 100%; height: 420px; object-fit: cover; border-radius: var(--radius-xl); box-shadow: var(--shadow-lg); }
-        .ed-meta { display: flex; gap: 20px; font-size: .88rem; color: var(--gray-600); margin-bottom: 24px; flex-wrap: wrap; }
-        .ed-meta i { color: var(--gold); margin-right: 6px; }
-        .ed-body { font-size: 1.05rem; line-height: 1.9; color: var(--gray-700); }
-        .ed-body p { margin-bottom: 16px; }
+        .ed-panel {
+            background: linear-gradient(145deg, #ffffff, #fff7f2);
+            border: 1px solid #f3e0d5;
+            border-radius: var(--radius-xl);
+            padding: 34px;
+            box-shadow: var(--shadow-md);
+            position: relative;
+            overflow: hidden;
+            max-width: 1120px;
+            margin: 0 auto;
+        }
+        .ed-panel::after {
+            content: "";
+            position: absolute;
+            top: -70px;
+            right: -50px;
+            width: 240px;
+            height: 240px;
+            border-radius: 50%;
+            background: rgba(136, 27, 18, .07);
+            pointer-events: none;
+        }
+        .ed-grid {
+            position: relative;
+            z-index: 1;
+            display: block;
+        }
+        .ed-media {
+            border-radius: 18px;
+            overflow: hidden;
+            border: 3px solid rgba(136, 27, 18, .14);
+            background: #fff8f4;
+            height: 320px;
+            max-width: 620px;
+            margin: 0 auto 24px;
+        }
+        .ed-media picture,
+        .ed-media img {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .ed-media img {
+            object-fit: contain;
+            background: #fff;
+            padding: 8px;
+        }
+        .ed-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 12px 0 16px;
+        }
+        .ed-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            background: #fff;
+            border: 1px solid #f1d7c8;
+            color: #7c2d12;
+            font-size: .82rem;
+            font-weight: 700;
+        }
+        .ed-chip i { color: #9a3412; }
+        .ed-body {
+            color: var(--gray-700);
+            line-height: 1.9;
+            font-size: 1.03rem;
+            margin-bottom: 16px;
+        }
+        .ed-empty {
+            display: inline-flex;
+            width: 100%;
+            min-height: 420px;
+            align-items: center;
+            justify-content: center;
+            background: #fff8f4;
+            color: #9a3412;
+            font-weight: 700;
+            letter-spacing: .3px;
+        }
         @media (max-width: 991px) {
-            .ed-grid { grid-template-columns: 1fr; gap: 32px; }
-            .ed-img { height: 280px; }
+            .ed-media,
+            .ed-media img,
+            .ed-empty { height: 240px; }
+        }
+        @media (max-width: 767px) {
+            .ed-panel { padding: 22px; }
         }
     </style>
 </head>
@@ -70,22 +152,37 @@ if (!empty($menu['eventStartDateTime'])) {
 
 <section class="bbcc-section">
     <div class="bbcc-container">
-        <div class="ed-grid">
-            <div class="fade-up">
-                <img src="<?= htmlspecialchars($menu['menuImgUrl']) ?>" alt="<?= htmlspecialchars($menu['menuName']) ?>" class="ed-img">
-            </div>
-            <div class="fade-up">
-                <h2 style="font-size:2rem;font-weight:800;margin-bottom:12px;"><?= htmlspecialchars($menu['menuName']) ?></h2>
+        <div class="ed-panel fade-up">
+            <div class="ed-grid">
+                <div class="ed-media">
+                    <?php if (!empty($menu['menuImgUrl'])): ?>
+                        <?= bbcc_render_responsive_picture(
+                            (string)$menu['menuImgUrl'],
+                            (string)$menu['menuName'],
+                            [
+                                'sizes' => '(max-width: 991px) 100vw, 58vw',
+                                'loading' => 'lazy',
+                                'decoding' => 'async',
+                                'widths' => [640, 960, 1280, 1600],
+                            ]
+                        ) ?>
+                    <?php else: ?>
+                        <div class="ed-empty"><i class="fa-solid fa-calendar-days" style="margin-right:8px;"></i> Event Image</div>
+                    <?php endif; ?>
+                </div>
+                <div>
+                <h2 style="font-size:2rem;font-weight:800;margin-bottom:10px;"><?= htmlspecialchars($menu['menuName']) ?></h2>
                 <div class="ed-meta">
-                    <span><i class="fa-regular fa-calendar"></i> <?= $eventDate ?></span>
-                    <span><i class="fa-solid fa-user"></i> BBCC</span>
+                    <span class="ed-chip"><i class="fa-regular fa-calendar"></i> <?= $eventDate ?></span>
+                    <span class="ed-chip"><i class="fa-solid fa-user"></i> BBCC Community Event</span>
                 </div>
                 <div class="ed-body">
-                    <p><?= nl2br(htmlspecialchars($menu['menuDetail'])) ?></p>
+                    <p><?= nl2br(htmlspecialchars((string)$menu['menuDetail'])) ?></p>
                 </div>
-                <a href="events" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:24px;">
+                <a href="events" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:8px;">
                     <i class="fa-solid fa-arrow-left"></i> Back to Events
                 </a>
+            </div>
             </div>
         </div>
     </div>
@@ -96,9 +193,3 @@ if (!empty($menu['eventStartDateTime'])) {
 
 </body>
 </html>
-
-
-
-
-
-

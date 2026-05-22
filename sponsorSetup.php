@@ -46,27 +46,7 @@ try {
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
 
-    $pdo->exec("\n        CREATE TABLE IF NOT EXISTS sponsor_settings (\n            id INT PRIMARY KEY,\n            icon_one VARCHAR(60) NULL,\n            icon_two VARCHAR(60) NULL,\n            icon_three VARCHAR(60) NULL,\n            image_one VARCHAR(255) NULL,\n            image_two VARCHAR(255) NULL,\n            image_three VARCHAR(255) NULL,\n            intro_text TEXT NULL,\n            title_one VARCHAR(255) NULL,\n            title_two VARCHAR(255) NULL,\n            title_three VARCHAR(255) NULL,\n            date_one VARCHAR(255) NULL,\n            date_two VARCHAR(255) NULL,\n            date_three VARCHAR(255) NULL,\n            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4\n    ");
-    $extraCols = [
-        'image_one' => "ALTER TABLE sponsor_settings ADD COLUMN image_one VARCHAR(255) NULL AFTER icon_three",
-        'image_two' => "ALTER TABLE sponsor_settings ADD COLUMN image_two VARCHAR(255) NULL AFTER image_one",
-        'image_three' => "ALTER TABLE sponsor_settings ADD COLUMN image_three VARCHAR(255) NULL AFTER image_two",
-        'intro_text' => "ALTER TABLE sponsor_settings ADD COLUMN intro_text TEXT NULL AFTER image_three",
-        'title_one' => "ALTER TABLE sponsor_settings ADD COLUMN title_one VARCHAR(255) NULL AFTER intro_text",
-        'title_two' => "ALTER TABLE sponsor_settings ADD COLUMN title_two VARCHAR(255) NULL AFTER title_one",
-        'title_three' => "ALTER TABLE sponsor_settings ADD COLUMN title_three VARCHAR(255) NULL AFTER title_two",
-        'date_one' => "ALTER TABLE sponsor_settings ADD COLUMN date_one VARCHAR(255) NULL AFTER title_three",
-        'date_two' => "ALTER TABLE sponsor_settings ADD COLUMN date_two VARCHAR(255) NULL AFTER date_one",
-        'date_three' => "ALTER TABLE sponsor_settings ADD COLUMN date_three VARCHAR(255) NULL AFTER date_two",
-    ];
-    foreach ($extraCols as $col => $sql) {
-        $chk = $pdo->query("SHOW COLUMNS FROM sponsor_settings LIKE " . $pdo->quote($col));
-        if (!$chk || !$chk->fetch(PDO::FETCH_ASSOC)) {
-            $pdo->exec($sql);
-        }
-    }
-
-    $load = $pdo->prepare("SELECT * FROM sponsor_settings WHERE id = 1 LIMIT 1");
+        $load = $pdo->prepare("SELECT * FROM sponsor_settings WHERE id = 1 LIMIT 1");
     $load->execute();
     $row = $load->fetch(PDO::FETCH_ASSOC) ?: [];
     foreach (['icon_one','icon_two','icon_three'] as $k) {

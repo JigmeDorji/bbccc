@@ -30,20 +30,11 @@ try {
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
 
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS download_files (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            title VARCHAR(255) NOT NULL,
-            description TEXT NULL,
-            original_name VARCHAR(255) NULL,
-            file_path VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
+    $hasOriginalName = true;
     try {
-        $pdo->exec("ALTER TABLE download_files ADD COLUMN original_name VARCHAR(255) NULL AFTER description");
+        $pdo->query("SELECT original_name FROM download_files LIMIT 1");
     } catch (Throwable $e) {
-        // ignore if column exists
+        $hasOriginalName = false;
     }
 
     if (isset($_GET['delete'])) {
@@ -102,19 +93,32 @@ try {
         if (!move_uploaded_file($tmp, $pathAbs)) throw new Exception("Failed to upload file.");
         $rel = 'uploads/downloads/' . $safeName;
 
-        $ins = $pdo->prepare("INSERT INTO download_files (title, description, original_name, file_path) VALUES (:title, :description, :original_name, :file_path)");
-        $ins->execute([
-            ':title' => $title,
-            ':description' => $description,
-            ':original_name' => $originalName,
-            ':file_path' => $rel,
-        ]);
+        if ($hasOriginalName) {
+            $ins = $pdo->prepare("INSERT INTO download_files (title, description, original_name, file_path) VALUES (:title, :description, :original_name, :file_path)");
+            $ins->execute([
+                ':title' => $title,
+                ':description' => $description,
+                ':original_name' => $originalName,
+                ':file_path' => $rel,
+            ]);
+        } else {
+            $ins = $pdo->prepare("INSERT INTO download_files (title, description, file_path) VALUES (:title, :description, :file_path)");
+            $ins->execute([
+                ':title' => $title,
+                ':description' => $description,
+                ':file_path' => $rel,
+            ]);
+        }
 
         $message = "Download file uploaded successfully.";
         $msgType = "success";
     }
 
-    $files = $pdo->query("SELECT * FROM download_files ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+    if ($hasOriginalName) {
+        $files = $pdo->query("SELECT * FROM download_files ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $files = $pdo->query("SELECT id, title, description, file_path, created_at, NULL AS original_name FROM download_files ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+    }
 } catch (Exception $e) {
     $message = $e->getMessage();
     $msgType = "error";

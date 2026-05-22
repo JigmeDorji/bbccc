@@ -38,8 +38,6 @@ try {
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
 
-    $pdo->exec("\n        CREATE TABLE IF NOT EXISTS tara_content (\n            id INT AUTO_INCREMENT PRIMARY KEY,\n            title VARCHAR(180) NULL,\n            subtitle VARCHAR(255) NULL,\n            intro_text TEXT NULL,\n            body_text TEXT NULL,\n            schedule_text VARCHAR(255) NULL,\n            monthly_text VARCHAR(255) NULL,\n            contact_text VARCHAR(255) NULL,\n            imgUrl VARCHAR(255) DEFAULT NULL,\n            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4\n    ");
-
     $stmt = $pdo->prepare("SELECT * FROM tara_content ORDER BY id DESC LIMIT 1");
     $stmt->execute();
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
