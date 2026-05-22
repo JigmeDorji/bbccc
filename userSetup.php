@@ -4,6 +4,7 @@ require_once "include/auth.php";
 require_once "access_control.php";
 require_once "include/role_helpers.php";
 require_once "include/module_access.php";
+require_once "include/patron_schema.php";
 require_login();
 allowRoles(['Administrator', 'Admin', 'Company Admin', 'System_owner']);
 
@@ -17,6 +18,7 @@ try {
 } catch (Exception $e) {
     bbcc_fail_db($e);
 }
+bbcc_ensure_patrons_table($pdo);
 
 // ─── POST handler (PRG) ──────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -146,6 +148,10 @@ $teacherUsers = $pdo->query(
 
 $parentUsers = $pdo->query(
     "SELECT id, full_name, email, phone, username, status, created_at FROM parents ORDER BY full_name"
+)->fetchAll();
+
+$patronUsers = $pdo->query(
+    "SELECT id, full_name, email, phone, patron_type, status, created_at FROM patrons ORDER BY full_name"
 )->fetchAll();
 
 // ─── Module access summary (defaults + overrides) ────────
@@ -331,6 +337,12 @@ foreach ($allUsers as $u) {
                         <a class="nav-link" data-toggle="tab" href="#pane-parents" role="tab">
                             <i class="fas fa-user-friends mr-1"></i> Parents
                             <span class="badge badge-secondary ml-1"><?= count($parentUsers) ?></span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#pane-patrons" role="tab">
+                            <i class="fas fa-hands-helping mr-1"></i> Patrons
+                            <span class="badge badge-secondary ml-1"><?= count($patronUsers) ?></span>
                         </a>
                     </li>
                 </ul>
@@ -625,6 +637,52 @@ foreach ($allUsers as $u) {
                                         <?php endforeach; ?>
                                         <?php if (empty($parentUsers)): ?>
                                             <tr><td colspan="6" class="text-center text-muted py-4"><i class="fas fa-inbox mr-1"></i> No parents registered yet.</td></tr>
+                                        <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ═ Patrons ═ -->
+                    <div class="tab-pane fade" id="pane-patrons" role="tabpanel">
+                        <div class="card shadow mb-4">
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover dt-table" id="tblPatrons">
+                                        <thead style="background:#f8f9fc;">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Email</th>
+                                            <th>Phone</th>
+                                            <th>Patron Type</th>
+                                            <th>Status</th>
+                                            <th>Joined</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        <?php foreach ($patronUsers as $pt): ?>
+                                            <tr>
+                                                <td class="font-weight-bold">
+                                                    <i class="fas fa-hands-helping mr-1" style="color:#7c3aed;font-size:.8rem;"></i>
+                                                    <?= htmlspecialchars((string)($pt['full_name'] ?? '—')) ?>
+                                                </td>
+                                                <td><?= htmlspecialchars((string)($pt['email'] ?? '—')) ?></td>
+                                                <td><?= htmlspecialchars((string)($pt['phone'] ?? '—')) ?></td>
+                                                <td><?= htmlspecialchars((string)($pt['patron_type'] ?? 'Regular')) ?></td>
+                                                <td>
+                                                    <?php if ((string)($pt['status'] ?? '') === 'Active'): ?>
+                                                        <span class="badge badge-success" style="border-radius:10px;padding:4px 10px;">Active</span>
+                                                    <?php else: ?>
+                                                        <span class="badge badge-secondary" style="border-radius:10px;padding:4px 10px;"><?= htmlspecialchars((string)($pt['status'] ?? 'Inactive')) ?></span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td style="font-size:.84rem;color:#888;"><?= !empty($pt['created_at']) ? htmlspecialchars(date('d M Y', strtotime((string)$pt['created_at']))) : '—' ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                        <?php if (empty($patronUsers)): ?>
+                                            <tr><td colspan="6" class="text-center text-muted py-4"><i class="fas fa-inbox mr-1"></i> No patrons registered yet.</td></tr>
                                         <?php endif; ?>
                                         </tbody>
                                     </table>

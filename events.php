@@ -5,6 +5,25 @@ date_default_timezone_set('Australia/Melbourne');
 $upcomingEvents = [];
 $pastEvents = [];
 $calendarEvents = [];
+$sponsorIcons = [
+    'icon_one' => 'fa-calendar-day',
+    'icon_two' => 'fa-moon',
+    'icon_three' => 'fa-spa',
+];
+$sponsorImages = [
+    'image_one' => '',
+    'image_two' => '',
+    'image_three' => '',
+];
+$sponsorText = [
+    'intro_text' => "We warmly welcome sponsorship from individuals, families, and groups to help sustain these monthly rituals at the Centre.\nThe following monthly rituals are available for sponsorship.\nFor sponsorship availability and further details, please contact Khenpo Sonam or Namgay (BBCC Program Coordinator) at 0434 522 720.",
+    'title_one' => '10th Day of Bhutanese Month (Tshe Chutham)',
+    'title_two' => '15th Day of Bhutanese Month (Tshe Chenga)',
+    'title_three' => 'Monthly Tara and Menlha Dungdrup',
+    'date_one' => '10th day of each Bhutanese month (Tshe Chutham).',
+    'date_two' => '15th day of each Bhutanese month (Tshe Chenga).',
+    'date_three' => 'Monthly (as scheduled by the Centre).',
+];
 
 try {
     $pdo = new PDO(
@@ -21,6 +40,23 @@ try {
     $filterMonth = $_GET['month'] ?? '';
     $search      = trim($_GET['search'] ?? '');
     $today       = date('Y-m-d');
+
+    $stmtSponsor = $pdo->prepare("SELECT * FROM sponsor_settings WHERE id = 1 LIMIT 1");
+    $stmtSponsor->execute();
+    $sRow = $stmtSponsor->fetch(PDO::FETCH_ASSOC) ?: [];
+    if (!empty($sRow)) {
+        foreach (['icon_one', 'icon_two', 'icon_three'] as $k) {
+            $v = trim((string)($sRow[$k] ?? ''));
+            if ($v !== '' && preg_match('/^fa-[a-z0-9-]+$/', $v)) $sponsorIcons[$k] = $v;
+        }
+        foreach (['image_one', 'image_two', 'image_three'] as $k) {
+            $sponsorImages[$k] = trim((string)($sRow[$k] ?? ''));
+        }
+        foreach (array_keys($sponsorText) as $k) {
+            $v = trim((string)($sRow[$k] ?? ''));
+            if ($v !== '') $sponsorText[$k] = $v;
+        }
+    }
 
     /* =========================
        UPCOMING EVENTS QUERY
@@ -343,6 +379,19 @@ $monthName   = $firstDayObj->format('F');
             gap: 20px;
             margin-top: 32px;
         }
+        .ev-sponsor-wrap {
+            margin: 14px 0 24px;
+            padding: 20px;
+            border: 1px solid var(--gray-200);
+            border-radius: var(--radius-lg);
+            background: var(--white);
+        }
+        .ev-sponsor-wrap .bbcc-team-card__photo {
+            width: 96px;
+            height: 96px;
+            margin: 0 auto;
+            flex: 0 0 96px;
+        }
 
         @media (max-width: 768px) {
             .cal-table td {
@@ -382,6 +431,49 @@ $monthName   = $firstDayObj->format('F');
 
 <section class="bbcc-section">
     <div class="bbcc-container">
+
+        <div id="monthly-ritual-programs" class="ev-sponsor-wrap fade-up">
+            <div class="section-header" style="text-align:left;max-width:none;margin-bottom:22px;">
+                <span class="section-badge"><i class="fa-solid fa-hand-holding-heart"></i> Opportunity to Sponsor</span>
+                <h2>Support Monthly <span>Ritual Programs</span></h2>
+                <?= nl2br(htmlspecialchars((string)$sponsorText['intro_text'])) ?>
+            </div>
+            <div class="bbcc-services-extended" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));">
+                <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
+                    <div class="bbcc-service-card-ext__icon">
+                        <?php if ($sponsorImages['image_one'] !== ''): ?>
+                            <div class="bbcc-team-card__photo"><img src="<?= htmlspecialchars((string)$sponsorImages['image_one']) ?>" alt="Sponsor Program 1"></div>
+                        <?php else: ?>
+                            <i class="fa-solid <?= htmlspecialchars((string)$sponsorIcons['icon_one']) ?>"></i>
+                        <?php endif; ?>
+                    </div>
+                    <h3><?= htmlspecialchars((string)$sponsorText['title_one']) ?></h3>
+                    <p><strong>Date:</strong> <?= htmlspecialchars((string)$sponsorText['date_one']) ?></p>
+                </div>
+                <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
+                    <div class="bbcc-service-card-ext__icon">
+                        <?php if ($sponsorImages['image_two'] !== ''): ?>
+                            <div class="bbcc-team-card__photo"><img src="<?= htmlspecialchars((string)$sponsorImages['image_two']) ?>" alt="Sponsor Program 2"></div>
+                        <?php else: ?>
+                            <i class="fa-solid <?= htmlspecialchars((string)$sponsorIcons['icon_two']) ?>"></i>
+                        <?php endif; ?>
+                    </div>
+                    <h3><?= htmlspecialchars((string)$sponsorText['title_two']) ?></h3>
+                    <p><strong>Date:</strong> <?= htmlspecialchars((string)$sponsorText['date_two']) ?></p>
+                </div>
+                <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
+                    <div class="bbcc-service-card-ext__icon">
+                        <?php if ($sponsorImages['image_three'] !== ''): ?>
+                            <div class="bbcc-team-card__photo"><img src="<?= htmlspecialchars((string)$sponsorImages['image_three']) ?>" alt="Sponsor Program 3"></div>
+                        <?php else: ?>
+                            <i class="fa-solid <?= htmlspecialchars((string)$sponsorIcons['icon_three']) ?>"></i>
+                        <?php endif; ?>
+                    </div>
+                    <h3><?= htmlspecialchars((string)$sponsorText['title_three']) ?></h3>
+                    <p><strong>Date:</strong> <?= htmlspecialchars((string)$sponsorText['date_three']) ?></p>
+                </div>
+            </div>
+        </div>
 
         <div class="section-header fade-up" style="margin-bottom:40px;">
             <span class="section-badge"><i class="fa-solid fa-calendar-days"></i> Events</span>
