@@ -22,9 +22,10 @@ $images = [
     'image_three' => '',
 ];
 $texts = [
-    'intro_line_one' => 'We warmly welcome sponsorship from individuals, families, and groups to help sustain these monthly rituals at the Centre.',
-    'intro_line_two' => 'The following monthly rituals are available for sponsorship.',
-    'intro_line_three' => 'For sponsorship availability and further details, please contact Khenpo Sonam or Namgay (BBCC Program Coordinator) at 0434 522 720.',
+    'intro_text' => "We warmly welcome sponsorship from individuals, families, and groups to help sustain these monthly rituals at the Centre.\nThe following monthly rituals are available for sponsorship.\nFor sponsorship availability and further details, please contact Khenpo Sonam or Namgay (BBCC Program Coordinator) at 0434 522 720.",
+    'title_one' => '10th Day of Bhutanese Month (Tshe Chutham)',
+    'title_two' => '15th Day of Bhutanese Month (Tshe Chenga)',
+    'title_three' => 'Monthly Tara and Menlha Dungdrup',
     'date_one' => '10th day of each Bhutanese month (Tshe Chutham).',
     'date_two' => '15th day of each Bhutanese month (Tshe Chenga).',
     'date_three' => 'Monthly (as scheduled by the Centre).',
@@ -45,15 +46,16 @@ try {
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
 
-    $pdo->exec("\n        CREATE TABLE IF NOT EXISTS sponsor_settings (\n            id INT PRIMARY KEY,\n            icon_one VARCHAR(60) NULL,\n            icon_two VARCHAR(60) NULL,\n            icon_three VARCHAR(60) NULL,\n            image_one VARCHAR(255) NULL,\n            image_two VARCHAR(255) NULL,\n            image_three VARCHAR(255) NULL,\n            intro_line_one TEXT NULL,\n            intro_line_two TEXT NULL,\n            intro_line_three TEXT NULL,\n            date_one VARCHAR(255) NULL,\n            date_two VARCHAR(255) NULL,\n            date_three VARCHAR(255) NULL,\n            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4\n    ");
+    $pdo->exec("\n        CREATE TABLE IF NOT EXISTS sponsor_settings (\n            id INT PRIMARY KEY,\n            icon_one VARCHAR(60) NULL,\n            icon_two VARCHAR(60) NULL,\n            icon_three VARCHAR(60) NULL,\n            image_one VARCHAR(255) NULL,\n            image_two VARCHAR(255) NULL,\n            image_three VARCHAR(255) NULL,\n            intro_text TEXT NULL,\n            title_one VARCHAR(255) NULL,\n            title_two VARCHAR(255) NULL,\n            title_three VARCHAR(255) NULL,\n            date_one VARCHAR(255) NULL,\n            date_two VARCHAR(255) NULL,\n            date_three VARCHAR(255) NULL,\n            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP\n        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4\n    ");
     $extraCols = [
         'image_one' => "ALTER TABLE sponsor_settings ADD COLUMN image_one VARCHAR(255) NULL AFTER icon_three",
         'image_two' => "ALTER TABLE sponsor_settings ADD COLUMN image_two VARCHAR(255) NULL AFTER image_one",
         'image_three' => "ALTER TABLE sponsor_settings ADD COLUMN image_three VARCHAR(255) NULL AFTER image_two",
-        'intro_line_one' => "ALTER TABLE sponsor_settings ADD COLUMN intro_line_one TEXT NULL AFTER image_three",
-        'intro_line_two' => "ALTER TABLE sponsor_settings ADD COLUMN intro_line_two TEXT NULL AFTER intro_line_one",
-        'intro_line_three' => "ALTER TABLE sponsor_settings ADD COLUMN intro_line_three TEXT NULL AFTER intro_line_two",
-        'date_one' => "ALTER TABLE sponsor_settings ADD COLUMN date_one VARCHAR(255) NULL AFTER intro_line_three",
+        'intro_text' => "ALTER TABLE sponsor_settings ADD COLUMN intro_text TEXT NULL AFTER image_three",
+        'title_one' => "ALTER TABLE sponsor_settings ADD COLUMN title_one VARCHAR(255) NULL AFTER intro_text",
+        'title_two' => "ALTER TABLE sponsor_settings ADD COLUMN title_two VARCHAR(255) NULL AFTER title_one",
+        'title_three' => "ALTER TABLE sponsor_settings ADD COLUMN title_three VARCHAR(255) NULL AFTER title_two",
+        'date_one' => "ALTER TABLE sponsor_settings ADD COLUMN date_one VARCHAR(255) NULL AFTER title_three",
         'date_two' => "ALTER TABLE sponsor_settings ADD COLUMN date_two VARCHAR(255) NULL AFTER date_one",
         'date_three' => "ALTER TABLE sponsor_settings ADD COLUMN date_three VARCHAR(255) NULL AFTER date_two",
     ];
@@ -85,7 +87,9 @@ try {
         $iconOne = trim((string)($_POST['icon_one'] ?? ''));
         $iconTwo = trim((string)($_POST['icon_two'] ?? ''));
         $iconThree = trim((string)($_POST['icon_three'] ?? ''));
-        foreach (array_keys($texts) as $k) {
+        $introPosted = trim((string)($_POST['intro_text'] ?? ''));
+        if ($introPosted !== '') $texts['intro_text'] = $introPosted;
+        foreach (['title_one','title_two','title_three','date_one','date_two','date_three'] as $k) {
             $v = trim((string)($_POST[$k] ?? ''));
             if ($v !== '') $texts[$k] = $v;
         }
@@ -120,12 +124,11 @@ try {
 
                 $uploadAbs = $uploadDir . "/" . $safeName;
                 if (!move_uploaded_file($imageTmp, $uploadAbs)) throw new Exception("Failed to upload image.");
-                bbcc_generate_responsive_variants($uploadAbs, [200, 320, 480], 84);
                 $images[$col] = "uploads/sponsor/" . $safeName;
             }
         }
 
-        $save = $pdo->prepare("\n            INSERT INTO sponsor_settings (id, icon_one, icon_two, icon_three, image_one, image_two, image_three, intro_line_one, intro_line_two, intro_line_three, date_one, date_two, date_three)\n            VALUES (1, :icon_one, :icon_two, :icon_three, :image_one, :image_two, :image_three, :intro_line_one, :intro_line_two, :intro_line_three, :date_one, :date_two, :date_three)\n            ON DUPLICATE KEY UPDATE\n                icon_one = VALUES(icon_one),\n                icon_two = VALUES(icon_two),\n                icon_three = VALUES(icon_three),\n                image_one = VALUES(image_one),\n                image_two = VALUES(image_two),\n                image_three = VALUES(image_three),\n                intro_line_one = VALUES(intro_line_one),\n                intro_line_two = VALUES(intro_line_two),\n                intro_line_three = VALUES(intro_line_three),\n                date_one = VALUES(date_one),\n                date_two = VALUES(date_two),\n                date_three = VALUES(date_three)\n        ");
+        $save = $pdo->prepare("\n            INSERT INTO sponsor_settings (id, icon_one, icon_two, icon_three, image_one, image_two, image_three, intro_text, title_one, title_two, title_three, date_one, date_two, date_three)\n            VALUES (1, :icon_one, :icon_two, :icon_three, :image_one, :image_two, :image_three, :intro_text, :title_one, :title_two, :title_three, :date_one, :date_two, :date_three)\n            ON DUPLICATE KEY UPDATE\n                icon_one = VALUES(icon_one),\n                icon_two = VALUES(icon_two),\n                icon_three = VALUES(icon_three),\n                image_one = VALUES(image_one),\n                image_two = VALUES(image_two),\n                image_three = VALUES(image_three),\n                intro_text = VALUES(intro_text),\n                title_one = VALUES(title_one),\n                title_two = VALUES(title_two),\n                title_three = VALUES(title_three),\n                date_one = VALUES(date_one),\n                date_two = VALUES(date_two),\n                date_three = VALUES(date_three)\n        ");
         $save->execute([
             ':icon_one' => $iconOne,
             ':icon_two' => $iconTwo,
@@ -133,9 +136,10 @@ try {
             ':image_one' => (string)$images['image_one'],
             ':image_two' => (string)$images['image_two'],
             ':image_three' => (string)$images['image_three'],
-            ':intro_line_one' => (string)$texts['intro_line_one'],
-            ':intro_line_two' => (string)$texts['intro_line_two'],
-            ':intro_line_three' => (string)$texts['intro_line_three'],
+            ':intro_text' => (string)$texts['intro_text'],
+            ':title_one' => (string)$texts['title_one'],
+            ':title_two' => (string)$texts['title_two'],
+            ':title_three' => (string)$texts['title_three'],
             ':date_one' => (string)$texts['date_one'],
             ':date_two' => (string)$texts['date_two'],
             ':date_three' => (string)$texts['date_three'],
@@ -159,7 +163,7 @@ try {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Sponsor Setup</title>
+    <title>Setup Montly Events</title>
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
 </head>
@@ -172,7 +176,7 @@ try {
 
 <div class="container-fluid">
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
-        <h1 class="h3 mb-0 text-gray-800">Sponsor Icon Setup</h1>
+        <h1 class="h3 mb-0 text-gray-800">Setup Montly Events</h1>
     </div>
 
     <div class="card shadow mb-4">
@@ -204,32 +208,30 @@ try {
                 <small class="text-muted d-block mb-3">Enter Font Awesome icon names only, e.g. <code>fa-calendar-day</code>, <code>fa-moon</code>, <code>fa-spa</code>.</small>
                 <hr>
                 <div class="form-group">
-                    <label>Intro Text Line 1</label>
-                    <input type="text" name="intro_line_one" class="form-control" value="<?= htmlspecialchars((string)$texts['intro_line_one']) ?>">
-                </div>
-                <div class="form-group">
-                    <label>Intro Text Line 2</label>
-                    <input type="text" name="intro_line_two" class="form-control" value="<?= htmlspecialchars((string)$texts['intro_line_two']) ?>">
-                </div>
-                <div class="form-group">
-                    <label>Intro Text Line 3</label>
-                    <input type="text" name="intro_line_three" class="form-control" value="<?= htmlspecialchars((string)$texts['intro_line_three']) ?>">
+                    <label>Intro Text</label>
+                    <textarea name="intro_text" class="form-control" rows="4"><?= htmlspecialchars((string)$texts['intro_text']) ?></textarea>
                 </div>
                 <div class="form-row">
                     <div class="form-group col-md-4">
+                        <label>Program Title 1</label>
+                        <input type="text" name="title_one" class="form-control mb-2" value="<?= htmlspecialchars((string)$texts['title_one']) ?>">
                         <label>Date Text 1</label>
                         <input type="text" name="date_one" class="form-control" value="<?= htmlspecialchars((string)$texts['date_one']) ?>">
                     </div>
                     <div class="form-group col-md-4">
+                        <label>Program Title 2</label>
+                        <input type="text" name="title_two" class="form-control mb-2" value="<?= htmlspecialchars((string)$texts['title_two']) ?>">
                         <label>Date Text 2</label>
                         <input type="text" name="date_two" class="form-control" value="<?= htmlspecialchars((string)$texts['date_two']) ?>">
                     </div>
                     <div class="form-group col-md-4">
+                        <label>Program Title 3</label>
+                        <input type="text" name="title_three" class="form-control mb-2" value="<?= htmlspecialchars((string)$texts['title_three']) ?>">
                         <label>Date Text 3</label>
                         <input type="text" name="date_three" class="form-control" value="<?= htmlspecialchars((string)$texts['date_three']) ?>">
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Save Icons</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Save Settings</button>
             </form>
         </div>
     </div>

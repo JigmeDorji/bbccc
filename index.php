@@ -25,9 +25,10 @@ $sponsorImages = [
     'image_three' => '',
 ];
 $sponsorText = [
-    'intro_line_one' => 'We warmly welcome sponsorship from individuals, families, and groups to help sustain these monthly rituals at the Centre.',
-    'intro_line_two' => 'The following monthly rituals are available for sponsorship.',
-    'intro_line_three' => 'For sponsorship availability and further details, please contact Khenpo Sonam or Namgay (BBCC Program Coordinator) at 0434 522 720.',
+    'intro_text' => "We warmly welcome sponsorship from individuals, families, and groups to help sustain these monthly rituals at the Centre.\nThe following monthly rituals are available for sponsorship.\nFor sponsorship availability and further details, please contact Khenpo Sonam or Namgay (BBCC Program Coordinator) at 0434 522 720.",
+    'title_one' => '10th Day of Bhutanese Month (Tshe Chutham)',
+    'title_two' => '15th Day of Bhutanese Month (Tshe Chenga)',
+    'title_three' => 'Monthly Tara and Menlha Dungdrup',
     'date_one' => '10th day of each Bhutanese month (Tshe Chutham).',
     'date_two' => '15th day of each Bhutanese month (Tshe Chenga).',
     'date_three' => 'Monthly (as scheduled by the Centre).',
@@ -64,6 +65,13 @@ try {
         'image_one' => "ALTER TABLE sponsor_settings ADD COLUMN image_one VARCHAR(255) NULL AFTER icon_three",
         'image_two' => "ALTER TABLE sponsor_settings ADD COLUMN image_two VARCHAR(255) NULL AFTER image_one",
         'image_three' => "ALTER TABLE sponsor_settings ADD COLUMN image_three VARCHAR(255) NULL AFTER image_two",
+        'intro_text' => "ALTER TABLE sponsor_settings ADD COLUMN intro_text TEXT NULL AFTER image_three",
+        'title_one' => "ALTER TABLE sponsor_settings ADD COLUMN title_one VARCHAR(255) NULL AFTER intro_text",
+        'title_two' => "ALTER TABLE sponsor_settings ADD COLUMN title_two VARCHAR(255) NULL AFTER title_one",
+        'title_three' => "ALTER TABLE sponsor_settings ADD COLUMN title_three VARCHAR(255) NULL AFTER title_two",
+        'date_one' => "ALTER TABLE sponsor_settings ADD COLUMN date_one VARCHAR(255) NULL AFTER title_three",
+        'date_two' => "ALTER TABLE sponsor_settings ADD COLUMN date_two VARCHAR(255) NULL AFTER date_one",
+        'date_three' => "ALTER TABLE sponsor_settings ADD COLUMN date_three VARCHAR(255) NULL AFTER date_two",
     ];
     foreach ($extraCols as $col => $sql) {
         $chk = $pdo->query("SHOW COLUMNS FROM sponsor_settings LIKE " . $pdo->quote($col));
@@ -349,9 +357,7 @@ try {
         <div class="section-header fade-up" style="text-align:left;max-width:none;margin-bottom:22px;">
             <span class="section-badge"><i class="fa-solid fa-hand-holding-heart"></i> Opportunity to Sponsor</span>
             <h2>Support Monthly <span>Ritual Programs</span></h2>
-            <p><?= htmlspecialchars((string)$sponsorText['intro_line_one']) ?></p>
-            <p><?= htmlspecialchars((string)$sponsorText['intro_line_two']) ?></p>
-            <p><?= htmlspecialchars((string)$sponsorText['intro_line_three']) ?></p>
+            <?= nl2br(htmlspecialchars((string)$sponsorText['intro_text'])) ?>
         </div>
 
         <div class="bbcc-services-extended" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));">
@@ -365,7 +371,7 @@ try {
                         <i class="fa-solid <?= htmlspecialchars((string)$sponsorIcons['icon_one']) ?>"></i>
                     <?php endif; ?>
                 </div>
-                <h3>10th Day of Bhutanese Month (Tshe Chutham)</h3>
+                <h3><?= htmlspecialchars((string)$sponsorText['title_one']) ?></h3>
                 <p><strong>Date:</strong> <?= htmlspecialchars((string)$sponsorText['date_one']) ?></p>
             </div>
 
@@ -379,7 +385,7 @@ try {
                         <i class="fa-solid <?= htmlspecialchars((string)$sponsorIcons['icon_two']) ?>"></i>
                     <?php endif; ?>
                 </div>
-                <h3>15th Day of Bhutanese Month (Tshe Chenga)</h3>
+                <h3><?= htmlspecialchars((string)$sponsorText['title_two']) ?></h3>
                 <p><strong>Date:</strong> <?= htmlspecialchars((string)$sponsorText['date_two']) ?></p>
             </div>
 
@@ -393,7 +399,7 @@ try {
                         <i class="fa-solid <?= htmlspecialchars((string)$sponsorIcons['icon_three']) ?>"></i>
                     <?php endif; ?>
                 </div>
-                <h3>Monthly Tara and Menlha Dungdrup</h3>
+                <h3><?= htmlspecialchars((string)$sponsorText['title_three']) ?></h3>
                 <p><strong>Date:</strong> <?= htmlspecialchars((string)$sponsorText['date_three']) ?></p>
             </div>
         </div>

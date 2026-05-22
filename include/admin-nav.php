@@ -431,7 +431,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                     <a class="collapse-item <?= ($currentPage == 'aboutPageSetup.php') ? 'active' : '' ?>" href="aboutPageSetup"><i class="fas fa-info-circle fa-sm mr-1 text-muted"></i> Setup About Page</a>
                     <a class="collapse-item <?= ($currentPage == 'schoolContentSetup.php') ? 'active' : '' ?>" href="schoolContentSetup"><i class="fas fa-school fa-sm mr-1 text-muted"></i> Setup School Content</a>
                     <a class="collapse-item <?= ($currentPage == 'taraContentSetup.php') ? 'active' : '' ?>" href="taraContentSetup"><i class="fas fa-om fa-sm mr-1 text-muted"></i> Setup Tara Content</a>
-                    <a class="collapse-item <?= ($currentPage == 'sponsorSetup.php') ? 'active' : '' ?>" href="sponsorSetup"><i class="fas fa-icons fa-sm mr-1 text-muted"></i> Setup Sponsor Icons</a>
+                    <a class="collapse-item <?= ($currentPage == 'sponsorSetup.php') ? 'active' : '' ?>" href="sponsorSetup"><i class="fas fa-icons fa-sm mr-1 text-muted"></i> Setup Montly Events</a>
                     <a class="collapse-item <?= ($currentPage == 'downloadFileSetup.php') ? 'active' : '' ?>" href="downloadFileSetup"><i class="fas fa-file-download fa-sm mr-1 text-muted"></i> Setup Download Files</a>
                     <a class="collapse-item <?= ($currentPage == 'serviceSetup.php') ? 'active' : '' ?>" href="serviceSetup"><i class="fas fa-bullhorn fa-sm mr-1 text-muted"></i> Post Event</a>
                     <a class="collapse-item <?= ($currentPage == 'ourTeamSetup.php') ? 'active' : '' ?>" href="ourTeamSetup"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Executive &amp; Board Members</a>
