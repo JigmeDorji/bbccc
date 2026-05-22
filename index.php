@@ -115,8 +115,19 @@ try {
         $schoolStats['year_levels'] = trim((string)($schoolContent['year_levels'] ?? '')) !== '' ? (string)$schoolContent['year_levels'] : $schoolStats['year_levels'];
     }
 
-    // Fetch menu/event data
-    $stmt = $pdo->prepare("SELECT * FROM menu");
+    // Fetch menu/event data for upcoming items only.
+    // Items with no date are kept visible for backward compatibility.
+    $stmt = $pdo->prepare("
+        SELECT *
+        FROM menu
+        WHERE eventStartDateTime IS NULL
+           OR eventStartDateTime = ''
+           OR eventStartDateTime >= NOW()
+        ORDER BY
+            CASE WHEN eventStartDateTime IS NULL OR eventStartDateTime = '' THEN 1 ELSE 0 END,
+            eventStartDateTime ASC,
+            id DESC
+    ");
     $stmt->execute();
     $menus = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -373,7 +384,7 @@ try {
                 </div>
                 <h3><?= htmlspecialchars((string)$sponsorText['title_one']) ?></h3>
                 <p><strong>Date:</strong> <?= htmlspecialchars((string)$sponsorText['date_one']) ?></p>
-                <a href="events#monthly-ritual-programs" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:12px;">
+                <a href="program-tshe-chutham" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:12px;">
                     View More <i class="fa-solid fa-arrow-right"></i>
                 </a>
             </div>
@@ -390,7 +401,7 @@ try {
                 </div>
                 <h3><?= htmlspecialchars((string)$sponsorText['title_two']) ?></h3>
                 <p><strong>Date:</strong> <?= htmlspecialchars((string)$sponsorText['date_two']) ?></p>
-                <a href="events#monthly-ritual-programs" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:12px;">
+                <a href="program-tshe-chenga" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:12px;">
                     View More <i class="fa-solid fa-arrow-right"></i>
                 </a>
             </div>
@@ -407,7 +418,7 @@ try {
                 </div>
                 <h3><?= htmlspecialchars((string)$sponsorText['title_three']) ?></h3>
                 <p><strong>Date:</strong> <?= htmlspecialchars((string)$sponsorText['date_three']) ?></p>
-                <a href="events#monthly-ritual-programs" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:12px;">
+                <a href="program-tara-menlha" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:12px;">
                     View More <i class="fa-solid fa-arrow-right"></i>
                 </a>
             </div>

@@ -449,6 +449,9 @@ $monthName   = $firstDayObj->format('F');
                     </div>
                     <h3><?= htmlspecialchars((string)$sponsorText['title_one']) ?></h3>
                     <p><strong>Date:</strong> <?= htmlspecialchars((string)$sponsorText['date_one']) ?></p>
+                    <a href="program-tshe-chutham" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:12px;">
+                        View More <i class="fa-solid fa-arrow-right"></i>
+                    </a>
                 </div>
                 <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
                     <div class="bbcc-service-card-ext__icon">
@@ -460,6 +463,9 @@ $monthName   = $firstDayObj->format('F');
                     </div>
                     <h3><?= htmlspecialchars((string)$sponsorText['title_two']) ?></h3>
                     <p><strong>Date:</strong> <?= htmlspecialchars((string)$sponsorText['date_two']) ?></p>
+                    <a href="program-tshe-chenga" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:12px;">
+                        View More <i class="fa-solid fa-arrow-right"></i>
+                    </a>
                 </div>
                 <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
                     <div class="bbcc-service-card-ext__icon">
@@ -471,6 +477,9 @@ $monthName   = $firstDayObj->format('F');
                     </div>
                     <h3><?= htmlspecialchars((string)$sponsorText['title_three']) ?></h3>
                     <p><strong>Date:</strong> <?= htmlspecialchars((string)$sponsorText['date_three']) ?></p>
+                    <a href="program-tara-menlha" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:12px;">
+                        View More <i class="fa-solid fa-arrow-right"></i>
+                    </a>
                 </div>
             </div>
         </div>

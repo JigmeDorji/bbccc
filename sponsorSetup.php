@@ -206,6 +206,7 @@ try {
                     </div>
                 </div>
                 <small class="text-muted d-block mb-3">Enter Font Awesome icon names only, e.g. <code>fa-calendar-day</code>, <code>fa-moon</code>, <code>fa-spa</code>.</small>
+
                 <hr>
                 <div class="form-group">
                     <label>Intro Text</label>

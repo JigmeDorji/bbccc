@@ -46,14 +46,14 @@ try {
         }
 
         // Sanitize
-        $title    = trim(htmlspecialchars($_POST['title']    ?? '', ENT_QUOTES, 'UTF-8'));
-        $desc     = trim(htmlspecialchars($_POST['description'] ?? '', ENT_QUOTES, 'UTF-8'));
+        $title    = trim((string)($_POST['title'] ?? ''));
+        $desc     = trim((string)($_POST['description'] ?? ''));
         $date     = $_POST['event_date'] ?? '';
         $start    = $_POST['start_time'] ?? '';
         $end      = $_POST['end_time']   ?? '';
-        $location = trim(htmlspecialchars($_POST['location'] ?? '', ENT_QUOTES, 'UTF-8'));
-        $sponsors = trim(htmlspecialchars($_POST['sponsors'] ?? '', ENT_QUOTES, 'UTF-8'));
-        $contacts = trim(htmlspecialchars($_POST['contacts'] ?? '', ENT_QUOTES, 'UTF-8'));
+        $location = trim((string)($_POST['location'] ?? ''));
+        $sponsors = trim((string)($_POST['sponsors'] ?? ''));
+        $contacts = trim((string)($_POST['contacts'] ?? ''));
         $status   = $_POST['status']     ?? 'Available';
 
         // Validate
@@ -309,7 +309,7 @@ $csrf = $_SESSION['csrf_token'];
             <input type="text" name="search" class="form-control form-control-sm mr-2"
                    value="<?= htmlspecialchars($search) ?>" placeholder="Search title...">
             <button class="btn btn-sm btn-primary mr-2"><i class="fas fa-search"></i> Filter</button>
-            <a href="eventManagement" class="btn btn-sm btn-secondary">Clear</a>
+            <a href="eventManagement.php" class="btn btn-sm btn-secondary">Clear</a>
         </form>
     </div>
 </div>
@@ -391,7 +391,7 @@ $csrf = $_SESSION['csrf_token'];
                     <i class="fas fa-times" aria-hidden="true"></i>
                 </button>
             </div>
-            <form method="POST" action="eventManagement" id="eventFormInner">
+            <form method="POST" action="eventManagement.php" id="eventFormInner">
                 <div class="modal-body">
                     <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
                     <input type="hidden" name="edit_id" id="modal_edit_id" value="">
