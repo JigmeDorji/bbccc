@@ -89,8 +89,11 @@ function bbcc_queue_mail(string $toEmail, string $toName, string $subject, strin
             ':max_attempts' => max(1, $maxAttempts),
         ]);
 
-        // Improve perceived speed: drain a small batch after response is sent.
-        if (bbcc_mail_queue_is_truthy(bbcc_env('MAIL_QUEUE_DRAIN_ON_SHUTDOWN', '1'))) {
+        // Improve perceived speed: drain only when response can be flushed first.
+        // On many cPanel/shared Apache setups, fastcgi_finish_request() is unavailable,
+        // so draining on shutdown can block the user-facing request.
+        $drainDefault = function_exists('fastcgi_finish_request') ? '1' : '0';
+        if (bbcc_mail_queue_is_truthy(bbcc_env('MAIL_QUEUE_DRAIN_ON_SHUTDOWN', $drainDefault))) {
             $drainLimit = (int)bbcc_env('MAIL_QUEUE_DRAIN_LIMIT', '3');
             bbcc_schedule_mail_queue_drain(max(1, min(10, $drainLimit)));
         }

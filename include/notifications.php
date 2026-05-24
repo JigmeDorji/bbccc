@@ -1,6 +1,7 @@
 <?php
 // include/notifications.php — simple role/user notification helpers
 require_once __DIR__ . '/mailer.php';
+require_once __DIR__ . '/mail_queue.php';
 
 function bbcc_notification_role_key(string $role): string {
     $r = strtolower(trim($role));
@@ -87,7 +88,12 @@ function bbcc_notify_admins(PDO $pdo, string $title, string $body = '', string $
                 " . ($safeBody !== '' ? "<p style='margin:0 0 10px;'>{$safeBody}</p>" : "") . "
                 " . ($safeLink !== '' ? "<p style='margin:0;'><strong>Link:</strong> {$safeLink}</p>" : "") . "
             ";
-            @send_mail($to, 'Admin', $title, $html, 4);
+            // Queue-first to keep user-facing requests fast.
+            // Fallback to short-timeout direct send only if queue insert fails.
+            $queued = bbcc_queue_mail($to, 'Admin', $title, $html, 5);
+            if (!$queued) {
+                @send_mail($to, 'Admin', $title, $html, 3);
+            }
         }
     } catch (Throwable $e) {
         // Non-blocking: keep in-app notification working even if mail fails.

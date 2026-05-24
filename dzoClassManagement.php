@@ -105,6 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ok = true;
             } elseif ($action === 'admin_update_enrolment') {
                 $plan = trim((string)($_POST['fee_plan'] ?? 'Term-wise'));
+                $approveNow = (int)($_POST['approve_now'] ?? 0) === 1;
                 $allowedPlans = ['Term-wise', 'Half-yearly', 'Yearly'];
                 if (!in_array($plan, $allowedPlans, true)) {
                     throw new Exception("Invalid fee plan.");
@@ -129,6 +130,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $parentId = (int)($student['parent_id'] ?? 0);
                 if ($parentId <= 0) throw new Exception("Parent link missing for this child.");
 
+                $parentInfoStmt = $pdo->prepare("SELECT full_name, email FROM parents WHERE id = :id LIMIT 1");
+                $parentInfoStmt->execute([':id' => $parentId]);
+                $parentInfo = $parentInfoStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+                $parentName = (string)($parentInfo['full_name'] ?? 'Parent');
+                $parentEmail = (string)($parentInfo['email'] ?? '');
+
                 $existing = $pdo->prepare("SELECT id FROM pcm_enrolments WHERE student_id = :sid LIMIT 1");
                 $existing->execute([':sid' => $studentDbId]);
                 $row = $existing->fetch(PDO::FETCH_ASSOC);
@@ -137,22 +144,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $eid = (int)$row['id'];
                     $upd = $pdo->prepare("
                         UPDATE pcm_enrolments
-                        SET fee_plan=:plan, campus_preference=:campus, fee_amount=:amt, payment_ref=:ref, admin_note=:note
+                        SET fee_plan=:plan, campus_preference=:campus, fee_amount=:amt, payment_ref=:ref, admin_note=:note,
+                            status=:status, reviewed_by=:reviewed_by, reviewed_at=:reviewed_at
                         WHERE id=:id
                     ");
                     $upd->execute([
                         ':plan' => $plan, ':campus' => $campusStored, ':amt' => $amount,
-                        ':ref' => ($ref !== '' ? $ref : null), ':note' => ($note !== '' ? $note : null), ':id' => $eid
+                        ':ref' => ($ref !== '' ? $ref : null),
+                        ':note' => ($note !== '' ? $note : null),
+                        ':status' => $approveNow ? 'Approved' : 'Pending',
+                        ':reviewed_by' => $approveNow ? $reviewer : null,
+                        ':reviewed_at' => $approveNow ? date('Y-m-d H:i:s') : null,
+                        ':id' => $eid
                     ]);
                     pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_enrolment_updated', (string)$reviewer, 'Updated from child registration page.');
                 } else {
                     $ins = $pdo->prepare("
-                        INSERT INTO pcm_enrolments (student_id, parent_id, fee_plan, campus_preference, fee_amount, payment_ref, status, admin_note, submitted_at)
-                        VALUES (:sid,:pid,:plan,:campus,:amt,:ref,'Pending',:note,NOW())
+                        INSERT INTO pcm_enrolments (student_id, parent_id, fee_plan, campus_preference, fee_amount, payment_ref, status, admin_note, submitted_at, reviewed_by, reviewed_at)
+                        VALUES (:sid,:pid,:plan,:campus,:amt,:ref,:status,:note,NOW(),:reviewed_by,:reviewed_at)
                     ");
                     $ins->execute([
                         ':sid' => $studentDbId, ':pid' => $parentId, ':plan' => $plan, ':campus' => $campusStored,
-                        ':amt' => $amount, ':ref' => ($ref !== '' ? $ref : null), ':note' => ($note !== '' ? $note : null)
+                        ':amt' => $amount,
+                        ':ref' => ($ref !== '' ? $ref : null),
+                        ':status' => $approveNow ? 'Approved' : 'Pending',
+                        ':note' => ($note !== '' ? $note : null),
+                        ':reviewed_by' => $approveNow ? $reviewer : null,
+                        ':reviewed_at' => $approveNow ? date('Y-m-d H:i:s') : null
                     ]);
                     $eid = (int)$pdo->lastInsertId();
                     pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_enrolment_created_from_child_reg', (string)$reviewer, 'Created from child registration page.');
@@ -166,7 +184,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     pcm_create_fee_rows($pdo, $eid, $studentDbId, $parentId, $plan, null);
                     pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_fee_rows_created', (string)$reviewer, 'Fee instalment rows created for manual enrollment.');
                 }
-                $flash = 'Enrollment updated for <strong>' . h((string)$student['student_name']) . '</strong>.';
+                if ($approveNow) {
+                    $pdo->prepare("UPDATE students SET approval_status='Approved' WHERE id=:id")->execute([':id' => $studentDbId]);
+                    if ($parentEmail !== '') {
+                        pcm_notify_parent_enrolment_confirmed($parentEmail, $parentName, (string)$student['student_name']);
+                    }
+                    pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_enrolment_approved_immediately', (string)$reviewer, 'Admin approved and enrolled directly from child registration page.');
+                    $flash = 'Child approved and enrolled for <strong>' . h((string)$student['student_name']) . '</strong>.';
+                } else {
+                    $flash = 'Enrollment updated for <strong>' . h((string)$student['student_name']) . '</strong>.';
+                }
                 $ok = true;
             } elseif ($action === 'delete') {
                 $stu = $pdo->prepare("SELECT student_name FROM students WHERE id = :id LIMIT 1");
@@ -852,6 +879,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="form-group mb-0">
                         <label>Admin Note</label>
                         <textarea name="admin_note" class="form-control" rows="2"><?= h((string)($existingEn['admin_note'] ?? '')) ?></textarea>
+                    </div>
+                    <div class="custom-control custom-checkbox mt-3">
+                        <input class="custom-control-input" type="checkbox" id="approve_now_<?= (int)$s['id'] ?>" name="approve_now" value="1">
+                        <label class="custom-control-label" for="approve_now_<?= (int)$s['id'] ?>">
+                            Approve and enroll now (skip parent-side completion step)
+                        </label>
                     </div>
                 </div>
                 <div class="modal-footer">

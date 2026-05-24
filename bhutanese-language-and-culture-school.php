@@ -32,6 +32,14 @@ try {
         $schoolStats['campuses'] = trim((string)($schoolRow['campuses_count'] ?? '')) !== '' ? (string)$schoolRow['campuses_count'] : $schoolStats['campuses'];
         $schoolStats['year_levels'] = trim((string)($schoolRow['year_levels'] ?? '')) !== '' ? (string)$schoolRow['year_levels'] : $schoolStats['year_levels'];
     }
+
+    // Keep enrolled count live from students table so add/delete actions are reflected automatically.
+    try {
+        $liveStudentCount = (int)$pdo->query("SELECT COUNT(*) FROM students")->fetchColumn();
+        $schoolStats['students'] = (string)$liveStudentCount;
+    } catch (Throwable $e) {
+        // Keep existing fallback value.
+    }
 } catch (Throwable $e) {
     // Keep defaults.
 }
