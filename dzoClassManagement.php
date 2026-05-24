@@ -69,11 +69,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $studentDbId = (int)($_POST['student_id'] ?? 0);
 
-    if ($studentDbId > 0 && in_array($action, ['approve','reject','delete','admin_update_enrolment'])) {
+    if ($studentDbId > 0 && in_array($action, ['approve','reject','delete','admin_update_enrolment','admin_update_child_details'])) {
         try {
             $reviewer = $_SESSION['username'] ?? 'admin';
 
-            if ($action === 'admin_update_enrolment') {
+            if ($action === 'admin_update_child_details') {
+                $studentName = trim((string)($_POST['student_name'] ?? ''));
+                $dob = trim((string)($_POST['dob'] ?? ''));
+                $gender = trim((string)($_POST['gender'] ?? ''));
+                $medical = trim((string)($_POST['medical_issue'] ?? ''));
+                $parentName = trim((string)($_POST['parent_name'] ?? ''));
+                $parentEmail = trim((string)($_POST['parent_email'] ?? ''));
+                $parentPhone = trim((string)($_POST['parent_phone'] ?? ''));
+                $parentAddress = trim((string)($_POST['parent_address'] ?? ''));
+
+                if ($studentName === '') {
+                    throw new Exception("Student name is required.");
+                }
+                if ($dob !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dob)) {
+                    throw new Exception("Invalid DOB format.");
+                }
+                if ($parentEmail !== '' && !filter_var($parentEmail, FILTER_VALIDATE_EMAIL)) {
+                    throw new Exception("Invalid parent email address.");
+                }
+                if ($parentName === '') {
+                    throw new Exception("Parent name is required.");
+                }
+
+                $stu = $pdo->prepare("SELECT {$studentParentExpr} AS parent_id, student_name FROM students WHERE id = :id LIMIT 1");
+                $stu->execute([':id' => $studentDbId]);
+                $student = $stu->fetch(PDO::FETCH_ASSOC);
+                if (!$student) {
+                    throw new Exception("Student not found.");
+                }
+                $parentId = (int)($student['parent_id'] ?? 0);
+                if ($parentId <= 0) {
+                    throw new Exception("Parent link missing for this child.");
+                }
+
+                $pdo->beginTransaction();
+                $upStudent = $pdo->prepare("
+                    UPDATE students
+                    SET student_name = :name, dob = :dob, gender = :gender, medical_issue = :medical
+                    WHERE id = :id
+                ");
+                $upStudent->execute([
+                    ':name' => $studentName,
+                    ':dob' => ($dob !== '' ? $dob : null),
+                    ':gender' => ($gender !== '' ? $gender : null),
+                    ':medical' => ($medical !== '' ? $medical : null),
+                    ':id' => $studentDbId,
+                ]);
+
+                $upParent = $pdo->prepare("
+                    UPDATE parents
+                    SET full_name = :full_name, email = :email, phone = :phone, address = :address
+                    WHERE id = :id
+                ");
+                $upParent->execute([
+                    ':full_name' => $parentName,
+                    ':email' => ($parentEmail !== '' ? $parentEmail : null),
+                    ':phone' => ($parentPhone !== '' ? $parentPhone : null),
+                    ':address' => ($parentAddress !== '' ? $parentAddress : null),
+                    ':id' => $parentId,
+                ]);
+                $pdo->commit();
+
+                pcm_log_enrolment_event($pdo, $studentDbId, null, 'admin_child_profile_updated', (string)$reviewer, 'Student and parent details updated from child registration page.');
+                $flash = 'Child and parent details updated successfully.';
+                $ok = true;
+            } elseif ($action === 'admin_update_enrolment') {
                 $plan = trim((string)($_POST['fee_plan'] ?? 'Term-wise'));
                 $allowedPlans = ['Term-wise', 'Half-yearly', 'Yearly'];
                 if (!in_array($plan, $allowedPlans, true)) {
@@ -211,6 +276,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ok = true;
             }
         } catch (Exception $ex) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             $flash = 'Error: ' . $ex->getMessage();
         }
     }
@@ -222,7 +290,8 @@ $students = $pdo->query("
            p.full_name  AS parent_name,
            p.email       AS parent_email,
            p.phone       AS parent_phone,
-           p.address     AS parent_address
+           p.address     AS parent_address,
+           p.id          AS parent_db_id
     FROM students s
     LEFT JOIN parents p ON p.id = {$studentParentJoinExpr}
     ORDER BY s.id DESC
@@ -569,6 +638,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>
                         <div class="act-group">
                             <button class="btn-act act-view toggle-detail" data-id="<?= (int)$s['id'] ?>" title="View details"><i class="fas fa-eye"></i></button>
+                            <button class="btn-act act-view" data-toggle="modal" data-target="#editChildModal<?= $s['id'] ?>" title="Edit child and parent details"><i class="fas fa-edit"></i></button>
                             <button class="btn-mini-label" data-toggle="modal" data-target="#enrolModal<?= $s['id'] ?>" title="Create or Update Enrollment">
                                 <i class="fas fa-file-signature mr-1"></i> Enroll
                             </button>
@@ -694,6 +764,87 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
 </div>
 <?php endif; ?>
+<?php endforeach; ?>
+
+<?php foreach ($students as $s): ?>
+<div class="modal fade" id="editChildModal<?= (int)$s['id'] ?>" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" class="js-enrol-action-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="admin_update_child_details">
+                <input type="hidden" name="student_id" value="<?= (int)$s['id'] ?>">
+                <div class="modal-header">
+                    <div>
+                        <h5 class="modal-title font-weight-bold"><i class="fas fa-user-edit text-primary mr-2"></i>Edit Child Details</h5>
+                        <small class="text-muted">Update child profile and parent contact details</small>
+                    </div>
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-user-graduate mr-1"></i>Child Details</h6>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Student ID</label>
+                            <input type="text" class="form-control" value="<?= h((string)($s['student_id'] ?? '')) ?>" readonly>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>Child Name</label>
+                            <input type="text" class="form-control" name="student_name" value="<?= h((string)($s['student_name'] ?? '')) ?>" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label>Date of Birth</label>
+                            <input type="date" class="form-control" name="dob" value="<?= h((string)($s['dob'] ?? '')) ?>">
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label>Gender</label>
+                            <?php $genderVal = (string)($s['gender'] ?? ''); ?>
+                            <select class="form-control" name="gender">
+                                <option value="" <?= $genderVal === '' ? 'selected' : '' ?>>--</option>
+                                <option value="Male" <?= $genderVal === 'Male' ? 'selected' : '' ?>>Male</option>
+                                <option value="Female" <?= $genderVal === 'Female' ? 'selected' : '' ?>>Female</option>
+                                <option value="Other" <?= $genderVal === 'Other' ? 'selected' : '' ?>>Other</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label>Medical</label>
+                            <input type="text" class="form-control" name="medical_issue" value="<?= h((string)($s['medical_issue'] ?? '')) ?>" maxlength="500">
+                        </div>
+                    </div>
+
+                    <hr>
+                    <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-user-friends mr-1"></i>Parent Contact Details</h6>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Parent Name</label>
+                            <input type="text" class="form-control" name="parent_name" value="<?= h((string)($s['parent_name'] ?? '')) ?>" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>Parent Phone</label>
+                            <input type="text" class="form-control" name="parent_phone" value="<?= h((string)($s['parent_phone'] ?? '')) ?>">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Parent Email</label>
+                            <input type="email" class="form-control" name="parent_email" value="<?= h((string)($s['parent_email'] ?? '')) ?>">
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>Parent Address</label>
+                            <input type="text" class="form-control" name="parent_address" value="<?= h((string)($s['parent_address'] ?? '')) ?>">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary js-submit-action-btn"><i class="fas fa-save mr-1"></i> Save Details</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 <?php endforeach; ?>
 
 <?php foreach ($students as $s):
