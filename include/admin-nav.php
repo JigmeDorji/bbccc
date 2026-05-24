@@ -450,9 +450,9 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
             <div id="collapseOrders" class="collapse <?= $dzoActive ? 'show' : '' ?>">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <?php
-                        $dzoEnrollActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','admin-assign-class.php'], true);
+                        $dzoEnrollActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','admin-assign-class.php','admin-class-students.php'], true);
                         $dzoFeesActive = in_array($currentPage, ['feesManagement.php','update-payments.php','manual-payments.php','admin-fee-verification.php','feesSetting.php'], true);
-                        $dzoOpsActive = in_array($currentPage, ['dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-students.php'], true);
+                        $dzoOpsActive = in_array($currentPage, ['dzongkha-classroom.php','parent-email.php','admin-attendance.php'], true);
                         $dzoAttendanceActive = in_array($currentPage, ['attendanceManagement.php','attendance-records.php'], true);
                         $dzoConfigActive = in_array($currentPage, ['admin-class-setup.php','feesSetting.php','admin-parent-pins.php'], true);
                     ?>
@@ -463,6 +463,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                         <a class="collapse-item <?= ($currentPage === 'dzoClassManagement.php') ? 'active' : '' ?>" href="dzoClassManagement"><i class="fas fa-user-plus fa-sm mr-1 text-muted"></i> Child Registration</a>
                         <a class="collapse-item <?= ($currentPage === 'admin-enrolments.php') ? 'active' : '' ?>" href="admin-enrolments"><i class="fas fa-file-signature fa-sm mr-1 text-muted"></i> Enrollment</a>
                         <a class="collapse-item <?= ($currentPage == 'admin-assign-class.php') ? 'active' : '' ?>" href="admin-assign-class"><i class="fas fa-user-plus fa-sm mr-1 text-muted"></i> Assign Students</a>
+                        <a class="collapse-item <?= ($currentPage == 'admin-class-students.php') ? 'active' : '' ?>" href="admin-class-students"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Class Allocation</a>
                     </div>
 
                     <h6 class="collapse-header dzo-group-header d-none d-lg-block">Fees Management</h6>
@@ -481,7 +482,6 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                         <a class="collapse-item <?= ($currentPage == 'dzongkha-classroom.php') ? 'active' : '' ?>" href="dzongkha-classroom"><i class="fas fa-bullhorn fa-sm mr-1 text-muted"></i> Dzongkha Classroom</a>
                         <a class="collapse-item <?= ($currentPage == 'parent-email.php') ? 'active' : '' ?>" href="parent-email"><i class="fas fa-envelope-open-text fa-sm mr-1 text-muted"></i> Send Parent Email</a>
                         <a class="collapse-item <?= ($currentPage == 'admin-attendance.php') ? 'active' : '' ?>" href="admin-attendance"><i class="fas fa-door-open fa-sm mr-1 text-muted"></i> Kiosk Sign In/Out</a>
-                        <a class="collapse-item <?= ($currentPage == 'admin-class-students.php') ? 'active' : '' ?>" href="admin-class-students"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Class Student List</a>
                     </div>
 
                     <h6 class="collapse-header dzo-group-header d-none d-lg-block">Attendance Management</h6>
