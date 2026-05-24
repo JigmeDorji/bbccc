@@ -20,15 +20,6 @@ $existing_teachers_count = "8";
 $existing_campuses_count = "2";
 $existing_year_levels = "Age 6 years and above";
 $existing_stats_heading = "BLCS Snapshot - Term 1, 2026";
-$default_tara_img = "bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png";
-$existing_tara_title = "Droenchoe (Tara) Practice";
-$existing_tara_subtitle = "A deeply spiritual journey for all practitioners";
-$existing_tara_intro = "Under the blessing and guidance of His Eminence Leytshog Lopen Rinpoche, the Bhutanese Centre offers Droenchoe (Tara) Practice classes for all practitioners.";
-$existing_tara_body = "If you are interested and wanting to take your first step, we warmly welcome you to join this deeply spiritual journey.\n\nWe warmly welcome anyone wishing to learn and deepen their practice.";
-$existing_tara_schedule = "Classes are held every Saturday from 5:00 PM to 8:00 PM.";
-$existing_tara_monthly = "We also conduct monthly Droenchoe practice sessions.";
-$existing_tara_contact = "Contact Khenpo Sonam at 0434 522 720 or visit the Bhutanese Centre.";
-$existing_tara_imgUrl = $default_tara_img;
 $blcsSchedule = [
     'intro_text' => bbcc_blcs_default_intro_text(),
     'terms_text' => bbcc_blcs_default_terms_text(),
@@ -68,20 +59,6 @@ try {
             $existing_imgUrl = $default_school_img;
         }
     }
-    $taraStmt = $pdo->prepare("SELECT * FROM tara_content ORDER BY id DESC LIMIT 1");
-    $taraStmt->execute();
-    $taraRow = $taraStmt->fetch(PDO::FETCH_ASSOC);
-    if ($taraRow) {
-        $existing_tara_title = trim((string)($taraRow['title'] ?? '')) !== '' ? (string)$taraRow['title'] : $existing_tara_title;
-        $existing_tara_subtitle = trim((string)($taraRow['subtitle'] ?? '')) !== '' ? (string)$taraRow['subtitle'] : $existing_tara_subtitle;
-        $existing_tara_intro = trim((string)($taraRow['intro_text'] ?? '')) !== '' ? (string)$taraRow['intro_text'] : $existing_tara_intro;
-        $existing_tara_body = trim((string)($taraRow['body_text'] ?? '')) !== '' ? (string)$taraRow['body_text'] : $existing_tara_body;
-        $existing_tara_schedule = trim((string)($taraRow['schedule_text'] ?? '')) !== '' ? (string)$taraRow['schedule_text'] : $existing_tara_schedule;
-        $existing_tara_monthly = trim((string)($taraRow['monthly_text'] ?? '')) !== '' ? (string)$taraRow['monthly_text'] : $existing_tara_monthly;
-        $existing_tara_contact = trim((string)($taraRow['contact_text'] ?? '')) !== '' ? (string)$taraRow['contact_text'] : $existing_tara_contact;
-        $existing_tara_imgUrl = trim((string)($taraRow['imgUrl'] ?? '')) !== '' ? (string)$taraRow['imgUrl'] : $existing_tara_imgUrl;
-    }
-
     if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $action = trim((string)($_POST['action'] ?? 'update_school_content'));
         if ($action === 'update_blcs_schedule') {
@@ -124,70 +101,6 @@ try {
             header("Location: schoolContentSetup");
             exit;
         }
-        if ($action === 'update_tara_content') {
-            $taraTitle = trim((string)($_POST['tara_title'] ?? ''));
-            $taraSubtitle = trim((string)($_POST['tara_subtitle'] ?? ''));
-            $taraIntro = trim((string)($_POST['tara_intro_text'] ?? ''));
-            $taraBody = trim((string)($_POST['tara_body_text'] ?? ''));
-            $taraSchedule = trim((string)($_POST['tara_schedule_text'] ?? ''));
-            $taraMonthly = trim((string)($_POST['tara_monthly_text'] ?? ''));
-            $taraContact = trim((string)($_POST['tara_contact_text'] ?? ''));
-            $taraImgUrl = $existing_tara_imgUrl;
-
-            if ($taraTitle === '') $taraTitle = $existing_tara_title;
-            if ($taraSubtitle === '') $taraSubtitle = $existing_tara_subtitle;
-            if ($taraIntro === '') $taraIntro = $existing_tara_intro;
-            if ($taraBody === '') $taraBody = $existing_tara_body;
-            if ($taraSchedule === '') $taraSchedule = $existing_tara_schedule;
-            if ($taraMonthly === '') $taraMonthly = $existing_tara_monthly;
-            if ($taraContact === '') $taraContact = $existing_tara_contact;
-
-            if (isset($_FILES['tara_image']) && (int)($_FILES['tara_image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
-                $image_name = (string)$_FILES['tara_image']['name'];
-                $image_size = (int)$_FILES['tara_image']['size'];
-                $image_tmp = (string)$_FILES['tara_image']['tmp_name'];
-
-                if ($image_size > 5242880) throw new Exception("File too large. Max 5MB.");
-                $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-                $ext = strtolower((string)pathinfo($image_name, PATHINFO_EXTENSION));
-                if (!in_array($ext, $allowed, true)) throw new Exception("Only JPG, JPEG, PNG, GIF, WEBP allowed.");
-
-                $safeName = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $image_name);
-                $uploadDir = __DIR__ . "/uploads/tara";
-                if (!is_dir($uploadDir)) {
-                    @mkdir($uploadDir, 0775, true);
-                }
-                if (!is_dir($uploadDir)) throw new Exception("Upload folder is not available.");
-
-                $uploadAbs = $uploadDir . "/" . $safeName;
-                if (!move_uploaded_file($image_tmp, $uploadAbs)) throw new Exception("Failed to upload image.");
-                bbcc_generate_responsive_variants($uploadAbs, [480, 768, 1200], 82);
-                $taraImgUrl = "uploads/tara/" . $safeName;
-            }
-
-            $taraUp = $pdo->prepare("
-                INSERT INTO tara_content (title, subtitle, intro_text, body_text, schedule_text, monthly_text, contact_text, imgUrl)
-                VALUES (:title, :subtitle, :intro_text, :body_text, :schedule_text, :monthly_text, :contact_text, :imgUrl)
-            ");
-            $taraUp->execute([
-                ':title' => $taraTitle,
-                ':subtitle' => $taraSubtitle,
-                ':intro_text' => $taraIntro,
-                ':body_text' => $taraBody,
-                ':schedule_text' => $taraSchedule,
-                ':monthly_text' => $taraMonthly,
-                ':contact_text' => $taraContact,
-                ':imgUrl' => $taraImgUrl,
-            ]);
-
-            $_SESSION['school_setup_flash'] = [
-                'type' => 'success',
-                'message' => 'Droenchoe (Tara) content updated successfully.',
-            ];
-            header("Location: schoolContentSetup");
-            exit;
-        }
-
         $description = trim((string)($_POST['description'] ?? ''));
         $studentsCount = trim((string)($_POST['students_count'] ?? ''));
         $teachersCount = trim((string)($_POST['teachers_count'] ?? ''));
