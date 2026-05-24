@@ -1,6 +1,9 @@
 <?php
 require_once "include/config.php";
 require_once "include/image_helpers.php";
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 $menu = null;
 try {
@@ -28,6 +31,7 @@ $eventDate = "Date Not Set";
 if (!empty($menu['eventStartDateTime'])) {
     $eventDate = date("d M Y – g:i A", strtotime($menu['eventStartDateTime']));
 }
+$canEditEvent = in_array(strtolower((string)($_SESSION['role'] ?? '')), ['administrator', 'website admin', 'website_admin', 'company_admin'], true);
 ?>
 <!doctype html>
 <html lang="en">
@@ -179,9 +183,16 @@ if (!empty($menu['eventStartDateTime'])) {
                 <div class="ed-body">
                     <p><?= nl2br(htmlspecialchars((string)$menu['menuDetail'])) ?></p>
                 </div>
-                <a href="events" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" style="margin-top:8px;">
-                    <i class="fa-solid fa-arrow-left"></i> Back to Events
-                </a>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">
+                    <a href="events" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm">
+                        <i class="fa-solid fa-arrow-left"></i> Back to Events
+                    </a>
+                    <?php if ($canEditEvent): ?>
+                    <a href="serviceSetup" class="bbcc-btn bbcc-btn--primary bbcc-btn--sm">
+                        <i class="fa-solid fa-pen-to-square"></i> Update Event
+                    </a>
+                    <?php endif; ?>
+                </div>
             </div>
             </div>
         </div>
