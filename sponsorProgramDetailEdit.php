@@ -84,7 +84,7 @@ try {
         ]);
 
         $_SESSION['sponsor_program_detail_flash'] = ['type' => 'success', 'message' => $sel['label'] . ' updated successfully.'];
-        header('Location: sponsorProgramDetailsSetup');
+        header('Location: ProgramDetailsSetup');
         exit;
     }
 } catch (Exception $e) {
@@ -114,7 +114,7 @@ try {
 <div class="container-fluid">
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">Edit <?= htmlspecialchars($sel['label']) ?> Details</h1>
-        <a href="sponsorProgramDetailsSetup" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left mr-1"></i> Back to List</a>
+        <a href="ProgramDetailsSetup" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left mr-1"></i> Back to List</a>
     </div>
 
     <div class="card shadow mb-4">

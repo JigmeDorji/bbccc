@@ -6,7 +6,6 @@ require_once "include/csrf.php";
 require_once "include/role_helpers.php";
 require_once "include/pcm_helpers.php";
 require_once "include/notifications.php";
-require_once "include/blcs_schedule.php";
 require_login();
 
 if (!is_admin_role()) {
@@ -19,7 +18,6 @@ $studentParentColumn = pcm_students_parent_column($pdo);
 $campusChoices = pcm_campus_choice_labels();
 $flash = '';
 $ok    = false;
-$blcsSchedule = [];
 
 $hasParentIdNew = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parent_id'")->fetch(PDO::FETCH_ASSOC);
 $hasParentIdLegacy = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parentId'")->fetch(PDO::FETCH_ASSOC);
@@ -34,39 +32,6 @@ $studentParentJoinExpr = $hasParentIdNew && $hasParentIdLegacy
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     $action = $_POST['action'] ?? '';
-    if ($action === 'update_blcs_schedule') {
-        try {
-            $introText = trim((string)($_POST['blcs_intro_text'] ?? ''));
-            $termsText = trim((string)($_POST['blcs_terms_text'] ?? ''));
-            $datesText = trim((string)($_POST['blcs_dates_text'] ?? ''));
-
-            if ($introText === '') $introText = bbcc_blcs_default_intro_text();
-            if ($termsText === '') $termsText = bbcc_blcs_default_terms_text();
-            if ($datesText === '') $datesText = bbcc_blcs_default_sunday_dates_text();
-
-            bbcc_blcs_ensure_schedule_table($pdo);
-            $stmtUp = $pdo->prepare("
-                INSERT INTO blcs_schedule_settings (id, intro_text, terms_text, sunday_dates_text, updated_by)
-                VALUES (1, :intro, :terms, :dates, :updated_by)
-                ON DUPLICATE KEY UPDATE
-                    intro_text = VALUES(intro_text),
-                    terms_text = VALUES(terms_text),
-                    sunday_dates_text = VALUES(sunday_dates_text),
-                    updated_by = VALUES(updated_by)
-            ");
-            $stmtUp->execute([
-                ':intro' => $introText,
-                ':terms' => $termsText,
-                ':dates' => $datesText,
-                ':updated_by' => (string)($_SESSION['username'] ?? 'admin'),
-            ]);
-            $flash = 'BLCS schedule updated successfully.';
-            $ok = true;
-        } catch (Exception $ex) {
-            $flash = 'Error: ' . $ex->getMessage();
-            $ok = false;
-        }
-    }
     $studentDbId = (int)($_POST['student_id'] ?? 0);
 
     if ($studentDbId > 0 && in_array($action, ['approve','reject','delete','admin_update_enrolment','admin_update_child_details'])) {
@@ -308,8 +273,6 @@ $total    = count($students);
 $pending  = count(array_filter($students, fn($r) => strtolower($r['approval_status'] ?? '') === 'pending'));
 $approved = count(array_filter($students, fn($r) => strtolower($r['approval_status'] ?? '') === 'approved'));
 $rejected = count(array_filter($students, fn($r) => strtolower($r['approval_status'] ?? '') === 'rejected'));
-$blcsSchedule = bbcc_blcs_load_schedule($pdo);
-
 $pageScripts = [
     "https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js",
     "https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap4.min.js",
@@ -481,37 +444,6 @@ document.addEventListener('DOMContentLoaded', () => {
         <a href="attendanceManagement" class="btn btn-sm btn-outline-secondary">
             <i class="fas fa-clipboard-check mr-1"></i> Attendance
         </a>
-    </div>
-</div>
-
-<!-- ─── BLCS Schedule Settings ─── -->
-<div class="card shadow-sm mb-4">
-    <div class="card-header py-3 d-flex justify-content-between align-items-center">
-        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-calendar-alt mr-1"></i> BLCS Schedule Settings (Public Page)</h6>
-        <span class="small text-muted">Updates Bhutanese Language and Culture School page</span>
-    </div>
-    <div class="card-body">
-        <form method="POST" action="dzoClassManagement.php">
-            <?= csrf_field() ?>
-            <input type="hidden" name="action" value="update_blcs_schedule">
-            <div class="form-row">
-                <div class="form-group col-12">
-                    <label class="font-weight-bold" style="font-size:.82rem;">Intro Line</label>
-                    <input type="text" name="blcs_intro_text" class="form-control" value="<?= h((string)$blcsSchedule['intro_text']) ?>">
-                </div>
-                <div class="form-group col-lg-6">
-                    <label class="font-weight-bold" style="font-size:.82rem;">School Terms (one line per term)</label>
-                    <textarea name="blcs_terms_text" rows="8" class="form-control"><?= h((string)$blcsSchedule['terms_text']) ?></textarea>
-                </div>
-                <div class="form-group col-lg-6">
-                    <label class="font-weight-bold" style="font-size:.82rem;">Sunday Class Dates (one date per line)</label>
-                    <textarea name="blcs_dates_text" rows="8" class="form-control"><?= h((string)$blcsSchedule['sunday_dates_text']) ?></textarea>
-                </div>
-            </div>
-            <button type="submit" class="btn btn-primary">
-                <i class="fas fa-save mr-1"></i> Save BLCS Dates
-            </button>
-        </form>
     </div>
 </div>
 
