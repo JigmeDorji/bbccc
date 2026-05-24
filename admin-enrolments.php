@@ -45,11 +45,118 @@ function bbcc_class_matches_campus(string $className, array $campusLabels): bool
 }
 
 // ── POST actions ──
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['approve','reject','request_changes','assign_class','manual_enrol'], true)) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['approve','reject','request_changes','assign_class','manual_enrol','enrol_registered_child'], true)) {
     verify_csrf();
     $action = $_POST['action'];
 
-    if ($action === 'manual_enrol') {
+    if ($action === 'enrol_registered_child') {
+        $studentDbId = (int)($_POST['student_id'] ?? 0);
+        $plan = trim((string)($_POST['fee_plan'] ?? 'Term-wise'));
+        $ref = trim((string)($_POST['payment_ref'] ?? ''));
+        $approveNow = isset($_POST['approve_now']) && (string)$_POST['approve_now'] === '1';
+        $campusSelection = $_POST['campus_choice'] ?? [];
+        if (!is_array($campusSelection)) $campusSelection = [];
+        $campusSelection = array_values(array_unique(array_filter(array_map('strval', $campusSelection))));
+        $allowedCampusChoices = array_keys($campusChoices);
+
+        if ($studentDbId <= 0) {
+            $flash = 'Invalid child selected.';
+        } elseif (!in_array($plan, ['Term-wise', 'Half-yearly', 'Yearly'], true)) {
+            $flash = 'Invalid fee plan selected.';
+        } elseif (empty($campusSelection) || array_diff($campusSelection, $allowedCampusChoices)) {
+            $flash = 'Please select at least one valid campus.';
+        } else {
+            try {
+                $stu = $pdo->prepare("
+                    SELECT s.id, s.student_name, s.approval_status,
+                           COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0)) AS parent_id,
+                           p.full_name AS parent_name, p.email AS parent_email
+                    FROM students s
+                    LEFT JOIN parents p ON p.id = COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0))
+                    WHERE s.id = :id
+                    LIMIT 1
+                ");
+                $stu->execute([':id' => $studentDbId]);
+                $student = $stu->fetch(PDO::FETCH_ASSOC);
+                if (!$student) throw new Exception('Child not found.');
+
+                $parentId = (int)($student['parent_id'] ?? 0);
+                if ($parentId <= 0) throw new Exception('Parent link missing for this child.');
+
+                $campusStored = implode(',', $campusSelection);
+                $amount = pcm_plan_amount($plan);
+                $existing = $pdo->prepare("SELECT id FROM pcm_enrolments WHERE student_id = :sid LIMIT 1");
+                $existing->execute([':sid' => $studentDbId]);
+                $row = $existing->fetch(PDO::FETCH_ASSOC);
+
+                if ($row) {
+                    $eid = (int)$row['id'];
+                    $upd = $pdo->prepare("
+                        UPDATE pcm_enrolments
+                        SET fee_plan=:plan, campus_preference=:campus, fee_amount=:amt, payment_ref=:ref,
+                            status=:status, admin_note=NULL, reviewed_by=:rb, reviewed_at=:ra, submitted_at=NOW()
+                        WHERE id=:id
+                    ");
+                    $upd->execute([
+                        ':plan' => $plan,
+                        ':campus' => $campusStored,
+                        ':amt' => $amount,
+                        ':ref' => ($ref !== '' ? $ref : null),
+                        ':status' => $approveNow ? 'Approved' : 'Pending',
+                        ':rb' => $approveNow ? $currentActor : null,
+                        ':ra' => $approveNow ? date('Y-m-d H:i:s') : null,
+                        ':id' => $eid,
+                    ]);
+                    pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_registered_child_enrolment_updated', $currentActor, 'Updated from registered children queue.');
+                } else {
+                    $ins = $pdo->prepare("
+                        INSERT INTO pcm_enrolments
+                        (student_id, parent_id, fee_plan, campus_preference, fee_amount, payment_ref, proof_path, status, admin_note, reviewed_by, reviewed_at, submitted_at)
+                        VALUES
+                        (:sid, :pid, :plan, :campus, :amt, :ref, NULL, :status, NULL, :rb, :ra, NOW())
+                    ");
+                    $ins->execute([
+                        ':sid' => $studentDbId,
+                        ':pid' => $parentId,
+                        ':plan' => $plan,
+                        ':campus' => $campusStored,
+                        ':amt' => $amount,
+                        ':ref' => ($ref !== '' ? $ref : null),
+                        ':status' => $approveNow ? 'Approved' : 'Pending',
+                        ':rb' => $approveNow ? $currentActor : null,
+                        ':ra' => $approveNow ? date('Y-m-d H:i:s') : null,
+                    ]);
+                    $eid = (int)$pdo->lastInsertId();
+                    pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_registered_child_enrolment_created', $currentActor, 'Created from registered children queue.');
+                }
+
+                $feeCountStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE enrolment_id = :eid");
+                $feeCountStmt->execute([':eid' => $eid]);
+                if ((int)$feeCountStmt->fetchColumn() === 0) {
+                    pcm_create_fee_rows($pdo, $eid, $studentDbId, $parentId, $plan, null);
+                    pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_fee_rows_created', $currentActor, 'Fee instalment rows created from registered children queue.');
+                }
+
+                if ($approveNow) {
+                    $pdo->prepare("UPDATE students SET approval_status='Approved' WHERE id=:id")->execute([':id' => $studentDbId]);
+                    $parentEmail = trim((string)($student['parent_email'] ?? ''));
+                    if ($parentEmail !== '') {
+                        pcm_notify_parent_enrolment_confirmed(
+                            $parentEmail,
+                            (string)($student['parent_name'] ?? 'Parent'),
+                            (string)$student['student_name']
+                        );
+                    }
+                }
+
+                $flash = 'Enrollment created for <strong>' . h((string)$student['student_name']) . '</strong>.'
+                    . ($approveNow ? ' Approved immediately.' : '');
+                $ok = true;
+            } catch (Throwable $e) {
+                $flash = 'Error: ' . $e->getMessage();
+            }
+        }
+    } elseif ($action === 'manual_enrol') {
         $parentName = trim((string)($_POST['parent_name'] ?? ''));
         $parentEmail = strtolower(trim((string)($_POST['parent_email'] ?? '')));
         $parentPhone = trim((string)($_POST['parent_phone'] ?? ''));
@@ -382,6 +489,17 @@ $needsUpdate = count(array_filter($all, fn($r)=>$r['status']==='Needs Update'));
 $approved= count(array_filter($all, fn($r)=>$r['status']==='Approved'));
 $rejected= count(array_filter($all, fn($r)=>$r['status']==='Rejected'));
 
+$registeredChildren = $pdo->query("
+    SELECT s.id, s.student_id, s.student_name, s.approval_status, s.registration_date,
+           p.full_name AS parent_name, p.email AS parent_email, p.phone AS parent_phone,
+           e.id AS enrolment_id, e.status AS enrolment_status
+    FROM students s
+    LEFT JOIN parents p ON p.id = COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0))
+    LEFT JOIN pcm_enrolments e ON e.student_id = s.id
+    WHERE e.id IS NULL
+    ORDER BY s.id DESC
+")->fetchAll(PDO::FETCH_ASSOC);
+
 $pageScripts = [
     "https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js",
     "https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap4.min.js",
@@ -535,6 +653,67 @@ document.addEventListener('DOMContentLoaded',()=>{
                     <button type="submit" class="btn btn-primary">Create Enrollment</button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Registered Children Queue -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+        <h6 class="m-0 font-weight-bold text-primary">Registered Children Enrollment Queue</h6>
+        <small class="text-muted">Enroll children directly from registration records</small>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover mb-0">
+                <thead class="thead-light">
+                    <tr>
+                        <th>#</th><th>Student ID</th><th>Child</th><th>Parent</th><th>Child Status</th><th>Enrollment</th><th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($registeredChildren as $i => $rc): ?>
+                    <?php
+                        $enrolStatus = trim((string)($rc['enrolment_status'] ?? ''));
+                        $canEnrolFromQueue = ($enrolStatus === '' || in_array($enrolStatus, ['Needs Update', 'Rejected', 'Pending'], true));
+                    ?>
+                    <tr>
+                        <td><?= $i + 1 ?></td>
+                        <td><code><?= h((string)($rc['student_id'] ?? '')) ?></code></td>
+                        <td>
+                            <?= h((string)($rc['student_name'] ?? '')) ?>
+                            <div class="small text-muted"><?= !empty($rc['registration_date']) ? date('d M Y', strtotime((string)$rc['registration_date'])) : '—' ?></div>
+                        </td>
+                        <td>
+                            <?= h((string)($rc['parent_name'] ?? '—')) ?><br>
+                            <small class="text-muted"><?= h((string)($rc['parent_email'] ?? '')) ?></small>
+                        </td>
+                        <td><span class="badge badge-<?= pcm_badge((string)($rc['approval_status'] ?? 'Pending')) ?>"><?= h((string)($rc['approval_status'] ?? 'Pending')) ?></span></td>
+                        <td>
+                            <?php if ($enrolStatus !== ''): ?>
+                                <span class="badge badge-<?= pcm_badge($enrolStatus) ?>"><?= h($enrolStatus) ?></span>
+                            <?php else: ?>
+                                <span class="text-muted">Not created</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <button
+                                type="button"
+                                class="btn btn-sm btn-primary js-enrol-registered-btn"
+                                data-student-id="<?= (int)$rc['id'] ?>"
+                                data-student-name="<?= h((string)($rc['student_name'] ?? '')) ?>"
+                                <?= $canEnrolFromQueue ? '' : 'disabled' ?>
+                            >
+                                <i class="fas fa-file-signature mr-1"></i> Enroll
+                            </button>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if (empty($registeredChildren)): ?>
+                    <tr><td colspan="7" class="text-center text-muted">No registered children found.</td></tr>
+                <?php endif; ?>
+                </tbody>
+            </table>
         </div>
     </div>
 </div>
@@ -808,6 +987,58 @@ document.addEventListener('DOMContentLoaded',()=>{
 </div>
 </div>
 
+<div class="modal fade" id="registeredChildEnrolModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="POST" class="js-enrol-action-form">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="enrol_registered_child">
+                <input type="hidden" name="student_id" id="rcStudentId" value="">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Enroll Registered Child</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">Create enrollment for <strong id="rcStudentName">this child</strong>.</p>
+                    <div class="form-group">
+                        <label>Fee Plan</label>
+                        <select class="form-control" name="fee_plan" required>
+                            <option value="Term-wise">Term-wise</option>
+                            <option value="Half-yearly">Half-yearly</option>
+                            <option value="Yearly">Yearly</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Payment Reference (optional)</label>
+                        <input type="text" class="form-control" name="payment_ref" maxlength="150">
+                    </div>
+                    <div class="form-group mb-2">
+                        <label class="d-block">Campus Selection</label>
+                        <div class="custom-control custom-checkbox custom-control-inline">
+                            <input type="checkbox" class="custom-control-input" id="rcCampusC1" name="campus_choice[]" value="c1">
+                            <label class="custom-control-label" for="rcCampusC1"><?= h($campusChoices['c1'] ?? 'Campus 1') ?></label>
+                        </div>
+                        <div class="custom-control custom-checkbox custom-control-inline">
+                            <input type="checkbox" class="custom-control-input" id="rcCampusC2" name="campus_choice[]" value="c2">
+                            <label class="custom-control-label" for="rcCampusC2"><?= h($campusChoices['c2'] ?? 'Campus 2') ?></label>
+                        </div>
+                    </div>
+                    <div class="custom-control custom-checkbox mt-3">
+                        <input type="checkbox" class="custom-control-input" id="rcApproveNow" name="approve_now" value="1">
+                        <label class="custom-control-label" for="rcApproveNow">Approve immediately</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary js-submit-action-btn">Create Enrollment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="proofModal" tabindex="-1">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
@@ -935,6 +1166,17 @@ $(function(){
         form.reset();
         var emailInput = form.querySelector('input[name="parent_email"]');
         if (emailInput) emailInput.value = '';
+    });
+
+    $(document).on('click', '.js-enrol-registered-btn', function(){
+        var sid = $(this).data('student-id') || '';
+        var sname = $(this).data('student-name') || 'this child';
+        var $modal = $('#registeredChildEnrolModal');
+        var form = $modal.find('form')[0];
+        if (form) form.reset();
+        $('#rcStudentId').val(sid);
+        $('#rcStudentName').text(sname);
+        $modal.modal('show');
     });
 });
 </script>

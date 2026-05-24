@@ -17,6 +17,12 @@ if (!$parent) { die("Parent account not found. Please contact admin."); }
 $parentId = (int)$parent['id'];
 $flash    = '';
 $ok       = false;
+$hasParentIdNew = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parent_id'")->fetch(PDO::FETCH_ASSOC);
+$hasParentIdLegacy = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parentId'")->fetch(PDO::FETCH_ASSOC);
+$studentParentCol = $hasParentIdNew ? 'parent_id' : 'parentId';
+$studentParentExpr = $hasParentIdNew && $hasParentIdLegacy
+    ? "COALESCE(NULLIF(parent_id,0), NULLIF(parentId,0))"
+    : $studentParentCol;
 
 // ── Handle POST: add child ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -36,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         } else {
             $sid = pcm_next_student_id($pdo);
             $stmt = $pdo->prepare("
-                INSERT INTO students (student_id, student_name, dob, gender, medical_issue, registration_date, approval_status, parentId)
+                INSERT INTO students (student_id, student_name, dob, gender, medical_issue, registration_date, approval_status, {$studentParentCol})
                 VALUES (:sid, :name, :dob, :g, :med, CURDATE(), 'Pending', :pid)
             ");
             $stmt->execute([':sid'=>$sid, ':name'=>$name, ':dob'=>$dob?:null, ':g'=>$gender?:null, ':med'=>$med?:null, ':pid'=>$parentId]);
@@ -71,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($chk->fetch()) {
             $flash = 'Cannot remove a child who has an enrolment. Contact admin.';
         } else {
-            $del = $pdo->prepare("DELETE FROM students WHERE id = :id AND parentId = :pid AND approval_status = 'Pending'");
+            $del = $pdo->prepare("DELETE FROM students WHERE id = :id AND {$studentParentExpr} = :pid AND approval_status = 'Pending'");
             $del->execute([':id'=>$cid, ':pid'=>$parentId]);
             $flash = $del->rowCount() ? 'Child removed.' : 'Cannot remove this child.';
             $ok = (bool)$del->rowCount();
@@ -81,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 // ── Fetch children ──
-$children = $pdo->prepare("SELECT * FROM students WHERE parentId = :pid ORDER BY id DESC");
+$children = $pdo->prepare("SELECT * FROM students WHERE {$studentParentExpr} = :pid ORDER BY id DESC");
 $children->execute([':pid'=>$parentId]);
 $children = $children->fetchAll();
 

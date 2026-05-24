@@ -20,6 +20,15 @@ if (!$parent) die("Parent account not found.");
 $parentId = (int)$parent['id'];
 $flash    = '';
 $ok       = false;
+$hasParentIdNew = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parent_id'")->fetch(PDO::FETCH_ASSOC);
+$hasParentIdLegacy = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parentId'")->fetch(PDO::FETCH_ASSOC);
+$studentParentCol = $hasParentIdNew ? 'parent_id' : 'parentId';
+$studentParentExpr = $hasParentIdNew && $hasParentIdLegacy
+    ? "COALESCE(NULLIF(parent_id,0), NULLIF(parentId,0))"
+    : $studentParentCol;
+$studentParentExprWithAlias = $hasParentIdNew && $hasParentIdLegacy
+    ? "COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0))"
+    : 's.' . $studentParentCol;
 
 if (empty($_SESSION['enrol_submit_nonce'])) {
     $_SESSION['enrol_submit_nonce'] = bin2hex(random_bytes(16));
@@ -78,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $plan    = trim($_POST['fee_plan'] ?? '');
         $ref     = trim($_POST['payment_ref'] ?? '');
 
-        $chk = $pdo->prepare("SELECT id, student_name FROM students WHERE id=:id AND parentId=:pid LIMIT 1");
+        $chk = $pdo->prepare("SELECT id, student_name FROM students WHERE id=:id AND {$studentParentExpr}=:pid LIMIT 1");
         $chk->execute([':id'=>$childId, ':pid'=>$parentId]);
         $child = $chk->fetch();
 
@@ -168,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 }
 
 // ── Fetch all children ──
-$children = $pdo->prepare("SELECT * FROM students WHERE parentId = :pid ORDER BY id DESC");
+$children = $pdo->prepare("SELECT * FROM students WHERE {$studentParentExpr} = :pid ORDER BY id DESC");
 $children->execute([':pid'=>$parentId]);
 $children = $children->fetchAll();
 
@@ -177,7 +186,7 @@ $eligible = $pdo->prepare("
     SELECT s.id, s.student_id, s.student_name, e.status AS enrol_status
     FROM students s
     LEFT JOIN pcm_enrolments e ON e.student_id = s.id
-    WHERE s.parentId = :pid
+    WHERE {$studentParentExprWithAlias} = :pid
       AND LOWER(COALESCE(s.approval_status,'pending')) = 'approved'
       AND (e.id IS NULL OR LOWER(COALESCE(e.status,'')) = 'needs update')
     ORDER BY s.student_name
