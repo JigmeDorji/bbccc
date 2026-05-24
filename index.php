@@ -272,7 +272,7 @@ try {
 <section class="bbcc-section">
     <div class="bbcc-container">
         <div class="bbcc-about" style="margin-bottom:54px;">
-            <div class="bbcc-about__image fade-up">
+            <div class="bbcc-about__image fade-up" style="position:relative;">
                 <?php if (!empty($schoolContent['imgUrl'])): ?>
                 <?= bbcc_render_responsive_picture(
                     (string)$schoolContent['imgUrl'],
@@ -296,6 +296,9 @@ try {
                     ]
                 ) ?>
                 <?php endif; ?>
+                <a href="parentAccountSetup" class="bbcc-btn bbcc-btn--primary" style="position:absolute;left:18px;bottom:18px;padding:13px 20px;font-size:1rem;font-weight:800;border-radius:999px;box-shadow:0 10px 24px rgba(136,27,18,.38);backdrop-filter:blur(2px);">
+                    Enroll at BLCS <i class="fa-solid fa-user-plus"></i>
+                </a>
             </div>
             <div class="bbcc-about__content fade-up">
                 <span class="section-badge"><i class="fa-solid fa-school"></i> Language Program</span>
@@ -326,9 +329,11 @@ try {
                         </div>
                     </div>
                 </div>
-                <a href="bhutanese-language-and-culture-school" class="bbcc-btn bbcc-btn--primary bbcc-btn--sm" style="margin-top:16px;">
-                    View School Details <i class="fa-solid fa-arrow-right"></i>
-                </a>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
+                    <a href="bhutanese-language-and-culture-school" class="bbcc-btn bbcc-btn--primary bbcc-btn--sm">
+                        View School Details <i class="fa-solid fa-arrow-right"></i>
+                    </a>
+                </div>
             </div>
         </div>
     </div>
