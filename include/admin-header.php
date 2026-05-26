@@ -12,9 +12,9 @@ $profileUrl = ($role === 'parent')
     : (($role === 'teacher') ? 'teacherProfile.php' : 'adminProfile.php');
 $notificationsUrl = 'notifications.php';
 $unreadNotifications = 0;
-$hasParentProfileForSwitch = false;
-$hasTeacherProfileForSwitch = false;
-$activePortalMode = strtolower(trim((string)($_SESSION['active_portal'] ?? '')));
+$portalState = bbcc_acl_portal_state();
+$isMixedPortalUser = $portalState['is_mixed_portal_user'];
+$activePortalMode = $portalState['active_portal'];
 try {
     global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
     $hdrPdo = new PDO(
@@ -28,47 +28,8 @@ try {
         (string)($_SESSION['username'] ?? ''),
         (string)($_SESSION['role'] ?? '')
     );
-
-    $sessionUsername = (string)($_SESSION['username'] ?? '');
-    $sessionUserId = (string)($_SESSION['userid'] ?? '');
-
-    if ($sessionUsername !== '') {
-        $stmtP = $hdrPdo->prepare("SELECT id FROM parents WHERE username = :u LIMIT 1");
-        $stmtP->execute([':u' => $sessionUsername]);
-        $hasParentProfileForSwitch = (bool)$stmtP->fetch(PDO::FETCH_ASSOC);
-    }
-    $stmtT = $hdrPdo->prepare("
-        SELECT id
-        FROM teachers
-        WHERE (user_id = :uid AND :uid <> '')
-           OR LOWER(email) = LOWER(:em)
-        LIMIT 1
-    ");
-    $stmtT->execute([':uid' => $sessionUserId, ':em' => $sessionUsername]);
-    $hasTeacherProfileForSwitch = (bool)$stmtT->fetch(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     $unreadNotifications = 0;
-}
-
-if (is_parent_role()) {
-    $hasParentProfileForSwitch = true;
-}
-if (is_teacher_role()) {
-    $hasTeacherProfileForSwitch = true;
-}
-
-$isMixedPortalUser = $hasParentProfileForSwitch && $hasTeacherProfileForSwitch;
-if ($isMixedPortalUser) {
-    if (!in_array($activePortalMode, ['parent', 'teacher'], true)) {
-        $activePortalMode = 'teacher';
-        $_SESSION['active_portal'] = $activePortalMode;
-    }
-} else {
-    if ($hasTeacherProfileForSwitch) {
-        $activePortalMode = 'teacher';
-    } elseif ($hasParentProfileForSwitch) {
-        $activePortalMode = 'parent';
-    }
 }
 
 // ── Derive display name & initials ──
@@ -88,6 +49,7 @@ $_pageTitles = [
     'serviceSetup'         => 'Post Event',
     'ourTeamSetup'         => 'Executive & Board Members',
     'viewFeedback'         => 'Contact Messages',
+    'dzo-dashboard'        => 'Dzo Class Dashboard',
     'dzoClassManagement'   => 'Child Registration',
     'dzongkha-classroom'   => 'Dzongkha Classroom',
     'feesManagement'       => 'Fees Management',

@@ -9,78 +9,18 @@ $currentPage = (str_ends_with($_uriBase, '.php') ? $_uriBase : $_uriBase . '.php
 
 function isSystemOwner() { return ($_SESSION['role'] ?? '') === 'Administrator'; }
 function isCompanyAdmin() { return ($_SESSION['role'] ?? '') === 'company_admin'; }
-function hasParentProfile() {
-    if (strtolower($_SESSION['role'] ?? '') === 'parent') return true;
-    static $checkedParent = null;
-    if ($checkedParent !== null) return $checkedParent;
-    $checkedParent = false;
-    try {
-        global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
-        $pdo = new PDO(
-            "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
-            $DB_USER,
-            $DB_PASSWORD,
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-        );
-        $uname = (string)($_SESSION['username'] ?? '');
-        if ($uname !== '') {
-            $stmt = $pdo->prepare("SELECT id FROM parents WHERE username = :u LIMIT 1");
-            $stmt->execute([':u' => $uname]);
-            $checkedParent = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
-        }
-    } catch (Throwable $e) {
-        $checkedParent = false;
-    }
-    return $checkedParent;
-}
-function hasTeacherProfile() {
-    if (strtolower($_SESSION['role'] ?? '') === 'teacher') return true;
-    static $checked = null;
-    if ($checked !== null) return $checked;
-    $checked = false;
-    try {
-        global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
-        $pdo = new PDO(
-            "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
-            $DB_USER,
-            $DB_PASSWORD,
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-        );
-        $uid = (string)($_SESSION['userid'] ?? '');
-        $uname = (string)($_SESSION['username'] ?? '');
-        $stmt = $pdo->prepare("
-            SELECT id
-            FROM teachers
-            WHERE (user_id = :uid AND :uid <> '')
-               OR LOWER(email) = LOWER(:em)
-            LIMIT 1
-        ");
-        $stmt->execute([':uid' => $uid, ':em' => $uname]);
-        $checked = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
-    } catch (Throwable $e) {
-        $checked = false;
-    }
-    return $checked;
-}
-function isParent() { return hasParentProfile(); }
-function isTeacher() { return hasTeacherProfile(); }
-function isPatron() { return strtolower($_SESSION['role'] ?? '') === 'patron'; }
+function isParent() { return bbcc_acl_detect_parent_profile(); }
+function isTeacher() { return bbcc_acl_detect_teacher_profile(); }
+function isPatron() { return bbcc_acl_role() === 'patron'; }
 
-$hasParentProfile = hasParentProfile();
-$hasTeacherProfile = hasTeacherProfile();
-$isMixedPortal = $hasParentProfile && $hasTeacherProfile;
-$activePortal = strtolower(trim((string)($_SESSION['active_portal'] ?? '')));
-if ($isMixedPortal && !in_array($activePortal, ['parent', 'teacher'], true)) {
-    $activePortal = 'teacher';
-    $_SESSION['active_portal'] = $activePortal;
-}
-if (!$isMixedPortal) {
-    if ($hasTeacherProfile) $activePortal = 'teacher';
-    if ($hasParentProfile) $activePortal = 'parent';
-}
+$portalState = bbcc_acl_portal_state();
+$activePortal = $portalState['active_portal'];
 $portalMode = strtolower(trim((string)($_GET['as'] ?? $activePortal)));
-$showTeacherPortal = $hasTeacherProfile && (!$isMixedPortal || $activePortal === 'teacher');
-$showParentPortal = $hasParentProfile && (!$isMixedPortal || $activePortal === 'parent');
+if (!in_array($portalMode, ['parent', 'teacher'], true)) {
+    $portalMode = $activePortal;
+}
+$showTeacherPortal = $portalState['show_teacher_portal'];
+$showParentPortal = $portalState['show_parent_portal'];
 ?>
 
 <style>
@@ -243,6 +183,14 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
     white-space: normal !important;
     line-height: 1.25;
 }
+#collapseWebsite .collapse-item {
+    white-space: normal !important;
+    line-height: 1.25;
+    align-items: flex-start !important;
+}
+#collapseWebsite .collapse-item i {
+    margin-top: 2px;
+}
 #collapseOrders .dzo-subgroup-trigger::after {
     content: '▾';
     font-size: 0.85rem;
@@ -403,7 +351,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
     <?php if (!isParent() && !isTeacher() && !isPatron()) { ?>
         <?php
             $websiteActive = in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','schoolContentSetup.php','taraContentSetup.php','sponsorSetup.php','ProgramDetailsSetup.php','sponsorProgramDetailEdit.php','downloadFileSetup.php','serviceSetup.php','ourTeamSetup.php','viewFeedback.php'], true);
-            $dzoActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','feesManagement.php','update-payments.php','manual-payments.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php','admin-class-students.php'], true);
+            $dzoActive = in_array($currentPage, ['dzo-dashboard.php','dzoClassManagement.php','admin-enrolments.php','feesManagement.php','update-payments.php','manual-payments.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php','admin-class-students.php'], true);
             $eventsActive = in_array($currentPage, ['eventManagement.php','bookingManagement.php'], true);
             $adminSettingsActive = in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php','audit-logs.php','run-migration.php','module-access.php'], true);
             $canWebsiteManage = function_exists('bbcc_can') ? bbcc_can('website', 'manage') : false;
@@ -425,7 +373,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                 <i class="fas fa-cogs"></i>
                 <span>Website Settings</span>
             </a>
-            <div id="collapseWebsite" class="collapse <?= $websiteActive ? 'show' : '' ?>">
+            <div id="collapseWebsite" class="collapse <?= $websiteActive ? 'show' : '' ?>" data-parent="#accordionSidebar">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <a class="collapse-item <?= ($currentPage == 'schoolContentSetup.php') ? 'active' : '' ?>" href="schoolContentSetup"><i class="fas fa-school fa-sm mr-1 text-muted"></i> Setup School Content</a>
                     <a class="collapse-item <?= in_array($currentPage, ['ProgramDetailsSetup.php','sponsorProgramDetailEdit.php'], true) ? 'active' : '' ?>" href="ProgramDetailsSetup"><i class="fas fa-file-alt fa-sm mr-1 text-muted"></i> Setup Program Details</a>
@@ -447,15 +395,18 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                 <span>Dzo Class Mgmt</span>
             </a>
 
-            <div id="collapseOrders" class="collapse <?= $dzoActive ? 'show' : '' ?>">
+            <div id="collapseOrders" class="collapse <?= $dzoActive ? 'show' : '' ?>" data-parent="#accordionSidebar">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <?php
+                        $dzoDashboardActive = ($currentPage === 'dzo-dashboard.php');
                         $dzoEnrollActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','admin-assign-class.php','admin-class-students.php'], true);
                         $dzoFeesActive = in_array($currentPage, ['feesManagement.php','update-payments.php','manual-payments.php','admin-fee-verification.php','feesSetting.php'], true);
                         $dzoOpsActive = in_array($currentPage, ['dzongkha-classroom.php','parent-email.php','admin-attendance.php'], true);
                         $dzoAttendanceActive = in_array($currentPage, ['attendanceManagement.php','attendance-records.php'], true);
                         $dzoConfigActive = in_array($currentPage, ['admin-class-setup.php','feesSetting.php','admin-parent-pins.php'], true);
                     ?>
+
+                    <a class="collapse-item <?= $dzoDashboardActive ? 'active' : '' ?>" href="dzo-dashboard"><i class="fas fa-chart-line fa-sm mr-1 text-muted"></i> Dashboard</a>
 
                     <h6 class="collapse-header dzo-group-header d-none d-lg-block">Enrollment Workflow</h6>
                     <a class="collapse-item dzo-subgroup-trigger <?= $dzoEnrollActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseDzoEnroll" aria-expanded="<?= $dzoEnrollActive ? 'true' : 'false' ?>" aria-controls="collapseDzoEnroll">Enrollment Workflow</a>
@@ -512,7 +463,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                 <i class="fas fa-calendar-alt"></i>
                 <span>Event Management</span>
             </a>
-            <div id="collapseEvents" class="collapse <?= $eventsActive ? 'show' : '' ?>">
+            <div id="collapseEvents" class="collapse <?= $eventsActive ? 'show' : '' ?>" data-parent="#accordionSidebar">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <a class="collapse-item <?= ($currentPage == 'eventManagement.php') ? 'active' : '' ?>" href="eventManagement"><i class="fas fa-calendar-plus fa-sm mr-1 text-muted"></i> Manage Events</a>
                     <a class="collapse-item <?= ($currentPage == 'bookingManagement.php') ? 'active' : '' ?>" href="bookingManagement"><i class="fas fa-ticket-alt fa-sm mr-1 text-muted"></i> Booking Requests</a>
@@ -529,7 +480,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                 <i class="fas fa-user-cog"></i>
                 <span>Admin Settings</span>
             </a>
-            <div id="collapseAdmin" class="collapse <?= $adminSettingsActive ? 'show' : '' ?>">
+            <div id="collapseAdmin" class="collapse <?= $adminSettingsActive ? 'show' : '' ?>" data-parent="#accordionSidebar">
                 <div class="bg-white py-2 collapse-inner rounded">
                     <a class="collapse-item <?= ($currentPage == 'userSetup.php') ? 'active' : '' ?>" href="userSetup"><i class="fas fa-users-cog fa-sm mr-1 text-muted"></i> User Management</a>
                     <a class="collapse-item <?= ($currentPage == 'adminProfile.php') ? 'active' : '' ?>" href="adminProfile"><i class="fas fa-id-badge fa-sm mr-1 text-muted"></i> My Profile</a>
@@ -671,8 +622,46 @@ document.addEventListener('DOMContentLoaded', function () {
     var backdrop  = document.getElementById('sidebarBackdrop');
     var closeBtn  = document.getElementById('drawerCloseBtn');
     var toggleBtn = document.getElementById('sidebarToggleBtn');
+    if (!sidebar) return;
 
     function isMobile() { return window.innerWidth < 992; }
+
+    // Reliable top-level collapse toggles (independent of bootstrap data API edge-cases).
+    var topLevelTriggers = sidebar.querySelectorAll('.nav-item > .nav-link[data-toggle="collapse"][data-target]');
+    topLevelTriggers.forEach(function (trigger) {
+        trigger.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            var targetSelector = trigger.getAttribute('data-target');
+            if (!targetSelector) return;
+            var target = sidebar.querySelector(targetSelector);
+            if (!target) return;
+
+            var shouldOpen = !target.classList.contains('show');
+
+            // Accordion behavior for primary sections.
+            topLevelTriggers.forEach(function (otherTrigger) {
+                var otherSelector = otherTrigger.getAttribute('data-target');
+                if (!otherSelector) return;
+                var otherTarget = sidebar.querySelector(otherSelector);
+                if (!otherTarget || otherTarget === target) return;
+                otherTarget.classList.remove('show');
+                otherTrigger.classList.add('collapsed');
+                otherTrigger.setAttribute('aria-expanded', 'false');
+            });
+
+            if (shouldOpen) {
+                target.classList.add('show');
+                trigger.classList.remove('collapsed');
+                trigger.setAttribute('aria-expanded', 'true');
+            } else {
+                target.classList.remove('show');
+                trigger.classList.add('collapsed');
+                trigger.setAttribute('aria-expanded', 'false');
+            }
+        });
+    });
 
     function openDrawer() {
         if (!isMobile()) return;

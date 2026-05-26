@@ -50,9 +50,6 @@ $recentStudents   = [];
 $recentBookings   = [];
 $contactMessages  = 0;
 $unreadNotifications = 0;
-$dashboardAttendance = [];
-$attendanceTitle = 'Attendance Records';
-$attendanceViewLink = 'attendanceManagement';
 $parentClassesAttended = 0;
 $parentChildTermProgress = [];
 $parentTermTotals = [1 => 0, 2 => 0, 3 => 0, 4 => 0];
@@ -67,19 +64,6 @@ $parentFeeMatrix = [];
 $recentClassroomActivity = [];
 $dashboardTeacherId = 0;
 $teacherAssignedClassNames = [];
-$campusAttendanceSummary = [];
-$campusAttendanceOverall = ['present' => 0, 'absent' => 0, 'grand' => 0];
-$campusKioskSummary = [];
-$campusKioskOverall = ['registered' => 0, 'sign_in' => 0, 'sign_out' => 0, 'grand' => 0];
-$dashboardFeePayments = [];
-$summaryDate = date('Y-m-d');
-if (isset($_GET['summary_date'])) {
-    $candidateDate = trim((string)$_GET['summary_date']);
-    $dt = DateTime::createFromFormat('Y-m-d', $candidateDate);
-    if ($dt && $dt->format('Y-m-d') === $candidateDate) {
-        $summaryDate = $candidateDate;
-    }
-}
 
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
@@ -93,7 +77,6 @@ try {
         (string)($_SESSION['role'] ?? '')
     );
     bbcc_ensure_term_class_total_columns($pdo);
-    $campusChoiceLabels = pcm_campus_choice_labels();
 
     $sessionUsername = (string)($_SESSION['username'] ?? '');
     $sessionUserId = (string)($_SESSION['userid'] ?? '');
@@ -397,200 +380,21 @@ try {
                 $approvedStudents = (int)($teacherStudentStats['approved_students'] ?? 0);
                 $pendingStudents = (int)($teacherStudentStats['pending_students'] ?? 0);
 
-                $stmtTeacherAttendance = $pdo->prepare("
-                    SELECT a.attendance_date, s.student_name, s.student_id, c.class_name, a.status
-                    FROM attendance a
-                    INNER JOIN classes c ON c.id = a.class_id
-                    INNER JOIN students s ON s.id = a.student_id
-                    WHERE c.teacher_id = :teacher_id
-                    ORDER BY a.attendance_date DESC, a.id DESC
-                    LIMIT 15
-                ");
-                $stmtTeacherAttendance->execute([':teacher_id' => $teacherId]);
-                $dashboardAttendance = $stmtTeacherAttendance->fetchAll(PDO::FETCH_ASSOC);
             } else {
                 $totalStudents = 0;
                 $approvedStudents = 0;
                 $pendingStudents = 0;
             }
-            $attendanceTitle = 'My Class Attendance Records';
-            $attendanceViewLink = 'teacher-attendance';
-        } else {
-            $stmtAdminAttendance = $pdo->query("
-                SELECT a.attendance_date, s.student_name, s.student_id, c.class_name, a.status
-                FROM attendance a
-                INNER JOIN students s ON s.id = a.student_id
-                LEFT JOIN classes c ON c.id = a.class_id
-                ORDER BY a.attendance_date DESC, a.id DESC
-                LIMIT 15
-            ");
-            $dashboardAttendance = $stmtAdminAttendance->fetchAll(PDO::FETCH_ASSOC);
-            $attendanceTitle = 'Recent Attendance Records';
-            $attendanceViewLink = 'attendanceManagement';
-
-            // Attendance summary by campus and class (Present / Absent / Grand Total)
-            $campusLabels = $campusChoiceLabels;
-            $campusAttendanceSummary = [
-                'c1' => [
-                    'label' => (string)($campusLabels['c1'] ?? 'Campus 1'),
-                    'rows' => [],
-                    'totals' => ['present' => 0, 'absent' => 0, 'grand' => 0],
-                ],
-                'c2' => [
-                    'label' => (string)($campusLabels['c2'] ?? 'Campus 2'),
-                    'rows' => [],
-                    'totals' => ['present' => 0, 'absent' => 0, 'grand' => 0],
-                ],
-            ];
-
-            $stmtCampusAttendance = $pdo->prepare("
-                SELECT
-                    LOWER(COALESCE(NULLIF(TRIM(c.campus_key), ''), 'c1')) AS campus_key,
-                    COALESCE(NULLIF(TRIM(c.class_name), ''), 'Unassigned Class') AS class_name,
-                    SUM(CASE WHEN LOWER(COALESCE(a.status, '')) = 'present' THEN 1 ELSE 0 END) AS present_count,
-                    SUM(CASE WHEN LOWER(COALESCE(a.status, '')) = 'absent' THEN 1 ELSE 0 END) AS absent_count
-                FROM attendance a
-                LEFT JOIN classes c ON c.id = a.class_id
-                WHERE DATE(a.attendance_date) = :summary_date
-                GROUP BY campus_key, class_name
-                ORDER BY campus_key ASC, class_name ASC
-            ");
-            $stmtCampusAttendance->execute([':summary_date' => $summaryDate]);
-            $campusRows = $stmtCampusAttendance->fetchAll(PDO::FETCH_ASSOC);
-
-            foreach ($campusRows as $row) {
-                $campusKey = strtolower((string)($row['campus_key'] ?? 'c1'));
-                if (!isset($campusAttendanceSummary[$campusKey])) {
-                    continue;
-                }
-                $present = (int)($row['present_count'] ?? 0);
-                $absent = (int)($row['absent_count'] ?? 0);
-                $grand = $present + $absent;
-
-                $campusAttendanceSummary[$campusKey]['rows'][] = [
-                    'class_name' => (string)($row['class_name'] ?? 'Class'),
-                    'present' => $present,
-                    'absent' => $absent,
-                    'grand' => $grand,
-                ];
-                $campusAttendanceSummary[$campusKey]['totals']['present'] += $present;
-                $campusAttendanceSummary[$campusKey]['totals']['absent'] += $absent;
-                $campusAttendanceSummary[$campusKey]['totals']['grand'] += $grand;
-            }
-
-            foreach ($campusAttendanceSummary as $summary) {
-                $campusAttendanceOverall['present'] += (int)($summary['totals']['present'] ?? 0);
-                $campusAttendanceOverall['absent'] += (int)($summary['totals']['absent'] ?? 0);
-                $campusAttendanceOverall['grand'] += (int)($summary['totals']['grand'] ?? 0);
-            }
-
-            // Kiosk sign-in/out summary by campus and class
-            $campusKioskSummary = [
-                'c1' => [
-                    'label' => (string)($campusLabels['c1'] ?? 'Campus 1'),
-                    'rows' => [],
-                    'totals' => ['registered' => 0, 'sign_in' => 0, 'sign_out' => 0, 'grand' => 0],
-                ],
-                'c2' => [
-                    'label' => (string)($campusLabels['c2'] ?? 'Campus 2'),
-                    'rows' => [],
-                    'totals' => ['registered' => 0, 'sign_in' => 0, 'sign_out' => 0, 'grand' => 0],
-                ],
-            ];
-
-            $stmtCampusKiosk = $pdo->prepare("
-                SELECT
-                    LOWER(COALESCE(NULLIF(TRIM(c.campus_key), ''), 'c1')) AS campus_key,
-                    COALESCE(NULLIF(TRIM(c.class_name), ''), 'Unassigned Class') AS class_name,
-                    COUNT(DISTINCT ca.student_id) AS registered_count,
-                    SUM(CASE WHEN k.time_in IS NOT NULL THEN 1 ELSE 0 END) AS sign_in_count,
-                    SUM(CASE WHEN k.time_out IS NOT NULL THEN 1 ELSE 0 END) AS sign_out_count
-                FROM classes c
-                LEFT JOIN class_assignments ca ON ca.class_id = c.id
-                LEFT JOIN pcm_kiosk_log k
-                    ON k.child_id = ca.student_id
-                   AND k.log_date = :summary_date
-                GROUP BY c.id, campus_key, class_name
-                ORDER BY campus_key ASC, class_name ASC
-            ");
-            $stmtCampusKiosk->execute([':summary_date' => $summaryDate]);
-            $kioskRows = $stmtCampusKiosk->fetchAll(PDO::FETCH_ASSOC);
-
-            foreach ($kioskRows as $row) {
-                $campusKey = strtolower((string)($row['campus_key'] ?? 'c1'));
-                if (!isset($campusKioskSummary[$campusKey])) {
-                    continue;
-                }
-                $registered = (int)($row['registered_count'] ?? 0);
-                $signIn = (int)($row['sign_in_count'] ?? 0);
-                $signOut = (int)($row['sign_out_count'] ?? 0);
-                $grand = $signIn + $signOut;
-
-                $campusKioskSummary[$campusKey]['rows'][] = [
-                    'class_name' => (string)($row['class_name'] ?? 'Class'),
-                    'registered' => $registered,
-                    'sign_in' => $signIn,
-                    'sign_out' => $signOut,
-                    'grand' => $grand,
-                ];
-                $campusKioskSummary[$campusKey]['totals']['registered'] += $registered;
-                $campusKioskSummary[$campusKey]['totals']['sign_in'] += $signIn;
-                $campusKioskSummary[$campusKey]['totals']['sign_out'] += $signOut;
-                $campusKioskSummary[$campusKey]['totals']['grand'] += $grand;
-            }
-
-            foreach ($campusKioskSummary as $summary) {
-                $campusKioskOverall['registered'] += (int)($summary['totals']['registered'] ?? 0);
-                $campusKioskOverall['sign_in'] += (int)($summary['totals']['sign_in'] ?? 0);
-                $campusKioskOverall['sign_out'] += (int)($summary['totals']['sign_out'] ?? 0);
-                $campusKioskOverall['grand'] += (int)($summary['totals']['grand'] ?? 0);
-            }
         }
     }
 
-    /* ═══ FEE COLLECTION DATA ═══ */
-    $feeCollected    = 0;
-    $feePending      = 0;
-    $feeTotal        = 0;
-    $feePendingCount = 0;
-    $feeVerifiedCount= 0;
+    /* ═══ DASHBOARD QUICK STATS DATA ═══ */
     $todaySignIns    = 0;
     $todaySignOuts   = 0;
     $totalClasses    = 0;
 
     if ($dashboardRole !== 'parent') {
         if (!$isWebsiteAdminDashboard) {
-            // Fee collection stats
-            $stmtFees = $pdo->query("SELECT
-                COALESCE(SUM(due_amount), 0) AS total_due,
-                COALESCE(SUM(CASE WHEN status = 'Verified' THEN paid_amount ELSE 0 END), 0) AS collected,
-                COALESCE(SUM(CASE WHEN status IN ('Unpaid','Pending','Rejected') THEN due_amount ELSE 0 END), 0) AS pending,
-                SUM(CASE WHEN status = 'Verified' THEN 1 ELSE 0 END) AS verified_count,
-                SUM(CASE WHEN status IN ('Unpaid','Pending') THEN 1 ELSE 0 END) AS pending_count
-                FROM pcm_fee_payments");
-            $feeRow = $stmtFees->fetch(PDO::FETCH_ASSOC);
-            $feeTotal        = (float)($feeRow['total_due'] ?? 0);
-            $feeCollected    = (float)($feeRow['collected'] ?? 0);
-            $feePending      = (float)($feeRow['pending'] ?? 0);
-            $feeVerifiedCount= (int)($feeRow['verified_count'] ?? 0);
-            $feePendingCount = (int)($feeRow['pending_count'] ?? 0);
-
-            $stmtFeeTable = $pdo->query("
-                SELECT
-                    f.id,
-                    s.student_name,
-                    COALESCE(s.student_id, CONCAT('ID-', s.id)) AS public_student_id,
-                    f.instalment_label,
-                    COALESCE(f.due_amount, 0) AS due_amount,
-                    f.status
-                FROM pcm_fee_payments f
-                LEFT JOIN students s ON s.id = f.student_id
-                WHERE COALESCE(f.due_amount, 0) > 0
-                ORDER BY f.id DESC
-                LIMIT 8
-            ");
-            $dashboardFeePayments = $stmtFeeTable->fetchAll(PDO::FETCH_ASSOC);
-
             // Today's kiosk attendance
             $stmtToday = $pdo->query("SELECT
                 SUM(CASE WHEN time_in IS NOT NULL THEN 1 ELSE 0 END) AS sign_ins,
@@ -1733,155 +1537,10 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                 </div>
 
                 <?php if ($dashboardRole !== 'teacher'): ?>
-                <!-- ── Attendance By Campus & Class ── -->
-                <div class="card dash-card shadow mb-4">
-                    <div class="card-body p-0">
-                        <div class="p-3" style="border-bottom: 1px solid #f0f0f0;">
-                            <div class="section-title mb-1">
-                                <span><i class="fas fa-school mr-2" style="color:#4e73df;"></i>Attendance Summary By Campus</span>
-                                <a href="attendance-records">View Records</a>
-                            </div>
-                            <form method="GET" class="mb-2 d-flex align-items-center" style="gap:8px;">
-                                <label for="summaryDate" class="mb-0" style="font-size:0.78rem;color:#8c8c9e;">Date:</label>
-                                <input type="date" id="summaryDate" name="summary_date" class="form-control form-control-sm" style="max-width:180px;" value="<?= htmlspecialchars($summaryDate, ENT_QUOTES, 'UTF-8') ?>">
-                                <button type="submit" class="btn btn-sm btn-outline-primary">Load</button>
-                            </form>
-                            <div style="font-size:0.78rem;color:#8c8c9e;">
-                                For: <strong><?= date('d M Y', strtotime($summaryDate)) ?></strong>
-                                &nbsp;&middot;&nbsp;
-                                Grand Total: <strong><?= (int)$campusAttendanceOverall['grand'] ?></strong>
-                                &nbsp;&middot;&nbsp;
-                                Present: <strong style="color:#1cc88a;"><?= (int)$campusAttendanceOverall['present'] ?></strong>
-                                &nbsp;&middot;&nbsp;
-                                Absent: <strong style="color:#e74a3b;"><?= (int)$campusAttendanceOverall['absent'] ?></strong>
-                            </div>
-                        </div>
-
-                        <div class="row no-gutters">
-                            <?php foreach (['c1', 'c2'] as $campusKey): ?>
-                                <?php $summary = $campusAttendanceSummary[$campusKey] ?? ['label' => 'Campus', 'rows' => [], 'totals' => ['present' => 0, 'absent' => 0, 'grand' => 0]]; ?>
-                                <div class="col-lg-6" style="border-right: <?= $campusKey === 'c1' ? '1px solid #f0f0f0' : 'none' ?>;">
-                                    <div class="p-3">
-                                        <div style="font-size:0.86rem;font-weight:700;color:#1a1a2e;margin-bottom:10px;">
-                                            <?= htmlspecialchars((string)$summary['label']) ?>
-                                        </div>
-                                        <div class="table-responsive">
-                                            <table class="dash-table mb-0">
-                                                <thead>
-                                                <tr>
-                                                    <th>Class</th>
-                                                    <th>Present</th>
-                                                    <th>Absent</th>
-                                                    <th>Grand Total</th>
-                                                </tr>
-                                                </thead>
-                                                <tbody>
-                                                <?php if (empty($summary['rows'])): ?>
-                                                    <tr>
-                                                        <td colspan="4" class="text-muted">No attendance records yet.</td>
-                                                    </tr>
-                                                <?php else: ?>
-                                                    <?php foreach ($summary['rows'] as $row): ?>
-                                                        <tr>
-                                                            <td><strong><?= htmlspecialchars((string)$row['class_name']) ?></strong></td>
-                                                            <td><span style="color:#1cc88a;font-weight:700;"><?= (int)$row['present'] ?></span></td>
-                                                            <td><span style="color:#e74a3b;font-weight:700;"><?= (int)$row['absent'] ?></span></td>
-                                                            <td><strong><?= (int)$row['grand'] ?></strong></td>
-                                                        </tr>
-                                                    <?php endforeach; ?>
-                                                    <tr style="background:#fafbff;">
-                                                        <td><strong>Total</strong></td>
-                                                        <td><strong style="color:#1cc88a;"><?= (int)$summary['totals']['present'] ?></strong></td>
-                                                        <td><strong style="color:#e74a3b;"><?= (int)$summary['totals']['absent'] ?></strong></td>
-                                                        <td><strong><?= (int)$summary['totals']['grand'] ?></strong></td>
-                                                    </tr>
-                                                <?php endif; ?>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card dash-card shadow mb-4">
-                    <div class="card-body p-0">
-                        <div class="p-3" style="border-bottom: 1px solid #f0f0f0;">
-                            <div class="section-title mb-1">
-                                <span><i class="fas fa-door-open mr-2" style="color:#36b9cc;"></i>Kiosk Sign In/Out Summary By Campus</span>
-                                <a href="admin-attendance?tab=kiosk">View Kiosk Records</a>
-                            </div>
-                            <div style="font-size:0.78rem;color:#8c8c9e;">
-                                For: <strong><?= date('d M Y', strtotime($summaryDate)) ?></strong>
-                                &nbsp;&middot;&nbsp;
-                                Registered: <strong style="color:#4e73df;"><?= (int)$campusKioskOverall['registered'] ?></strong>
-                                &nbsp;&middot;&nbsp;
-                                Grand Total: <strong><?= (int)$campusKioskOverall['grand'] ?></strong>
-                                &nbsp;&middot;&nbsp;
-                                Sign In: <strong style="color:#1cc88a;"><?= (int)$campusKioskOverall['sign_in'] ?></strong>
-                                &nbsp;&middot;&nbsp;
-                                Sign Out: <strong style="color:#e74a3b;"><?= (int)$campusKioskOverall['sign_out'] ?></strong>
-                            </div>
-                        </div>
-
-                        <div class="row no-gutters">
-                            <?php foreach (['c1', 'c2'] as $campusKey): ?>
-                                <?php $summary = $campusKioskSummary[$campusKey] ?? ['label' => 'Campus', 'rows' => [], 'totals' => ['sign_in' => 0, 'sign_out' => 0, 'grand' => 0]]; ?>
-                                <div class="col-lg-6" style="border-right: <?= $campusKey === 'c1' ? '1px solid #f0f0f0' : 'none' ?>;">
-                                    <div class="p-3">
-                                        <div style="font-size:0.86rem;font-weight:700;color:#1a1a2e;margin-bottom:10px;">
-                                            <?= htmlspecialchars((string)$summary['label']) ?>
-                                        </div>
-                                        <div class="table-responsive">
-                                            <table class="dash-table mb-0">
-                                                <thead>
-                                                <tr>
-                                                    <th>Class</th>
-                                                    <th>Registered Students</th>
-                                                    <th>Sign In</th>
-                                                    <th>Sign Out</th>
-                                                    <th>Grand Total</th>
-                                                </tr>
-                                                </thead>
-                                                <tbody>
-                                                <?php if (empty($summary['rows'])): ?>
-                                                    <tr>
-                                                        <td colspan="5" class="text-muted">No class records yet.</td>
-                                                    </tr>
-                                                <?php else: ?>
-                                                    <?php foreach ($summary['rows'] as $row): ?>
-                                                        <tr>
-                                                            <td><strong><?= htmlspecialchars((string)$row['class_name']) ?></strong></td>
-                                                            <td><span style="color:#4e73df;font-weight:700;"><?= (int)$row['registered'] ?></span></td>
-                                                            <td><span style="color:#1cc88a;font-weight:700;"><?= (int)$row['sign_in'] ?></span></td>
-                                                            <td><span style="color:#e74a3b;font-weight:700;"><?= (int)$row['sign_out'] ?></span></td>
-                                                            <td><strong><?= (int)$row['grand'] ?></strong></td>
-                                                        </tr>
-                                                    <?php endforeach; ?>
-                                                    <tr style="background:#fafbff;">
-                                                        <td><strong>Total</strong></td>
-                                                        <td><strong style="color:#4e73df;"><?= (int)$summary['totals']['registered'] ?></strong></td>
-                                                        <td><strong style="color:#1cc88a;"><?= (int)$summary['totals']['sign_in'] ?></strong></td>
-                                                        <td><strong style="color:#e74a3b;"><?= (int)$summary['totals']['sign_out'] ?></strong></td>
-                                                        <td><strong><?= (int)$summary['totals']['grand'] ?></strong></td>
-                                                    </tr>
-                                                <?php endif; ?>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ── Row 2: Upcoming Events + Finance ── -->
+                <!-- ── Row 2: Upcoming Events ── -->
                 <div class="row mb-2">
                     <!-- Upcoming Events -->
-                    <div class="col-lg-7 mb-4">
+                    <div class="col-lg-12 mb-4">
                         <div class="card dash-card shadow">
                             <div class="card-body">
                                 <div class="section-title">
@@ -1923,85 +1582,6 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                         </div>
                     </div>
 
-                    <!-- Fee Collection Overview -->
-                    <div class="col-lg-5 mb-4">
-                        <div class="card dash-card shadow">
-                            <div class="card-body">
-                                <div class="section-title">
-                                    <span><i class="fas fa-money-check-alt mr-2" style="color:#1cc88a;"></i>Fee Collection</span>
-                                    <a href="feesManagement">View All</a>
-                                </div>
-
-                                <div class="fee-row">
-                                    <span class="label"><span class="dot" style="background:#1cc88a;"></span> Collected</span>
-                                    <span class="val" style="color:#1cc88a;">$<?php echo number_format($feeCollected, 2); ?></span>
-                                </div>
-                                <div class="fee-row">
-                                    <span class="label"><span class="dot" style="background:#e74a3b;"></span> Outstanding</span>
-                                    <span class="val" style="color:#e74a3b;">$<?php echo number_format($feePending, 2); ?></span>
-                                </div>
-                                <div class="fee-row">
-                                    <span class="label"><span class="dot" style="background:#4e73df;"></span> Total Expected</span>
-                                    <span class="val">$<?php echo number_format($feeTotal, 2); ?></span>
-                                </div>
-
-                                <?php
-                                    $collPct = $feeTotal > 0 ? round(($feeCollected / $feeTotal) * 100) : 0;
-                                    $pendPct = 100 - $collPct;
-                                ?>
-                                <div class="fee-bar">
-                                    <div class="seg" style="width:<?php echo $collPct; ?>%; background:#1cc88a;"></div>
-                                    <div class="seg" style="width:<?php echo $pendPct; ?>%; background:#e74a3b;"></div>
-                                </div>
-
-                                <div style="margin-top:18px; padding:16px; background:linear-gradient(135deg,#e8f5e9,#c8e6c9); border-radius:10px;">
-                                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                                        <span style="font-size:0.84rem; font-weight:600; color:#555;">
-                                            <i class="fas fa-percentage mr-1" style="color:#1cc88a;"></i> Collection Rate
-                                        </span>
-                                        <span style="font-size:1.3rem; font-weight:800; color:<?php echo $collPct >= 70 ? '#1cc88a' : ($collPct >= 40 ? '#f6c23e' : '#e74a3b'); ?>;">
-                                            <?php echo $collPct; ?>%
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div style="margin-top:10px; display:flex; justify-content:center; gap:16px; font-size:0.76rem; color:#888;">
-                                    <span><i class="fas fa-check-circle" style="color:#1cc88a;"></i> <?php echo $feeVerifiedCount; ?> verified</span>
-                                    <span><i class="fas fa-clock" style="color:#f6c23e;"></i> <?php echo $feePendingCount; ?> pending</span>
-                                </div>
-
-                                <div class="table-responsive mt-3">
-                                    <table class="dash-table mb-0">
-                                        <thead>
-                                        <tr>
-                                            <th>Student</th>
-                                            <th>Installment</th>
-                                            <th>Amount</th>
-                                            <th>Status</th>
-                                        </tr>
-                                        </thead>
-                                        <tbody>
-                                        <?php if (empty($dashboardFeePayments)): ?>
-                                            <tr><td colspan="4" class="text-muted">No payment records found.</td></tr>
-                                        <?php else: ?>
-                                            <?php foreach ($dashboardFeePayments as $fp): ?>
-                                                <tr>
-                                                    <td>
-                                                        <strong><?= htmlspecialchars((string)($fp['student_name'] ?? 'Student')) ?></strong>
-                                                        <div style="font-size:.72rem;color:#8c8c9e;"><?= htmlspecialchars((string)($fp['public_student_id'] ?? '')) ?></div>
-                                                    </td>
-                                                    <td><?= htmlspecialchars((string)($fp['instalment_label'] ?? '-')) ?></td>
-                                                    <td>$<?= number_format((float)($fp['due_amount'] ?? 0), 2) ?></td>
-                                                    <td><span class="badge badge-<?= badge_class((string)($fp['status'] ?? 'Pending')) ?>"><?= htmlspecialchars((string)($fp['status'] ?? 'Pending')) ?></span></td>
-                                                </tr>
-                                            <?php endforeach; ?>
-                                        <?php endif; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
                 <?php endif; ?>
 
@@ -2083,55 +1663,6 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                                 <?php endif; ?>
                             </div>
                         </div>
-                    </div>
-                </div>
-                <?php endif; ?>
-
-                <?php if ($dashboardRole !== 'teacher'): ?>
-                <div class="card dash-card shadow mb-4">
-                    <div class="card-body p-0">
-                        <div class="p-3">
-                            <div class="section-title mb-0">
-                                <span><i class="fas fa-clipboard-check mr-2" style="color:#36b9cc;"></i><?php echo htmlspecialchars($attendanceTitle); ?></span>
-                                <a href="<?php echo htmlspecialchars($attendanceViewLink); ?>">View All</a>
-                            </div>
-                        </div>
-                        <?php if (empty($dashboardAttendance)): ?>
-                            <div class="p-4 text-center" style="color:#ccc;">
-                                <i class="fas fa-inbox fa-2x mb-2"></i>
-                                <p class="mb-0" style="font-size:0.85rem;">No attendance records yet</p>
-                            </div>
-                        <?php else: ?>
-                            <div class="table-responsive">
-                                <table class="dash-table">
-                                    <thead>
-                                    <tr><th>Date</th><th>Student</th><th>Class</th><th>Status</th></tr>
-                                    </thead>
-                                    <tbody>
-                                    <?php foreach ($dashboardAttendance as $ar): ?>
-                                        <?php
-                                            $attStatus = strtolower((string)($ar['status'] ?? ''));
-                                            $attBadge = 'secondary';
-                                            if ($attStatus === 'present') $attBadge = 'success';
-                                            elseif ($attStatus === 'absent') $attBadge = 'danger';
-                                            elseif ($attStatus === 'late') $attBadge = 'warning';
-                                        ?>
-                                        <tr>
-                                            <td><?php echo !empty($ar['attendance_date']) ? date('d M Y', strtotime($ar['attendance_date'])) : '-'; ?></td>
-                                            <td>
-                                                <strong><?php echo htmlspecialchars($ar['student_name'] ?? '-'); ?></strong>
-                                                <?php if (!empty($ar['student_id'])): ?>
-                                                    <div style="font-size:.75rem;color:#8c8c9e;"><?php echo htmlspecialchars($ar['student_id']); ?></div>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td><?php echo htmlspecialchars($ar['class_name'] ?? '-'); ?></td>
-                                            <td><span class="badge badge-<?php echo $attBadge; ?>"><?php echo htmlspecialchars($ar['status'] ?? 'Unknown'); ?></span></td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
-                        <?php endif; ?>
                     </div>
                 </div>
                 <?php endif; ?>

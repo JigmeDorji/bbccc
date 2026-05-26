@@ -22,58 +22,13 @@ function bbcc_acl_role(): string {
 }
 
 function bbcc_acl_detect_parent_profile(): bool {
-    static $cached = null;
-    if ($cached !== null) return $cached;
-    $cached = false;
-
-    try {
-        global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
-        $pdo = new PDO(
-            "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
-            $DB_USER,
-            $DB_PASSWORD,
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-        );
-        $username = (string)($_SESSION['username'] ?? '');
-        if ($username !== '') {
-            $stmt = $pdo->prepare("SELECT id FROM parents WHERE username = :u LIMIT 1");
-            $stmt->execute([':u' => $username]);
-            $cached = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
-        }
-    } catch (Throwable $e) {
-        $cached = false;
-    }
-    return $cached;
+    $profiles = bbcc_acl_detect_profiles();
+    return $profiles['parent'];
 }
 
 function bbcc_acl_detect_teacher_profile(): bool {
-    static $cached = null;
-    if ($cached !== null) return $cached;
-    $cached = false;
-
-    try {
-        global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
-        $pdo = new PDO(
-            "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
-            $DB_USER,
-            $DB_PASSWORD,
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-        );
-        $uid = (string)($_SESSION['userid'] ?? '');
-        $uname = (string)($_SESSION['username'] ?? '');
-        $stmt = $pdo->prepare("
-            SELECT id
-            FROM teachers
-            WHERE (user_id = :uid AND :uid <> '')
-               OR LOWER(email) = LOWER(:em)
-            LIMIT 1
-        ");
-        $stmt->execute([':uid' => $uid, ':em' => $uname]);
-        $cached = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
-    } catch (Throwable $e) {
-        $cached = false;
-    }
-    return $cached;
+    $profiles = bbcc_acl_detect_profiles();
+    return $profiles['teacher'];
 }
 
 function bbcc_acl_is_mixed_profile_user(): bool {
@@ -89,23 +44,114 @@ function bbcc_acl_active_portal(): string {
     return 'teacher';
 }
 
+function bbcc_acl_detect_profiles(): array {
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    $cached = [
+        'parent' => is_parent_role(),
+        'teacher' => is_teacher_role(),
+    ];
+
+    if ($cached['parent'] && $cached['teacher']) {
+        return $cached;
+    }
+
+    try {
+        global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
+        $pdo = new PDO(
+            "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
+            $DB_USER,
+            $DB_PASSWORD,
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+        );
+        $username = (string)($_SESSION['username'] ?? '');
+        $userId = (string)($_SESSION['userid'] ?? '');
+
+        if (!$cached['parent'] && $username !== '') {
+            $stmtParent = $pdo->prepare("SELECT id FROM parents WHERE username = :u LIMIT 1");
+            $stmtParent->execute([':u' => $username]);
+            $cached['parent'] = (bool)$stmtParent->fetch(PDO::FETCH_ASSOC);
+        }
+
+        if (!$cached['teacher']) {
+            $stmtTeacher = $pdo->prepare("
+                SELECT id
+                FROM teachers
+                WHERE (user_id = :uid AND :uid <> '')
+                   OR LOWER(email) = LOWER(:em)
+                LIMIT 1
+            ");
+            $stmtTeacher->execute([':uid' => $userId, ':em' => $username]);
+            $cached['teacher'] = (bool)$stmtTeacher->fetch(PDO::FETCH_ASSOC);
+        }
+    } catch (Throwable $e) {
+        // Keep role-based defaults when profile lookups fail.
+    }
+
+    return $cached;
+}
+
+function bbcc_acl_portal_state(): array {
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    $profiles = bbcc_acl_detect_profiles();
+    $hasParentProfile = $profiles['parent'];
+    $hasTeacherProfile = $profiles['teacher'];
+    $isMixedPortalUser = $hasParentProfile && $hasTeacherProfile;
+    $activePortal = bbcc_acl_active_portal();
+
+    if ($isMixedPortalUser) {
+        if (!in_array($activePortal, ['parent', 'teacher'], true)) {
+            $activePortal = 'teacher';
+        }
+    } elseif ($hasTeacherProfile) {
+        $activePortal = 'teacher';
+    } elseif ($hasParentProfile) {
+        $activePortal = 'parent';
+    } else {
+        $activePortal = '';
+    }
+
+    if ($activePortal !== '' && ($_SESSION['active_portal'] ?? null) !== $activePortal) {
+        $_SESSION['active_portal'] = $activePortal;
+    }
+
+    $cached = [
+        'has_parent_profile' => $hasParentProfile,
+        'has_teacher_profile' => $hasTeacherProfile,
+        'is_mixed_portal_user' => $isMixedPortalUser,
+        'active_portal' => $activePortal,
+        'show_teacher_portal' => $hasTeacherProfile && (!$isMixedPortalUser || $activePortal === 'teacher'),
+        'show_parent_portal' => $hasParentProfile && (!$isMixedPortalUser || $activePortal === 'parent'),
+    ];
+
+    return $cached;
+}
+
 function bbcc_acl_has_capability(string $cap): bool {
     $cap = strtolower(trim($cap));
     $role = bbcc_acl_role();
-    $isMixed = bbcc_acl_is_mixed_profile_user();
-    $activePortal = bbcc_acl_active_portal();
+    $portalState = bbcc_acl_portal_state();
+    $isMixed = $portalState['is_mixed_portal_user'];
+    $activePortal = $portalState['active_portal'];
 
     if ($cap === 'authenticated') return isset($_SESSION['userid']);
     if ($cap === 'admin') return is_admin_role();
     if ($cap === 'website_admin') return is_website_admin_role();
     if ($cap === 'parent') {
-        $hasParent = is_parent_role() || bbcc_acl_detect_parent_profile();
+        $hasParent = $portalState['has_parent_profile'];
         if (!$hasParent) return false;
         if ($isMixed && $activePortal !== 'parent') return false;
         return true;
     }
     if ($cap === 'teacher') {
-        $hasTeacher = is_teacher_role() || bbcc_acl_detect_teacher_profile();
+        $hasTeacher = $portalState['has_teacher_profile'];
         if (!$hasTeacher) return false;
         if ($isMixed && $activePortal !== 'teacher') return false;
         return true;
@@ -119,6 +165,7 @@ function bbcc_acl_page_rules(): array {
     return [
         // Shared authenticated landing/profile pages
         'index-admin' => ['authenticated'],
+        'dzo-dashboard' => ['admin', 'website_admin'],
         'notifications' => ['authenticated'],
         'switch-portal' => ['authenticated'],
         'adminprofile' => ['admin', 'teacher', 'patron', 'website_admin'],
