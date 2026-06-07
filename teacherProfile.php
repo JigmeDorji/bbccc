@@ -2,6 +2,7 @@
 require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/role_helpers.php";
+require_once "include/class_teacher_helpers.php";
 require_once "include/csrf.php";
 require_once "include/notifications.php";
 require_login();
@@ -19,6 +20,7 @@ try {
 } catch (Exception $e) {
     bbcc_fail_db($e);
 }
+bbcc_ensure_class_teacher_schema($pdo);
 
 function tp_h($v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
 
@@ -163,10 +165,11 @@ $linkedParent = $parentStmt->fetch() ?: null;
 $assignedClasses = [];
 if (!empty($teacher['id'])) {
     $classStmt = $pdo->prepare("
-        SELECT class_name, active, schedule_text
-        FROM classes
-        WHERE teacher_id = :tid
-        ORDER BY active DESC, class_name ASC
+        SELECT DISTINCT c.class_name, c.active, c.schedule_text
+        FROM classes c
+        INNER JOIN class_teacher_assignments cta ON cta.class_id = c.id
+        WHERE cta.teacher_id = :tid
+        ORDER BY c.active DESC, c.class_name ASC
     ");
     $classStmt->execute([':tid' => (int)$teacher['id']]);
     $assignedClasses = $classStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];

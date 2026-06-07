@@ -17,12 +17,8 @@ if (!$parent) { die("Parent account not found. Please contact admin."); }
 $parentId = (int)$parent['id'];
 $flash    = '';
 $ok       = false;
-$hasParentIdNew = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parent_id'")->fetch(PDO::FETCH_ASSOC);
-$hasParentIdLegacy = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parentId'")->fetch(PDO::FETCH_ASSOC);
-$studentParentCol = $hasParentIdNew ? 'parent_id' : 'parentId';
-$studentParentExpr = $hasParentIdNew && $hasParentIdLegacy
-    ? "COALESCE(NULLIF(parent_id,0), NULLIF(parentId,0))"
-    : $studentParentCol;
+$studentParentColumns = pcm_students_parent_insert_columns($pdo);
+$studentParentExpr = pcm_students_parent_expr($pdo);
 
 // ── Handle POST: add child ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -41,11 +37,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $flash = 'Child name is required.';
         } else {
             $sid = pcm_next_student_id($pdo);
+            $parentInsertColumns = implode(', ', $studentParentColumns);
+            $parentInsertPlaceholders = [];
+            $parentParams = [];
+            foreach ($studentParentColumns as $i => $col) {
+                $ph = ':pid' . $i;
+                $parentInsertPlaceholders[] = $ph;
+                $parentParams[$ph] = $parentId;
+            }
+            $parentInsertValues = implode(', ', $parentInsertPlaceholders);
             $stmt = $pdo->prepare("
-                INSERT INTO students (student_id, student_name, dob, gender, medical_issue, registration_date, approval_status, {$studentParentCol})
-                VALUES (:sid, :name, :dob, :g, :med, CURDATE(), 'Pending', :pid)
+                INSERT INTO students (student_id, student_name, dob, gender, medical_issue, registration_date, approval_status, {$parentInsertColumns})
+                VALUES (:sid, :name, :dob, :g, :med, CURDATE(), 'Pending', {$parentInsertValues})
             ");
-            $stmt->execute([':sid'=>$sid, ':name'=>$name, ':dob'=>$dob?:null, ':g'=>$gender?:null, ':med'=>$med?:null, ':pid'=>$parentId]);
+            $stmt->execute(array_merge([':sid'=>$sid, ':name'=>$name, ':dob'=>$dob?:null, ':g'=>$gender?:null, ':med'=>$med?:null], $parentParams));
 
             pcm_notify_admin_student_registration(
                 $name,

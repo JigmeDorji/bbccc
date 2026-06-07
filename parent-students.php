@@ -41,13 +41,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_s
         $approval_status = 'Pending';
         $status = 'Pending';
 
+        $parentColumns = pcm_students_parent_insert_columns($pdo);
+        $parentInsertColumns = implode(', ', $parentColumns);
+        $parentInsertPlaceholders = [];
+        $parentParams = [];
+        foreach ($parentColumns as $i => $col) {
+            $ph = ':parent_id' . $i;
+            $parentInsertPlaceholders[] = $ph;
+            $parentParams[$ph] = $parentId;
+        }
+
         $stmt = $pdo->prepare(
-            "INSERT INTO students (student_id, parent_id, student_name, dob, gender, medical_issue, registration_date, approval_status, status)
-             VALUES (:student_id, :parent_id, :student_name, :dob, :gender, :medical_issue, :registration_date, :approval_status, :status)"
+            "INSERT INTO students (student_id, {$parentInsertColumns}, student_name, dob, gender, medical_issue, registration_date, approval_status, status)
+             VALUES (:student_id, " . implode(', ', $parentInsertPlaceholders) . ", :student_name, :dob, :gender, :medical_issue, :registration_date, :approval_status, :status)"
         );
-        $stmt->execute([
+        $stmt->execute(array_merge([
             ':student_id' => $student_id,
-            ':parent_id' => $parentId,
             ':student_name' => $student_name,
             ':dob' => $dob,
             ':gender' => $gender,
@@ -55,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_s
             ':registration_date' => $registration_date,
             ':approval_status' => $approval_status,
             ':status' => $status
-        ]);
+        ], $parentParams));
 
         $message = "Student added successfully. Awaiting admin approval.";
     } catch (Exception $e) {
@@ -69,7 +78,7 @@ $stmt = $pdo->prepare(
      FROM students s
      LEFT JOIN class_assignments ca ON ca.student_id = s.id
      LEFT JOIN classes c ON c.id = ca.class_id
-     WHERE s.parent_id = :parent_id
+     WHERE " . pcm_students_parent_expr($pdo, 's') . " = :parent_id
      ORDER BY s.id DESC"
 );
 $stmt->execute([':parent_id' => $parentId]);

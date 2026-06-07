@@ -4,6 +4,7 @@ require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/notifications.php";
 require_once "include/pcm_helpers.php";
+require_once "include/class_teacher_helpers.php";
 require_login();
 
 function bbcc_table_exists(PDO $pdo, string $table): bool {
@@ -76,6 +77,7 @@ try {
         (string)($_SESSION['username'] ?? ''),
         (string)($_SESSION['role'] ?? '')
     );
+    bbcc_ensure_class_teacher_schema($pdo);
     bbcc_ensure_term_class_total_columns($pdo);
 
     $sessionUsername = (string)($_SESSION['username'] ?? '');
@@ -355,7 +357,8 @@ try {
                 $stmtTeacherClassNames = $pdo->prepare("
                     SELECT DISTINCT c.class_name
                     FROM classes c
-                    WHERE c.teacher_id = :teacher_id
+                    INNER JOIN class_teacher_assignments cta ON cta.class_id = c.id
+                    WHERE cta.teacher_id = :teacher_id
                     ORDER BY c.class_name ASC
                 ");
                 $stmtTeacherClassNames->execute([':teacher_id' => $teacherId]);
@@ -370,9 +373,10 @@ try {
                         COUNT(DISTINCT CASE WHEN LOWER(COALESCE(s.approval_status,'')) = 'approved' THEN s.id END) AS approved_students,
                         COUNT(DISTINCT CASE WHEN LOWER(COALESCE(s.approval_status,'')) = 'pending' THEN s.id END) AS pending_students
                     FROM classes c
+                    INNER JOIN class_teacher_assignments cta ON cta.class_id = c.id
                     INNER JOIN class_assignments ca ON ca.class_id = c.id
                     INNER JOIN students s ON s.id = ca.student_id
-                    WHERE c.teacher_id = :teacher_id
+                    WHERE cta.teacher_id = :teacher_id
                 ");
                 $stmtTeacherStudentStats->execute([':teacher_id' => $teacherId]);
                 $teacherStudentStats = $stmtTeacherStudentStats->fetch(PDO::FETCH_ASSOC) ?: [];
@@ -478,8 +482,8 @@ try {
                 SELECT DISTINCT a.created_at, a.title, a.category
                 FROM classroom_announcements a
                 INNER JOIN classroom_announcement_classes ac ON ac.announcement_id = a.id
-                INNER JOIN classes c ON c.id = ac.class_id
-                WHERE c.teacher_id = :tid
+                INNER JOIN class_teacher_assignments cta ON cta.class_id = ac.class_id
+                WHERE cta.teacher_id = :tid
                 ORDER BY a.created_at DESC
                 LIMIT 6
             ");
@@ -498,8 +502,8 @@ try {
                 SELECT r.created_at, r.report_title, s.student_name
                 FROM classroom_reports r
                 INNER JOIN students s ON s.id = r.student_id
-                INNER JOIN classes c ON c.id = r.class_id
-                WHERE c.teacher_id = :tid
+                INNER JOIN class_teacher_assignments cta ON cta.class_id = r.class_id
+                WHERE cta.teacher_id = :tid
                 ORDER BY r.created_at DESC
                 LIMIT 8
             ");
@@ -519,8 +523,8 @@ try {
                 FROM classroom_report_comments cm
                 INNER JOIN classroom_reports r ON r.id = cm.report_id
                 INNER JOIN students s ON s.id = r.student_id
-                INNER JOIN classes c ON c.id = r.class_id
-                WHERE c.teacher_id = :tid
+                INNER JOIN class_teacher_assignments cta ON cta.class_id = r.class_id
+                WHERE cta.teacher_id = :tid
                 ORDER BY cm.created_at DESC
                 LIMIT 8
             ");

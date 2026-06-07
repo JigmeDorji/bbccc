@@ -2,6 +2,7 @@
 require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/role_helpers.php";
+require_once "include/class_teacher_helpers.php";
 require_once "include/csrf.php";
 require_once "include/mail_queue.php";
 require_login();
@@ -118,6 +119,7 @@ try {
 } catch (Throwable $e) {
     bbcc_fail_db($e);
 }
+bbcc_ensure_class_teacher_schema($pdo);
 
 $sessionUsername = trim((string)($_SESSION['username'] ?? ''));
 $senderDisplayName = pe_pretty_name_from_username($sessionUsername);
@@ -170,14 +172,7 @@ $classId = 0;
 $parents = [];
 
 if (!$isAdmin) {
-    $stmtClasses = $pdo->prepare("
-        SELECT id, class_name
-        FROM classes
-        WHERE teacher_id = :tid
-        ORDER BY class_name ASC
-    ");
-    $stmtClasses->execute([':tid' => $teacherId]);
-    $teacherClasses = $stmtClasses->fetchAll(PDO::FETCH_ASSOC);
+    $teacherClasses = bbcc_teacher_classes($pdo, $teacherId, false);
 
     $classId = (int)($_GET['class_id'] ?? ($_POST['class_id'] ?? 0));
     if ($classId > 0) {
@@ -204,9 +199,10 @@ if ($isAdmin) {
             GROUP_CONCAT(DISTINCT c.class_name ORDER BY c.class_name SEPARATOR ', ') AS classes_csv
         FROM class_assignments ca
         INNER JOIN classes c ON c.id = ca.class_id
+        INNER JOIN class_teacher_assignments cta ON cta.class_id = c.id
         INNER JOIN students s ON s.id = ca.student_id
         INNER JOIN parents p ON p.id = s.parentId
-        WHERE c.teacher_id = :tid
+        WHERE cta.teacher_id = :tid
           AND p.email IS NOT NULL
           AND p.email <> ''
     ";

@@ -2,6 +2,7 @@
 require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/role_helpers.php";
+require_once "include/class_teacher_helpers.php";
 require_once "include/csrf.php";
 require_once "include/notifications.php";
 require_login();
@@ -99,9 +100,9 @@ function dc_collect_teacher_usernames_by_class_ids(PDO $pdo, array $classIds): a
     }
     $sql = "
         SELECT DISTINCT t.email
-        FROM classes c
-        INNER JOIN teachers t ON t.id = c.teacher_id
-        WHERE c.id IN (" . implode(',', $classIds) . ")
+        FROM class_teacher_assignments cta
+        INNER JOIN teachers t ON t.id = cta.teacher_id
+        WHERE cta.class_id IN (" . implode(',', $classIds) . ")
           AND t.email IS NOT NULL
           AND TRIM(t.email) <> ''
     ";
@@ -140,6 +141,7 @@ try {
     bbcc_fail_db($e);
 }
 
+bbcc_ensure_class_teacher_schema($pdo);
 dc_ensure_schema($pdo);
 
 $isAdmin = is_admin_role();
@@ -196,9 +198,7 @@ $allClasses = $pdo->query("SELECT id, class_name FROM classes WHERE active = 1 O
 
 $teacherClasses = [];
 if ($teacherId > 0) {
-    $stmtTc = $pdo->prepare("SELECT id, class_name FROM classes WHERE active = 1 AND teacher_id = :tid ORDER BY class_name ASC");
-    $stmtTc->execute([':tid' => $teacherId]);
-    $teacherClasses = $stmtTc->fetchAll();
+    $teacherClasses = bbcc_teacher_classes($pdo, $teacherId, true);
 }
 $teacherClassIds = array_map('intval', array_column($teacherClasses, 'id'));
 
@@ -211,7 +211,7 @@ if ($parentId > 0) {
 
 $teacherStudents = [];
 if ($teacherId > 0) {
-    $stmtTs = $pdo->prepare("\n        SELECT DISTINCT\n            s.id AS student_id_pk,\n            s.student_id,\n            s.student_name,\n            c.id AS class_id,\n            c.class_name\n        FROM class_assignments ca\n        INNER JOIN classes c ON c.id = ca.class_id\n        INNER JOIN students s ON s.id = ca.student_id\n        WHERE c.teacher_id = :tid\n        ORDER BY c.class_name ASC, s.student_name ASC\n    ");
+    $stmtTs = $pdo->prepare("\n        SELECT DISTINCT\n            s.id AS student_id_pk,\n            s.student_id,\n            s.student_name,\n            c.id AS class_id,\n            c.class_name\n        FROM class_assignments ca\n        INNER JOIN classes c ON c.id = ca.class_id\n        INNER JOIN class_teacher_assignments cta ON cta.class_id = c.id\n        INNER JOIN students s ON s.id = ca.student_id\n        WHERE cta.teacher_id = :tid\n        ORDER BY c.class_name ASC, s.student_name ASC\n    ");
     $stmtTs->execute([':tid' => $teacherId]);
     $teacherStudents = $stmtTs->fetchAll();
 }
@@ -473,7 +473,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $reportType = 'Progress';
             }
 
-            $stmtChk = $pdo->prepare("\n                SELECT s.id\n                FROM class_assignments ca\n                INNER JOIN students s ON s.id = ca.student_id\n                INNER JOIN classes c ON c.id = ca.class_id\n                WHERE ca.class_id = :cid\n                  AND ca.student_id = :sid\n                  AND c.teacher_id = :tid\n                LIMIT 1\n            ");
+            $stmtChk = $pdo->prepare("\n                SELECT s.id\n                FROM class_assignments ca\n                INNER JOIN students s ON s.id = ca.student_id\n                WHERE ca.class_id = :cid\n                  AND ca.student_id = :sid\n                  AND EXISTS (\n                        SELECT 1\n                        FROM class_teacher_assignments cta\n                        WHERE cta.class_id = ca.class_id\n                          AND cta.teacher_id = :tid\n                  )\n                LIMIT 1\n            ");
             $stmtChk->execute([':cid' => $classId, ':sid' => $studentId, ':tid' => $teacherId]);
             if (!$stmtChk->fetch()) {
                 throw new Exception('Selected student is not in your selected class.');
@@ -553,22 +553,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmtNotify = $pdo->prepare("
                 SELECT
                     r.student_id,
-                    r.class_id,
-                    t.email AS teacher_email
+                    r.class_id
                 FROM classroom_reports r
-                LEFT JOIN classes c ON c.id = r.class_id
-                LEFT JOIN teachers t ON t.id = c.teacher_id
                 WHERE r.id = :rid
                 LIMIT 1
             ");
             $stmtNotify->execute([':rid' => $reportId]);
             $notifyRow = $stmtNotify->fetch(PDO::FETCH_ASSOC) ?: [];
-            $teacherEmail = trim((string)($notifyRow['teacher_email'] ?? ''));
+            $notifyClassId = (int)($notifyRow['class_id'] ?? 0);
+            $teacherEmails = [];
+            if ($notifyClassId > 0) {
+                $stmtTeacherEmails = $pdo->prepare("
+                    SELECT DISTINCT t.email
+                    FROM class_teacher_assignments cta
+                    INNER JOIN teachers t ON t.id = cta.teacher_id
+                    WHERE cta.class_id = :cid
+                      AND t.email IS NOT NULL
+                      AND TRIM(t.email) <> ''
+                ");
+                $stmtTeacherEmails->execute([':cid' => $notifyClassId]);
+                $teacherEmails = array_values(array_filter(array_map(static function (array $row): string {
+                    return trim((string)($row['email'] ?? ''));
+                }, $stmtTeacherEmails->fetchAll(PDO::FETCH_ASSOC) ?: [])));
+            }
 
-            if ($teacherEmail !== '' && function_exists('bbcc_notify_username')) {
-                bbcc_notify_username(
+            if ($teacherEmails && function_exists('bbcc_notify_username')) {
+                dc_notify_usernames(
                     $pdo,
-                    $teacherEmail,
+                    $teacherEmails,
                     'New Parent Comment on Student Progress Note',
                     'A parent added a comment to a student progress note.',
                     'dzongkha-classroom?tab=reports&as=teacher'

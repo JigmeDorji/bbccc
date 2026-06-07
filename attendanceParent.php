@@ -1,6 +1,7 @@
 <?php
 require_once "include/config.php";
 require_once "include/auth.php";
+require_once "include/pcm_helpers.php";
 require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
@@ -33,7 +34,7 @@ $stmt = $pdo->prepare("
     FROM students s
     LEFT JOIN attendance a ON a.student_id = s.id
     LEFT JOIN classes c ON c.id = a.class_id
-    WHERE s.parentId = :pid
+    WHERE " . pcm_students_parent_expr($pdo, 's') . " = :pid
     ORDER BY s.student_name ASC, a.attendance_date DESC
 ");
 $stmt->execute([':pid' => $parentId]);

@@ -3,6 +3,7 @@ require_once "include/config.php";
 require_once "include/auth.php";
 require_once "access_control.php";
 require_once "include/role_helpers.php";
+require_once "include/class_teacher_helpers.php";
 require_login();
 allowRoles(['Administrator', 'Admin', 'Company Admin', 'System_owner', 'Staff']);
 
@@ -44,7 +45,29 @@ function bbcc_campus_options(PDO $pdo): array {
     }
 }
 
+function bbcc_filter_existing_teacher_ids(PDO $pdo, array $teacherIds): array {
+    $teacherIds = bbcc_normalize_teacher_ids($teacherIds);
+    if (empty($teacherIds)) {
+        return [];
+    }
+    $in = implode(',', array_fill(0, count($teacherIds), '?'));
+    $stmt = $pdo->prepare("SELECT id FROM teachers WHERE id IN ($in) AND active = 1");
+    $stmt->execute($teacherIds);
+    $existing = array_map('intval', array_column($stmt->fetchAll(PDO::FETCH_ASSOC) ?: [], 'id'));
+    sort($existing);
+
+    // Keep original selection order for primary teacher assignment.
+    $ordered = [];
+    foreach ($teacherIds as $teacherId) {
+        if (in_array($teacherId, $existing, true)) {
+            $ordered[] = $teacherId;
+        }
+    }
+    return $ordered;
+}
+
 bbcc_ensure_class_campus_column($pdo);
+bbcc_ensure_class_teacher_schema($pdo);
 $campusOptions = bbcc_campus_options($pdo);
 $validCampusKeys = array_keys($campusOptions);
 
@@ -116,12 +139,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("Another class with this name already exists.");
             }
 
-            $teacherId = (int)($_POST['teacher_id'] ?? 0) ?: null;
+            $teacherIds = bbcc_filter_existing_teacher_ids($pdo, array_map('intval', (array)($_POST['teacher_ids'] ?? [])));
 
+            $pdo->beginTransaction();
             $stmt = $pdo->prepare(
                 "UPDATE classes SET class_name = :class_name, description = :description,
-                 campus_key = :campus_key, capacity = :capacity, schedule_text = :schedule_text, active = :active,
-                 teacher_id = :teacher_id WHERE id = :id"
+                 campus_key = :campus_key, capacity = :capacity, schedule_text = :schedule_text, active = :active
+                 WHERE id = :id"
             );
             $stmt->execute([
                 ':class_name'   => $className,
@@ -130,12 +154,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ':capacity'     => $capacity,
                 ':schedule_text'=> $scheduleText === '' ? null : $scheduleText,
                 ':active'       => $active,
-                ':teacher_id'   => $teacherId,
                 ':id'           => $editId
             ]);
+            bbcc_set_class_teachers(
+                $pdo,
+                $editId,
+                $teacherIds,
+                (string)($_SESSION['userid'] ?? ''),
+                (string)($_SESSION['username'] ?? '')
+            );
+            $pdo->commit();
 
             $message = "Class updated successfully.";
         } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             $message = "Error: " . $e->getMessage();
         }
     }
@@ -157,10 +191,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("Cannot delete class — $assignedCount student(s) are still assigned. Remove assignments first.");
             }
 
-            $stmt = $pdo->prepare("DELETE FROM classes WHERE id = :id");
-            $stmt->execute([':id' => $deleteId]);
+            $pdo->beginTransaction();
+            $pdo->prepare("DELETE FROM class_teacher_assignments WHERE class_id = :id")->execute([':id' => $deleteId]);
+            $pdo->prepare("DELETE FROM classes WHERE id = :id")->execute([':id' => $deleteId]);
+            $pdo->commit();
             $message = "Class deleted successfully.";
         } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             $message = "Error: " . $e->getMessage();
         }
     }
@@ -239,7 +278,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             // Check if teacher is assigned to any class
-            $check = $pdo->prepare("SELECT COUNT(*) FROM classes WHERE teacher_id = (SELECT id FROM teachers WHERE id = :id)");
+            $check = $pdo->prepare("SELECT COUNT(*) FROM class_teacher_assignments WHERE teacher_id = :id");
             $check->execute([':id' => $deleteId]);
             $assignedCount = $check->fetchColumn();
 
@@ -267,23 +306,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Assign Teacher
-    if ($action === 'assign_teacher') {
+    // Assign Teacher(s)
+    if ($action === 'assign_teachers') {
         try {
             $classId = (int)($_POST['class_id'] ?? 0);
-            $teacherId = (int)($_POST['teacher_id'] ?? 0);
+            $teacherIds = bbcc_filter_existing_teacher_ids($pdo, array_map('intval', (array)($_POST['teacher_ids'] ?? [])));
 
             if ($classId === 0) {
                 throw new Exception("Class selection is required.");
             }
+            $classExists = $pdo->prepare("SELECT id FROM classes WHERE id = :id LIMIT 1");
+            $classExists->execute([':id' => $classId]);
+            if (!$classExists->fetch(PDO::FETCH_ASSOC)) {
+                throw new Exception("Selected class was not found.");
+            }
 
-            $stmt = $pdo->prepare("UPDATE classes SET teacher_id = :teacher_id WHERE id = :id");
-            $stmt->execute([
-                ':teacher_id' => $teacherId ?: null,
-                ':id' => $classId
-            ]);
+            bbcc_set_class_teachers(
+                $pdo,
+                $classId,
+                $teacherIds,
+                (string)($_SESSION['userid'] ?? ''),
+                (string)($_SESSION['username'] ?? '')
+            );
 
-            $message = "Teacher assignment updated.";
+            $message = "Teacher assignment(s) updated.";
         } catch (Exception $e) {
             $message = "Error: " . $e->getMessage();
         }
@@ -369,9 +415,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ─── Fetch data after all mutations ───
 $classes = $pdo->query(
-    "SELECT c.*, t.full_name AS teacher_name
+    "SELECT
+        c.*,
+        COALESCE(x.teacher_names, tlegacy.full_name) AS teacher_names,
+        COALESCE(x.teacher_ids_csv, CASE WHEN c.teacher_id IS NOT NULL THEN CAST(c.teacher_id AS CHAR) ELSE '' END) AS teacher_ids_csv
      FROM classes c
-     LEFT JOIN teachers t ON t.id = c.teacher_id
+     LEFT JOIN (
+         SELECT
+             cta.class_id,
+             GROUP_CONCAT(DISTINCT t.full_name ORDER BY cta.is_primary DESC, t.full_name SEPARATOR ', ') AS teacher_names,
+             GROUP_CONCAT(DISTINCT cta.teacher_id ORDER BY cta.is_primary DESC, cta.teacher_id SEPARATOR ',') AS teacher_ids_csv
+         FROM class_teacher_assignments cta
+         INNER JOIN teachers t ON t.id = cta.teacher_id
+         GROUP BY cta.class_id
+     ) x ON x.class_id = c.id
+     LEFT JOIN teachers tlegacy ON tlegacy.id = c.teacher_id
      ORDER BY c.created_at DESC"
 )->fetchAll(PDO::FETCH_ASSOC);
 
@@ -478,14 +536,14 @@ $teachers = $pdo->query(
                             </div>
                         </div>
 
-                        <!-- Assign Teacher -->
+                        <!-- Assign Teacher(s) -->
                         <div class="card shadow mb-4" style="border-radius:14px;border:none;">
                             <div class="card-header py-3" style="border-radius:14px 14px 0 0;">
-                                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-link mr-1"></i> Assign Teacher to Class</h6>
+                                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-link mr-1"></i> Assign Teacher(s) to Class</h6>
                             </div>
                             <div class="card-body">
                                 <form method="POST">
-                                    <input type="hidden" name="action" value="assign_teacher">
+                                    <input type="hidden" name="action" value="assign_teachers">
                                     <div class="form-row align-items-end">
                                         <div class="form-group col-md-5">
                                             <label><i class="fas fa-chalkboard mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Class</label>
@@ -497,16 +555,16 @@ $teachers = $pdo->query(
                                             </select>
                                         </div>
                                         <div class="form-group col-md-5">
-                                            <label><i class="fas fa-chalkboard-teacher mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Teacher</label>
-                                            <select name="teacher_id" class="form-control">
-                                                <option value="">— Unassigned —</option>
+                                            <label><i class="fas fa-chalkboard-teacher mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Teachers</label>
+                                            <select name="teacher_ids[]" class="form-control" multiple size="6">
                                                 <?php foreach ($teachers as $teacher): ?>
                                                     <option value="<?= (int)$teacher['id'] ?>"><?= htmlspecialchars($teacher['full_name']) ?></option>
                                                 <?php endforeach; ?>
                                             </select>
+                                            <small class="text-muted">Hold Cmd/Ctrl to select multiple teachers. Leave blank to unassign all.</small>
                                         </div>
                                         <div class="form-group col-md-2">
-                                            <button type="submit" class="btn btn-primary btn-block" style="border-radius:10px;"><i class="fas fa-link mr-1"></i> Assign</button>
+                                            <button type="submit" class="btn btn-primary btn-block" style="border-radius:10px;"><i class="fas fa-link mr-1"></i> Update</button>
                                         </div>
                                     </div>
                                 </form>
@@ -525,7 +583,7 @@ $teachers = $pdo->query(
                                         <tr>
                                             <th style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Class</th>
                                             <th style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Campus</th>
-                                            <th style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Teacher</th>
+                                            <th style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Teachers</th>
                                             <th style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Capacity</th>
                                             <th style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Schedule</th>
                                             <th style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Active</th>
@@ -537,7 +595,7 @@ $teachers = $pdo->query(
                                             <tr>
                                                 <td class="font-weight-bold"><?= htmlspecialchars($class['class_name']) ?></td>
                                                 <td><?= htmlspecialchars($campusOptions[(string)($class['campus_key'] ?? 'c1')] ?? '—') ?></td>
-                                                <td><?= htmlspecialchars($class['teacher_name'] ?? 'Not Assigned') ?></td>
+                                                <td><?= htmlspecialchars($class['teacher_names'] ?? 'Not Assigned') ?></td>
                                                 <td><?= htmlspecialchars($class['capacity']) ?></td>
                                                 <td><?= htmlspecialchars($class['schedule_text'] ?? '') ?></td>
                                                 <td>
@@ -556,6 +614,7 @@ $teachers = $pdo->query(
                                                         data-description="<?= htmlspecialchars($class['description'] ?? '', ENT_QUOTES) ?>"
                                                         data-capacity="<?= (int)$class['capacity'] ?>"
                                                         data-schedule="<?= htmlspecialchars($class['schedule_text'] ?? '', ENT_QUOTES) ?>"
+                                                        data-teacher-ids="<?= htmlspecialchars((string)($class['teacher_ids_csv'] ?? ''), ENT_QUOTES) ?>"
                                                         data-active="<?= (int)$class['active'] ?>"
                                                         style="width:32px;height:32px;padding:0;border-radius:8px;line-height:32px;">
                                                         <i class="fas fa-pencil-alt" style="font-size:.75rem;"></i>
@@ -734,13 +793,13 @@ $teachers = $pdo->query(
                         <textarea class="form-control" name="description" id="edit_description" rows="2"></textarea>
                     </div>
                     <div class="form-group mt-2">
-                        <label><i class="fas fa-chalkboard-teacher mr-1" style="color:#881b12;font-size:.7rem;"></i> Assign Teacher</label>
-                        <select class="form-control" name="teacher_id" id="edit_class_teacher">
-                            <option value="">— Unassigned —</option>
+                        <label><i class="fas fa-chalkboard-teacher mr-1" style="color:#881b12;font-size:.7rem;"></i> Assign Teacher(s)</label>
+                        <select class="form-control" name="teacher_ids[]" id="edit_class_teachers" multiple size="6">
                             <?php foreach ($teachers as $t): ?>
                                 <option value="<?= (int)$t['id'] ?>"><?= htmlspecialchars($t['full_name']) ?></option>
                             <?php endforeach; ?>
                         </select>
+                        <small class="text-muted">Hold Cmd/Ctrl to choose multiple teachers. First selected is treated as primary.</small>
                     </div>
                     <div class="custom-control custom-switch mt-2">
                         <input type="checkbox" class="custom-control-input" id="edit_active" name="active" value="1">
@@ -839,8 +898,12 @@ $(document).on('click', '.btn-edit-class', function(){
     $('#edit_capacity').val(btn.data('capacity'));
     $('#edit_schedule').val(btn.data('schedule'));
     $('#edit_active').prop('checked', btn.data('active') == 1);
-    var tid = btn.data('teacher-id');
-    $('#edit_class_teacher').val(tid ? String(tid) : '');
+    var teacherIdsCsv = String(btn.attr('data-teacher-ids') || '').trim();
+    var teacherIds = teacherIdsCsv ? teacherIdsCsv.split(',').map(function(v){ return String(v).trim(); }).filter(Boolean) : [];
+    $('#edit_class_teachers option').prop('selected', false);
+    teacherIds.forEach(function (id) {
+        $('#edit_class_teachers option[value="' + id + '"]').prop('selected', true);
+    });
     $('#editClassModal').modal('show');
 });
 

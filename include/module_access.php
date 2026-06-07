@@ -205,13 +205,18 @@ function bbcc_load_user_module_overrides(): array {
     }
 
     try {
-        global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
-        $pdo = new PDO(
-            "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
-            $DB_USER,
-            $DB_PASSWORD,
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-        );
+        $pdo = null;
+        if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
+            $pdo = $GLOBALS['pdo'];
+        } else {
+            global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
+            $pdo = new PDO(
+                "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
+                $DB_USER,
+                $DB_PASSWORD,
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            );
+        }
 
         $has = $pdo->query("SHOW TABLES LIKE 'user_module_access_overrides'")->fetch(PDO::FETCH_NUM);
         if (!$has) {

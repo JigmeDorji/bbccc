@@ -2,6 +2,7 @@
 require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/role_helpers.php";
+require_once "include/class_teacher_helpers.php";
 require_login();
 
 $message = "";
@@ -20,6 +21,7 @@ try {
 } catch (Exception $e) {
     bbcc_fail_db($e);
 }
+bbcc_ensure_class_teacher_schema($pdo);
 
 function bbcc_ensure_attendance_batch_column(PDO $pdo): void {
     static $done = false;
@@ -123,9 +125,7 @@ if ($viewMode === 'parent') {
 if ($viewMode === 'admin') {
     $classes = $pdo->query("SELECT id, class_name FROM classes WHERE active = 1 ORDER BY class_name")->fetchAll(PDO::FETCH_ASSOC);
 } elseif ($viewMode === 'teacher') {
-    $stmtClasses = $pdo->prepare("SELECT id, class_name FROM classes WHERE active = 1 AND teacher_id = :tid ORDER BY class_name");
-    $stmtClasses->execute([':tid' => $teacherId]);
-    $classes = $stmtClasses->fetchAll(PDO::FETCH_ASSOC);
+    $classes = bbcc_teacher_classes($pdo, $teacherId, true);
 } else {
     $stmtClasses = $pdo->prepare("
         SELECT DISTINCT c.id, c.class_name
@@ -166,11 +166,15 @@ if ($canEdit && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? ''
             $ownStmt = $pdo->prepare("
                 SELECT a.id
                 FROM attendance a
-                LEFT JOIN classes c ON c.id = a.class_id
                 WHERE a.id = :id
                   AND (
-                        c.teacher_id = :tid
-                        OR a.teacher_id = :tid
+                        a.teacher_id = :tid
+                        OR EXISTS (
+                            SELECT 1
+                            FROM class_teacher_assignments cta
+                            WHERE cta.class_id = a.class_id
+                              AND cta.teacher_id = :tid
+                        )
                       )
                 LIMIT 1
             ");
@@ -240,7 +244,12 @@ $params = [];
 if ($viewMode === 'admin') {
     $where[] = "1=1";
 } elseif ($viewMode === 'teacher') {
-    $where[] = "c.teacher_id = :teacher_id";
+    $where[] = "EXISTS (
+        SELECT 1
+        FROM class_teacher_assignments ctaf
+        WHERE ctaf.class_id = a.class_id
+          AND ctaf.teacher_id = :teacher_id
+    )";
     $params[':teacher_id'] = $teacherId;
 } else {
     $where[] = "s.parentId = :parent_id";

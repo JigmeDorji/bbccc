@@ -3,6 +3,7 @@ require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/role_helpers.php";
 require_once "include/pcm_helpers.php";
+require_once "include/class_teacher_helpers.php";
 require_once "include/csrf.php";
 require_login();
 
@@ -24,6 +25,7 @@ try {
 } catch (Throwable $e) {
     bbcc_fail_db($e);
 }
+bbcc_ensure_class_teacher_schema($pdo);
 
 [$campusOneName, $campusTwoName] = pcm_campus_names();
 $campusChoices = [
@@ -94,12 +96,20 @@ $rows = $pdo->query("
         c.id AS class_id,
         c.class_name,
         c.campus_key,
-        t.full_name AS teacher_name,
+        COALESCE(tt.teacher_names, tlegacy.full_name) AS teacher_name,
         s.id AS student_db_id,
         s.student_id,
         s.student_name
     FROM classes c
-    LEFT JOIN teachers t ON t.id = c.teacher_id
+    LEFT JOIN (
+        SELECT
+            cta.class_id,
+            GROUP_CONCAT(DISTINCT t.full_name ORDER BY cta.is_primary DESC, t.full_name SEPARATOR ', ') AS teacher_names
+        FROM class_teacher_assignments cta
+        INNER JOIN teachers t ON t.id = cta.teacher_id
+        GROUP BY cta.class_id
+    ) tt ON tt.class_id = c.id
+    LEFT JOIN teachers tlegacy ON tlegacy.id = c.teacher_id
     LEFT JOIN class_assignments ca ON ca.class_id = c.id
     LEFT JOIN students s ON s.id = ca.student_id
     WHERE c.active = 1

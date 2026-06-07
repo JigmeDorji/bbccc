@@ -60,13 +60,18 @@ function bbcc_acl_detect_profiles(): array {
     }
 
     try {
-        global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
-        $pdo = new PDO(
-            "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
-            $DB_USER,
-            $DB_PASSWORD,
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-        );
+        $pdo = null;
+        if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
+            $pdo = $GLOBALS['pdo'];
+        } else {
+            global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
+            $pdo = new PDO(
+                "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
+                $DB_USER,
+                $DB_PASSWORD,
+                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+            );
+        }
         $username = (string)($_SESSION['username'] ?? '');
         $userId = (string)($_SESSION['userid'] ?? '');
 

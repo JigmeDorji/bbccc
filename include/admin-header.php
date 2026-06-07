@@ -16,13 +16,17 @@ $portalState = bbcc_acl_portal_state();
 $isMixedPortalUser = $portalState['is_mixed_portal_user'];
 $activePortalMode = $portalState['active_portal'];
 try {
-    global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
-    $hdrPdo = new PDO(
-        "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
-        $DB_USER,
-        $DB_PASSWORD,
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
+    if (isset($GLOBALS['pdo']) && $GLOBALS['pdo'] instanceof PDO) {
+        $hdrPdo = $GLOBALS['pdo'];
+    } else {
+        global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
+        $hdrPdo = new PDO(
+            "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
+            $DB_USER,
+            $DB_PASSWORD,
+            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+        );
+    }
     $unreadNotifications = bbcc_unread_notifications_count(
         $hdrPdo,
         (string)($_SESSION['username'] ?? ''),

@@ -330,10 +330,49 @@ function pcm_students_parent_column(PDO $pdo): string {
     return $col;
 }
 
+function pcm_students_has_parent_column(PDO $pdo, string $column): bool {
+    static $cache = [];
+    if (array_key_exists($column, $cache)) {
+        return $cache[$column];
+    }
+
+    $stmt = $pdo->prepare("SHOW COLUMNS FROM students LIKE :column");
+    $stmt->execute([':column' => $column]);
+    $cache[$column] = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+    return $cache[$column];
+}
+
+function pcm_students_parent_expr(PDO $pdo, string $alias = ''): string {
+    $prefix = $alias !== '' ? rtrim($alias, '.') . '.' : '';
+    $hasSnake = pcm_students_has_parent_column($pdo, 'parent_id');
+    $hasLegacy = pcm_students_has_parent_column($pdo, 'parentId');
+
+    if ($hasSnake && $hasLegacy) {
+        return "COALESCE(NULLIF({$prefix}parent_id,0), NULLIF({$prefix}parentId,0))";
+    }
+
+    return $prefix . ($hasSnake ? 'parent_id' : 'parentId');
+}
+
+function pcm_students_parent_insert_columns(PDO $pdo): array {
+    $columns = [];
+    if (pcm_students_has_parent_column($pdo, 'parent_id')) {
+        $columns[] = 'parent_id';
+    }
+    if (pcm_students_has_parent_column($pdo, 'parentId')) {
+        $columns[] = 'parentId';
+    }
+    if (empty($columns)) {
+        $columns[] = pcm_students_parent_column($pdo);
+    }
+    return array_values(array_unique($columns));
+}
+
 function pcm_fetch_student_review_context(PDO $pdo, int $studentId): ?array {
-    $parentCol = pcm_students_parent_column($pdo);
+    $parentExpr = pcm_students_parent_expr($pdo, 's');
     $sql = "
         SELECT s.*,
+               {$parentExpr} AS effective_parent_id,
                p.full_name AS parent_name,
                p.email AS parent_email,
                e.id AS pcm_enrolment_id,
@@ -343,7 +382,7 @@ function pcm_fetch_student_review_context(PDO $pdo, int $studentId): ?array {
                e.proof_path AS pcm_proof_path,
                e.status AS pcm_status
         FROM students s
-        LEFT JOIN parents p ON p.id = s.`{$parentCol}`
+        LEFT JOIN parents p ON p.id = {$parentExpr}
         LEFT JOIN pcm_enrolments e ON e.student_id = s.id
         WHERE s.id = :id
         LIMIT 1
@@ -365,8 +404,7 @@ function pcm_process_enrolment_decision(PDO $pdo, int $studentId, string $action
     }
 
     $newStatus = ($action === 'approve') ? 'Approved' : 'Rejected';
-    $parentCol = pcm_students_parent_column($pdo);
-    $parentId = (int)($ctx[$parentCol] ?? 0);
+    $parentId = (int)($ctx['effective_parent_id'] ?? 0);
 
     $planType = trim((string)($ctx['pcm_fee_plan'] ?? ''));
     if ($planType === '') {

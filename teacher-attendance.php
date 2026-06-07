@@ -4,6 +4,7 @@ require_once "include/auth.php";
 require_once "include/csrf.php";
 require_once "access_control.php";
 require_once "include/role_helpers.php";
+require_once "include/class_teacher_helpers.php";
 require_login();
 
 $message = "";
@@ -17,6 +18,7 @@ try {
 } catch (Exception $e) {
     bbcc_fail_db($e);
 }
+bbcc_ensure_class_teacher_schema($pdo);
 
 function bbcc_ensure_attendance_batch_column(PDO $pdo): void {
     static $done = false;
@@ -69,15 +71,7 @@ if ($isAdmin) {
     $classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } else {
     $teacherId = (int)$teacher['id'];
-
-    $stmt = $pdo->prepare(
-        "SELECT c.id, c.class_name
-         FROM classes c
-         WHERE c.teacher_id = :teacher_id AND c.active = 1
-         ORDER BY c.class_name"
-    );
-    $stmt->execute([':teacher_id' => $teacherId]);
-    $classes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $classes = bbcc_teacher_classes($pdo, $teacherId, true);
 }
 
 $allowedClassIds = array_map(function ($class) {
@@ -166,10 +160,17 @@ if ($selectedDate < $lockDate) {
 
 if ($selectedClassId > 0) {
     $metaStmt = $pdo->prepare(
-        "SELECT c.class_name, t.full_name AS teacher_name
+        "SELECT
+            c.class_name,
+            COALESCE(
+                GROUP_CONCAT(DISTINCT t.full_name ORDER BY cta.is_primary DESC, t.full_name SEPARATOR ', '),
+                'Not Assigned'
+            ) AS teacher_name
          FROM classes c
-         LEFT JOIN teachers t ON t.id = c.teacher_id
+         LEFT JOIN class_teacher_assignments cta ON cta.class_id = c.id
+         LEFT JOIN teachers t ON t.id = cta.teacher_id
          WHERE c.id = :class_id
+         GROUP BY c.id, c.class_name
          LIMIT 1"
     );
     $metaStmt->execute([':class_id' => $selectedClassId]);
