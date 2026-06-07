@@ -17,14 +17,16 @@ function bbcc_schema_cache_set(string $key): void {
     $_SESSION['bbcc_schema_ready'][$key] = 1;
 }
 
-function bbcc_table_exists(PDO $pdo, string $tableName): bool {
-    $tableName = preg_replace('/[^a-zA-Z0-9_]/', '', $tableName ?? '');
-    if ($tableName === '') {
-        return false;
-    }
+if (!function_exists('bbcc_table_exists')) {
+    function bbcc_table_exists(PDO $pdo, string $tableName): bool {
+        $tableName = preg_replace('/[^a-zA-Z0-9_]/', '', $tableName ?? '');
+        if ($tableName === '') {
+            return false;
+        }
 
-    $stmt = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($tableName));
-    return $stmt ? (bool)$stmt->fetchColumn() : false;
+        $stmt = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($tableName));
+        return $stmt ? (bool)$stmt->fetchColumn() : false;
+    }
 }
 
 function bbcc_class_teacher_assignments_is_empty(PDO $pdo): bool {

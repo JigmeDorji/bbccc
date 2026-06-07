@@ -7,13 +7,15 @@ require_once "include/pcm_helpers.php";
 require_once "include/class_teacher_helpers.php";
 require_login();
 
-function bbcc_table_exists(PDO $pdo, string $table): bool {
-    try {
-        $stmt = $pdo->prepare("SHOW TABLES LIKE :t");
-        $stmt->execute([':t' => $table]);
-        return (bool)$stmt->fetch(PDO::FETCH_NUM);
-    } catch (Throwable $e) {
-        return false;
+if (!function_exists('bbcc_table_exists')) {
+    function bbcc_table_exists(PDO $pdo, string $table): bool {
+        try {
+            $stmt = $pdo->prepare("SHOW TABLES LIKE :t");
+            $stmt->execute([':t' => $table]);
+            return (bool)$stmt->fetch(PDO::FETCH_NUM);
+        } catch (Throwable $e) {
+            return false;
+        }
     }
 }
 
