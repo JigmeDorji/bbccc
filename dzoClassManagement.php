@@ -390,7 +390,7 @@ foreach ($enrolRows as $er) {
 }
 
 // Counts
-$total    = count($students);
+$total    = count(array_filter($students, fn($r) => strtolower($r['status'] ?? '') !== 'past'));
 $pending  = count(array_filter($students, fn($r) => strtolower($r['approval_status'] ?? '') === 'pending'));
 $approved = count(array_filter($students, fn($r) => strtolower($r['approval_status'] ?? '') === 'approved'));
 $rejected = count(array_filter($students, fn($r) => strtolower($r['approval_status'] ?? '') === 'rejected'));
