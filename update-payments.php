@@ -453,6 +453,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'bulk_update_payments') {
+    try {
+        $ids = $_POST['payment_ids'] ?? [];
+        if (!is_array($ids)) $ids = [];
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+
+        $st = trim((string)($_POST['bulk_status'] ?? ''));
+        $setPaidToDue = isset($_POST['set_paid_to_due']) && (string)$_POST['set_paid_to_due'] === '1';
+        $allowed = ['Unpaid','Pending','Verified','Rejected'];
+
+        if (empty($ids)) throw new Exception("Please select at least one payment row.");
+        if (!in_array($st, $allowed, true)) throw new Exception("Please choose a valid status.");
+
+        $reviewer = (string)($_SESSION['username'] ?? 'admin');
+        $in = implode(',', array_fill(0, count($ids), '?'));
+
+        if (in_array($st, ['Verified', 'Rejected'], true)) {
+            $sql = "
+                UPDATE pcm_fee_payments
+                SET status = ?,
+                    paid_amount = CASE WHEN ? = 1 THEN due_amount ELSE paid_amount END,
+                    verified_by = ?,
+                    verified_at = NOW()
+                WHERE id IN ({$in})
+            ";
+            $params = array_merge([$st, $setPaidToDue ? 1 : 0, $reviewer], $ids);
+        } else {
+            $sql = "
+                UPDATE pcm_fee_payments
+                SET status = ?,
+                    paid_amount = CASE WHEN ? = 1 THEN due_amount ELSE paid_amount END,
+                    verified_by = NULL,
+                    verified_at = NULL
+                WHERE id IN ({$in})
+            ";
+            $params = array_merge([$st, $setPaidToDue ? 1 : 0], $ids);
+        }
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+
+        $message = count($ids) . " payment row(s) updated successfully.";
+        $success = true;
+        $reload = true;
+    } catch (Throwable $e) {
+        $message = "Error: " . $e->getMessage();
+        $success = false;
+        $reload = false;
+    }
+}
+
 // ---------------- LOAD ALL FEE DATA ----------------
 // Parent column can be either parentId (legacy) or parent_id (newer)
 $hasStudentParentIdNew = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parent_id'")->fetch(PDO::FETCH_ASSOC);
@@ -903,6 +954,49 @@ if ($updateOnlyMode) {
         .update-payments-table .col-parent { min-width: 150px; }
         .update-payments-table .col-proof { min-width: 110px; }
         .update-payments-table .col-action { min-width: 100px; }
+        .update-payments-table tbody tr.status-pending { background:#fff8e1; }
+        .update-payments-table tbody tr.status-rejected { background:#fff1f0; }
+        .update-payments-table tbody tr.status-verified { background:#eefaf4; }
+        .update-payments-toolbar {
+            background:#f8f9fc;
+            border:1px solid #e3e6f0;
+            border-radius:8px;
+            padding:12px;
+            margin-bottom:14px;
+        }
+        .update-payments-toolbar .form-control,
+        .update-payments-toolbar .btn { min-height:38px; }
+        .status-filter-btn.active { color:#fff !important; }
+        .status-filter-btn[data-status="Pending"].active { background:#f6c23e; border-color:#f6c23e; color:#1f2933 !important; }
+        .status-filter-btn[data-status="Verified"].active { background:#1cc88a; border-color:#1cc88a; }
+        .status-filter-btn[data-status="Rejected"].active { background:#e74a3b; border-color:#e74a3b; }
+        .status-filter-btn[data-status="Unpaid"].active { background:#5a5c69; border-color:#5a5c69; }
+        .quick-paid-btn {
+            border:0;
+            background:transparent;
+            color:#4e73df;
+            padding:3px 0 0;
+            font-size:.75rem;
+            font-weight:700;
+        }
+        .update-overview-table {
+            min-width: 1220px;
+        }
+        .update-overview-table th,
+        .update-overview-table td {
+            vertical-align: top;
+        }
+        .update-overview-table .update-payment-cell {
+            min-width: 230px;
+            background:#fff;
+        }
+        .update-overview-table .update-payment-cell.status-pending { background:#fff8e1; }
+        .update-overview-table .update-payment-cell.status-rejected { background:#fff1f0; }
+        .update-overview-table .update-payment-cell.status-verified { background:#eefaf4; }
+        .update-overview-table .update-payment-cell .form-control-sm {
+            height:34px;
+            font-size:.84rem;
+        }
         @media (max-width: 768px) {
             .update-payments-table {
                 min-width: 1200px;
@@ -1180,90 +1274,191 @@ if ($updateOnlyMode) {
                                 <span><strong>Rejected:</strong> <?= (int)$updateCounts['Rejected'] ?></span>
                                 <span><strong>Unpaid:</strong> <?= (int)$updateCounts['Unpaid'] ?></span>
                             </div>
-                            <div class="mb-3">
-                                <button type="button" class="btn btn-sm btn-primary plan-filter-btn active" data-plan="all">All</button>
-                                <button type="button" class="btn btn-sm btn-outline-primary plan-filter-btn" data-plan="Term-wise">Term-wise</button>
-                                <button type="button" class="btn btn-sm btn-outline-info plan-filter-btn" data-plan="Half-yearly">Half-yearly</button>
-                                <button type="button" class="btn btn-sm btn-outline-success plan-filter-btn" data-plan="Yearly">Yearly</button>
-                                <button type="button" class="btn btn-sm btn-outline-dark plan-filter-btn" data-plan="Additional">Additional</button>
+                            <form method="POST" id="bulkPaymentForm" class="update-payments-toolbar">
+                                <input type="hidden" name="action" value="bulk_update_payments">
+                                <div class="row align-items-end">
+                                    <div class="col-lg-3 col-md-6 mb-2">
+                                        <label class="mini font-weight-bold text-uppercase mb-1">Bulk status</label>
+                                        <select name="bulk_status" class="form-control form-control-sm" required>
+                                            <option value="">Choose status</option>
+                                            <option value="Verified">Verified</option>
+                                            <option value="Pending">Pending</option>
+                                            <option value="Rejected">Rejected</option>
+                                            <option value="Unpaid">Unpaid</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-lg-3 col-md-6 mb-2">
+                                        <label class="mini font-weight-bold text-uppercase mb-1">Amount helper</label>
+                                        <div class="custom-control custom-checkbox">
+                                            <input type="checkbox" class="custom-control-input" id="bulkSetPaidToDue" name="set_paid_to_due" value="1">
+                                            <label class="custom-control-label" for="bulkSetPaidToDue">Set paid amount to due</label>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-3 col-md-6 mb-2">
+                                        <label class="mini font-weight-bold text-uppercase mb-1">Selected rows</label>
+                                        <div><strong id="selectedPaymentCount">0</strong> selected</div>
+                                    </div>
+                                    <div class="col-lg-3 col-md-6 mb-2 text-lg-right">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary mr-1" id="selectVisiblePayments">Select visible</button>
+                                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-check mr-1"></i>Apply selected</button>
+                                    </div>
+                                </div>
+                            </form>
+
+                            <div class="method-tabs-wrap">
+                                <div class="mini font-weight-bold text-uppercase mb-2" style="letter-spacing:.4px;">Payment Method</div>
+                                <button type="button" class="btn method-pill is-active-all js-method-pill" data-plan="all">All</button>
+                                <button type="button" class="btn btn-outline-primary method-pill js-method-pill" data-plan="term-wise">Term-wise</button>
+                                <button type="button" class="btn btn-outline-info method-pill js-method-pill" data-plan="half-yearly">Half-yearly</button>
+                                <button type="button" class="btn btn-outline-success method-pill js-method-pill" data-plan="yearly">Yearly</button>
                             </div>
-                            <div class="table-responsive">
-                                    <table id="updatePaymentsTable" class="table table-bordered table-hover update-payments-table">
-                                    <thead class="thead-light">
-                                        <tr>
-                                            <th>#</th>
-                                            <th class="col-child">Child</th>
-                                            <th class="col-parent">Parent</th>
-                                            <th>Plan</th>
-                                            <th>Instalment</th>
-                                            <th>Due</th>
-                                            <th>Paid</th>
-                                            <th>Ref</th>
-                                            <th>Status</th>
-                                            <th class="col-proof">Proof</th>
-                                            <th class="col-action">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                    <?php if (empty($updatePayments)): ?>
-                                        <tr><td colspan="11" class="text-muted">No payment rows found.</td></tr>
-                                    <?php else: foreach ($updatePayments as $i => $up): ?>
-                                        <tr>
-                                            <form method="POST">
-                                                <td><?= $i + 1 ?></td>
-                                                <td><?= h($up['student_name']) ?> <small class="text-muted">(<?= h($up['stu_code']) ?>)</small></td>
-                                                <td><?= h($up['parent_name'] ?? '-') ?></td>
-                                                <td><?= h($up['plan_type']) ?></td>
-                                                <td><?= h($up['instalment_label']) ?></td>
-                                                <td>
-                                                    <div class="upd-cell-label">Due</div>
-                                                    <input type="number" step="0.01" min="0" name="due_amount" class="form-control form-control-sm" value="<?= h((string)$up['due_amount']) ?>" placeholder="Due amount">
-                                                </td>
-                                                <td>
-                                                    <div class="upd-cell-label">Paid</div>
-                                                    <input type="number" step="0.01" min="0" name="paid_amount" class="form-control form-control-sm" value="<?= h((string)$up['paid_amount']) ?>" placeholder="Paid amount">
-                                                </td>
-                                                <td>
-                                                    <div class="upd-cell-label">Reference</div>
-                                                    <input type="text" name="payment_ref" class="form-control form-control-sm" value="<?= h((string)($up['payment_ref'] ?? '')) ?>" placeholder="Payment reference">
-                                                </td>
-                                                <td>
-                                                    <div class="upd-cell-label">Status</div>
-                                                    <select name="status" class="form-control form-control-sm">
-                                                        <?php foreach (['Unpaid','Pending','Verified','Rejected'] as $st): ?>
-                                                            <option value="<?= $st ?>" <?= ((string)$up['status'] === $st) ? 'selected' : '' ?>><?= $st ?></option>
+
+                            <?php foreach ($plans as $planName => $codes): ?>
+                                <div class="card shadow-sm mb-4 fee-plan-section" data-plan="<?php echo strtolower($planName); ?>">
+                                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                                        <h6 class="m-0 font-weight-bold text-primary"><?php echo h($planName); ?> Fees</h6>
+                                        <span class="mini">Installments: <?php echo count($codes); ?></span>
+                                    </div>
+                                    <div class="card-body">
+                                        <?php if (empty($group[$planName])): ?>
+                                            <div class="alert alert-light mb-0">No records found for this plan.</div>
+                                        <?php else: ?>
+                                            <div class="table-responsive">
+                                                <table class="table table-bordered table-hover update-overview-table" width="100%">
+                                                    <thead class="thead-light">
+                                                    <tr>
+                                                        <th>Student</th>
+                                                        <th>Parent</th>
+                                                        <th class="nowrap">Amount</th>
+                                                        <th class="nowrap">Status</th>
+                                                        <th class="ref-col">Reference No.</th>
+                                                        <?php foreach ($codes as $c): ?>
+                                                            <?php $dueHeader = installment_due_date($feesSettings, $c); ?>
+                                                            <th class="nowrap text-center">
+                                                                <div><?php echo h(installment_label($c)); ?></div>
+                                                                <div class="mini text-muted">Due: <?php echo $dueHeader ? h($dueHeader) : '-'; ?></div>
+                                                            </th>
                                                         <?php endforeach; ?>
-                                                    </select>
-                                                </td>
-                                                <td>
-                                                    <?php if (!empty($up['proof_path'])): ?>
-                                                        <?php $ptype = proof_type((string)$up['proof_path']); ?>
-                                                        <a href="javascript:void(0)"
-                                                           class="proof-thumb"
-                                                           data-proof="<?= h((string)$up['proof_path']) ?>"
-                                                           data-type="<?= h($ptype) ?>"
-                                                           data-name="<?= h(basename((string)$up['proof_path'])) ?>">
-                                                            <?php if ($ptype === 'img'): ?>
-                                                                <img class="thumb-img" src="<?= h((string)$up['proof_path']) ?>" alt="proof">
-                                                            <?php else: ?>
-                                                                <span class="thumb-icon"><i class="fas fa-file-pdf"></i></span>
-                                                            <?php endif; ?>
-                                                            <span class="mini"><i class="fas fa-eye"></i> View</span>
-                                                        </a>
-                                                    <?php else: ?>
-                                                        —
-                                                    <?php endif; ?>
-                                                </td>
-                                                <td class="nowrap">
-                                                    <input type="hidden" name="payment_id" value="<?= (int)$up['id'] ?>">
-                                                    <button class="btn btn-sm btn-primary" type="submit" name="action" value="update_payment_row"><i class="fas fa-save mr-1"></i>Save</button>
-                                                </td>
-                                            </form>
-                                        </tr>
-                                    <?php endforeach; endif; ?>
-                                    </tbody>
-                                </table>
-                            </div>
+                                                    </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                    <?php foreach ($group[$planName] as $sid => $info): ?>
+                                                        <?php
+                                                            $totalPlanAmount = 0.0;
+                                                            $hasInstallmentRows = false;
+                                                            $isFullyPaid = true;
+                                                            foreach ($codes as $codeForPlan) {
+                                                                $instRow = $info['installments'][$codeForPlan] ?? null;
+                                                                if (!$instRow) {
+                                                                    $isFullyPaid = false;
+                                                                    continue;
+                                                                }
+                                                                $hasInstallmentRows = true;
+                                                                $totalPlanAmount += (float)($instRow['due_amount'] ?? 0);
+                                                                if (!in_array(normalize_status($instRow['status'] ?? ''), ['approved','verified'], true)) {
+                                                                    $isFullyPaid = false;
+                                                                }
+                                                            }
+                                                            if ($totalPlanAmount <= 0) {
+                                                                $totalPlanAmount = (float)($info['enrollment_amount'] ?? 0);
+                                                            }
+                                                            $planPaymentStatus = ($hasInstallmentRows && $isFullyPaid) ? 'Paid' : 'Unpaid';
+                                                            $firstCode = first_installment_code($planName);
+                                                            $ref = (string)($info['installments'][$firstCode]['payment_reference'] ?? '');
+                                                            if ($ref === '') $ref = (string)($info['enrollment_reference'] ?? '');
+                                                        ?>
+                                                        <tr>
+                                                            <td class="wrap">
+                                                                <strong><?php echo h($info['student_name']); ?></strong><br>
+                                                                <span class="mini">Student ID: <?php echo h($info['public_student_id']); ?></span><br>
+                                                                <span class="mini">Enrollment:
+                                                                    <span class="badge badge-<?php echo badge_class($info['enrollment_status'] ?? 'Pending'); ?>">
+                                                                        <?php echo h($info['enrollment_status'] ?? 'Pending'); ?>
+                                                                    </span>
+                                                                </span>
+                                                            </td>
+                                                            <td class="wrap">
+                                                                <?php echo h($info['parent_name'] ?: '-'); ?><br>
+                                                                <span class="mini"><?php echo h($info['parent_email'] ?: '-'); ?></span><br>
+                                                                <span class="mini"><?php echo h($info['parent_phone'] ?: '-'); ?></span>
+                                                            </td>
+                                                            <td class="nowrap"><strong>$<?php echo number_format((float)$totalPlanAmount, 2); ?></strong></td>
+                                                            <td class="nowrap">
+                                                                <span class="badge badge-<?php echo $planPaymentStatus === 'Paid' ? 'success' : 'warning'; ?>">
+                                                                    <?php echo h($planPaymentStatus); ?>
+                                                                </span>
+                                                            </td>
+                                                            <td class="wrap">
+                                                                <div class="mini"><strong><?php echo $ref ? h($ref) : '-'; ?></strong></div>
+                                                                <div class="mini text-muted">Use this to match bank transfer</div>
+                                                            </td>
+                                                            <?php foreach ($codes as $code): ?>
+                                                                <?php
+                                                                    $r = $info['installments'][$code] ?? null;
+                                                                    $hasRow = is_array($r);
+                                                                    $status = (string)($r['status'] ?? 'Not Created');
+                                                                    $proof = trim((string)($r['proof_path'] ?? ''));
+                                                                    $feeId = (int)($r['id'] ?? 0);
+                                                                    $rowStatus = strtolower($status);
+                                                                    $rowFormId = 'rowPaymentForm' . $feeId;
+                                                                ?>
+                                                                <td class="update-payment-cell status-<?php echo h($rowStatus); ?>">
+                                                                    <?php if ($hasRow && $feeId > 0): ?>
+                                                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                                                            <label class="mb-0 mini">
+                                                                                <input type="checkbox" class="payment-row-check mr-1" name="payment_ids[]" value="<?php echo (int)$feeId; ?>" form="bulkPaymentForm">
+                                                                                Select
+                                                                            </label>
+                                                                            <span class="badge badge-<?php echo badge_class($status); ?>"><?php echo h($status); ?></span>
+                                                                        </div>
+                                                                        <form method="POST" id="<?php echo h($rowFormId); ?>"></form>
+                                                                        <input type="hidden" name="payment_id" form="<?php echo h($rowFormId); ?>" value="<?php echo (int)$feeId; ?>">
+                                                                        <div class="form-row">
+                                                                            <div class="col-6 mb-2">
+                                                                                <label class="upd-cell-label d-block">Due</label>
+                                                                                <input type="number" step="0.01" min="0" name="due_amount" form="<?php echo h($rowFormId); ?>" class="form-control form-control-sm js-due-amount" value="<?php echo h((string)($r['due_amount'] ?? 0)); ?>">
+                                                                            </div>
+                                                                            <div class="col-6 mb-2">
+                                                                                <label class="upd-cell-label d-block">Paid</label>
+                                                                                <input type="number" step="0.01" min="0" name="paid_amount" form="<?php echo h($rowFormId); ?>" class="form-control form-control-sm js-paid-amount" value="<?php echo h((string)($r['paid_amount'] ?? 0)); ?>">
+                                                                                <button type="button" class="quick-paid-btn js-paid-due">Use due</button>
+                                                                            </div>
+                                                                        </div>
+                                                                        <label class="upd-cell-label d-block">Reference</label>
+                                                                        <input type="text" name="payment_ref" form="<?php echo h($rowFormId); ?>" class="form-control form-control-sm mb-2" value="<?php echo h((string)($r['payment_reference'] ?? '')); ?>" placeholder="Reference">
+                                                                        <label class="upd-cell-label d-block">Status</label>
+                                                                        <select name="status" form="<?php echo h($rowFormId); ?>" class="form-control form-control-sm mb-2">
+                                                                            <?php foreach (['Unpaid','Pending','Verified','Rejected'] as $st): ?>
+                                                                                <option value="<?php echo h($st); ?>" <?php echo ($status === $st) ? 'selected' : ''; ?>><?php echo h($st); ?></option>
+                                                                            <?php endforeach; ?>
+                                                                        </select>
+                                                                        <div class="d-flex align-items-center justify-content-between">
+                                                                            <?php if ($proof !== ''): ?>
+                                                                                <?php $ptype = proof_type($proof); ?>
+                                                                                <a href="javascript:void(0)" class="mini proof-thumb" data-proof="<?php echo h($proof); ?>" data-type="<?php echo h($ptype); ?>" data-name="<?php echo h(basename($proof)); ?>">
+                                                                                    <i class="fas fa-eye"></i> Proof
+                                                                                </a>
+                                                                            <?php else: ?>
+                                                                                <span class="mini text-muted">No proof</span>
+                                                                            <?php endif; ?>
+                                                                            <button class="btn btn-sm btn-primary" type="submit" form="<?php echo h($rowFormId); ?>" name="action" value="update_payment_row">
+                                                                                <i class="fas fa-save mr-1"></i>Save
+                                                                            </button>
+                                                                        </div>
+                                                                    <?php else: ?>
+                                                                        <div class="mini text-muted">Missing fee row</div>
+                                                                    <?php endif; ?>
+                                                                </td>
+                                                            <?php endforeach; ?>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
                         </div>
                     </div>
                 <?php else: ?>
@@ -1484,10 +1679,13 @@ if ($updateOnlyMode) {
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     let updateTable = null;
-    if (window.jQuery && jQuery.fn && typeof jQuery.fn.DataTable === 'function') {
+    if (document.getElementById('updatePaymentsTable') && window.jQuery && jQuery.fn && typeof jQuery.fn.DataTable === 'function') {
         updateTable = jQuery('#updatePaymentsTable').DataTable({
             pageLength: 25,
-            order: [[0, 'asc']]
+            order: [[1, 'asc']],
+            columnDefs: [
+                { orderable: false, searchable: false, targets: [0, 11] }
+            ]
         });
     }
 
@@ -1505,10 +1703,85 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (updateTable) {
                 const plan = this.getAttribute('data-plan') || 'all';
-                updateTable.column(3).search(plan === 'all' ? '' : '^' + plan + '$', true, false).draw();
+                updateTable.column(4).search(plan === 'all' ? '' : '^' + plan + '$', true, false).draw();
+                updateSelectedCount();
             }
         });
     });
+
+    const statusButtons = document.querySelectorAll('.status-filter-btn');
+    statusButtons.forEach(btn => {
+        btn.addEventListener('click', function () {
+            statusButtons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            if (updateTable) {
+                const status = this.getAttribute('data-status') || 'all';
+                updateTable.column(9).search(status === 'all' ? '' : '^' + status + '$', true, false).draw();
+                updateSelectedCount();
+            }
+        });
+    });
+
+    const selectedCount = document.getElementById('selectedPaymentCount');
+    const selectAll = document.getElementById('selectAllPayments');
+    const selectVisible = document.getElementById('selectVisiblePayments');
+
+    function paymentCheckboxes(scopeVisibleOnly) {
+        if (updateTable && scopeVisibleOnly) {
+            return Array.from(jQuery(updateTable.rows({ search: 'applied', page: 'current' }).nodes()).find('.payment-row-check'));
+        }
+        return Array.from(document.querySelectorAll('.payment-row-check'));
+    }
+
+    function updateSelectedCount() {
+        const checked = document.querySelectorAll('.payment-row-check:checked').length;
+        if (selectedCount) selectedCount.textContent = String(checked);
+        if (selectAll) {
+            const visible = paymentCheckboxes(true);
+            selectAll.checked = visible.length > 0 && visible.every(cb => cb.checked);
+            selectAll.indeterminate = visible.some(cb => cb.checked) && !selectAll.checked;
+        }
+    }
+
+    document.addEventListener('change', function (e) {
+        if (e.target && e.target.classList.contains('payment-row-check')) {
+            updateSelectedCount();
+        }
+    });
+
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            paymentCheckboxes(true).forEach(cb => { cb.checked = selectAll.checked; });
+            updateSelectedCount();
+        });
+    }
+
+    if (selectVisible) {
+        selectVisible.addEventListener('click', function () {
+            paymentCheckboxes(true).forEach(cb => { cb.checked = true; });
+            updateSelectedCount();
+        });
+    }
+
+    document.querySelectorAll('.js-paid-due').forEach(btn => {
+        btn.addEventListener('click', function () {
+            const row = this.closest('tr');
+            if (!row) return;
+            const due = row.querySelector('.js-due-amount');
+            const paid = row.querySelector('.js-paid-amount');
+            if (due && paid) paid.value = due.value;
+        });
+    });
+
+    const bulkForm = document.getElementById('bulkPaymentForm');
+    if (bulkForm) {
+        bulkForm.addEventListener('submit', function (e) {
+            if (document.querySelectorAll('.payment-row-check:checked').length === 0) {
+                e.preventDefault();
+                alert('Please select at least one payment row.');
+            }
+        });
+    }
 
     // ---------- Payment method tabs ----------
     const methodPills = document.querySelectorAll('.js-method-pill');
