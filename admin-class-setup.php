@@ -94,6 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $description = trim($_POST['description'] ?? '');
             $capacity = (int)($_POST['capacity'] ?? 0);
             $scheduleText = trim($_POST['schedule_text'] ?? '');
+            $teacherIds = bbcc_filter_existing_teacher_ids($pdo, array_map('intval', (array)($_POST['teacher_ids'] ?? [])));
 
             if ($className === '') {
                 throw new Exception("Class name is required.");
@@ -127,6 +128,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  VALUES ({$classValues})"
             );
             $stmt->execute($classParams);
+            $classId = (int)$pdo->lastInsertId();
+
+            if (!empty($teacherIds)) {
+                bbcc_set_class_teachers(
+                    $pdo,
+                    $classId,
+                    $teacherIds,
+                    (string)($_SESSION['userid'] ?? ''),
+                    (string)($_SESSION['username'] ?? '')
+                );
+            }
 
             $message = "Class created successfully.";
         } catch (Exception $e) {
@@ -554,6 +566,15 @@ $teachers = $pdo->query(
                                         <label><i class="fas fa-align-left mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Description</label>
                                         <textarea class="form-control" name="description" rows="2" placeholder="Optional class description"></textarea>
                                     </div>
+                                    <div class="form-group">
+                                        <label><i class="fas fa-chalkboard-teacher mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Teacher(s)</label>
+                                        <select name="teacher_ids[]" class="form-control" multiple size="6">
+                                            <?php foreach ($teachers as $teacher): ?>
+                                                <option value="<?= (int)$teacher['id'] ?>"><?= htmlspecialchars($teacher['full_name']) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <small class="text-muted">Hold Cmd/Ctrl to select multiple teachers. The first selected teacher is primary.</small>
+                                    </div>
                                     <button type="submit" class="btn btn-primary" style="border-radius:10px;"><i class="fas fa-plus mr-1"></i> Create Class</button>
                                 </form>
                             </div>
@@ -570,16 +591,21 @@ $teachers = $pdo->query(
                                     <div class="form-row align-items-end">
                                         <div class="form-group col-md-5">
                                             <label><i class="fas fa-chalkboard mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Class</label>
-                                            <select name="class_id" class="form-control" required>
+                                            <select name="class_id" class="form-control" id="assign_class_id" required>
                                                 <option value="">— Select class —</option>
                                                 <?php foreach ($classes as $class): ?>
-                                                    <option value="<?= (int)$class['id'] ?>"><?= htmlspecialchars($class['class_name']) ?> (<?= htmlspecialchars($campusOptions[(string)($class['campus_key'] ?? 'c1')] ?? 'Campus') ?>)</option>
+                                                    <option
+                                                        value="<?= (int)$class['id'] ?>"
+                                                        data-teacher-ids="<?= htmlspecialchars((string)($class['teacher_ids_csv'] ?? ''), ENT_QUOTES) ?>"
+                                                    >
+                                                        <?= htmlspecialchars($class['class_name']) ?> (<?= htmlspecialchars($campusOptions[(string)($class['campus_key'] ?? 'c1')] ?? 'Campus') ?>)
+                                                    </option>
                                                 <?php endforeach; ?>
                                             </select>
                                         </div>
                                         <div class="form-group col-md-5">
                                             <label><i class="fas fa-chalkboard-teacher mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Teachers</label>
-                                            <select name="teacher_ids[]" class="form-control" multiple size="6">
+                                            <select name="teacher_ids[]" class="form-control" id="assign_teacher_ids" multiple size="6">
                                                 <?php foreach ($teachers as $teacher): ?>
                                                     <option value="<?= (int)$teacher['id'] ?>"><?= htmlspecialchars($teacher['full_name']) ?></option>
                                                 <?php endforeach; ?>
@@ -908,6 +934,15 @@ $(function(){
     }
     $('#setupTabs a').on('shown.bs.tab', function(e){
         history.replaceState(null, null, e.target.hash);
+    });
+
+    $('#assign_class_id').on('change', function () {
+        var teacherIdsCsv = String($(this).find('option:selected').attr('data-teacher-ids') || '').trim();
+        var teacherIds = teacherIdsCsv ? teacherIdsCsv.split(',').map(function(v){ return String(v).trim(); }).filter(Boolean) : [];
+        $('#assign_teacher_ids option').prop('selected', false);
+        teacherIds.forEach(function (id) {
+            $('#assign_teacher_ids option[value="' + id + '"]').prop('selected', true);
+        });
     });
 });
 
