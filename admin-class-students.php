@@ -137,6 +137,7 @@ $rows = $pdo->query("
     LEFT JOIN class_assignments ca ON ca.class_id = c.id
     LEFT JOIN students s ON s.id = ca.student_id
     WHERE c.active = 1
+      AND (s.id IS NULL OR LOWER(COALESCE(s.status,'active')) <> 'past')
     ORDER BY c.class_name ASC, s.student_name ASC
 ")->fetchAll();
 

@@ -212,7 +212,10 @@ $unassignedStudents = $pdo->query(
      FROM students s
      LEFT JOIN class_assignments ca ON ca.student_id = s.id
      LEFT JOIN pcm_enrolments e ON e.student_id = s.id AND e.status = 'Approved'
-     WHERE s.approval_status='Approved' AND ca.id IS NULL ORDER BY s.student_name"
+     WHERE s.approval_status='Approved'
+       AND LOWER(COALESCE(s.status,'active')) <> 'past'
+       AND ca.id IS NULL
+     ORDER BY s.student_name"
 )->fetchAll();
 
 $classesByCampus = [];
@@ -249,7 +252,9 @@ $assignedStudents = $pdo->query(
      FROM students s
      INNER JOIN class_assignments ca ON ca.student_id = s.id
      INNER JOIN classes c ON c.id = ca.class_id
-     WHERE s.approval_status='Approved' ORDER BY c.class_name, s.student_name"
+     WHERE s.approval_status='Approved'
+       AND LOWER(COALESCE(s.status,'active')) <> 'past'
+     ORDER BY c.class_name, s.student_name"
 )->fetchAll();
 
 $assignments = $pdo->query(
@@ -257,6 +262,7 @@ $assignments = $pdo->query(
      FROM class_assignments ca
      INNER JOIN students s ON s.id = ca.student_id
      INNER JOIN classes c  ON c.id = ca.class_id
+     WHERE LOWER(COALESCE(s.status,'active')) <> 'past'
      ORDER BY c.class_name, s.student_name"
 )->fetchAll();
 

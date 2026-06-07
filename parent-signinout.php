@@ -89,7 +89,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'sign'
 $stmt = $pdo->prepare(
     "SELECT s.id, s.student_name
      FROM students s
-     WHERE s.parent_id = :parent_id AND s.approval_status = 'Approved'
+     WHERE s.parent_id = :parent_id
+       AND s.approval_status = 'Approved'
+       AND LOWER(COALESCE(s.status,'active')) <> 'past'
      ORDER BY s.student_name ASC"
 );
 $stmt->execute([':parent_id' => $parentId]);

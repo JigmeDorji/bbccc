@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $studentDbId = (int)($_POST['student_id'] ?? 0);
 
-    if ($studentDbId > 0 && in_array($action, ['approve','reject','delete','admin_update_enrolment','admin_update_child_details','admin_reassign_parent'])) {
+    if ($studentDbId > 0 && in_array($action, ['approve','reject','delete','move_past','restore_active','admin_update_enrolment','admin_update_child_details','admin_reassign_parent'])) {
         try {
             $reviewer = $_SESSION['username'] ?? 'admin';
 
@@ -253,6 +253,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $flash = 'Enrollment updated for <strong>' . h((string)$student['student_name']) . '</strong>.';
                 }
                 $ok = true;
+            } elseif ($action === 'move_past') {
+                $stu = $pdo->prepare("SELECT student_name FROM students WHERE id = :id LIMIT 1");
+                $stu->execute([':id' => $studentDbId]);
+                $student = $stu->fetch(PDO::FETCH_ASSOC);
+                if (!$student) {
+                    throw new Exception("Student not found.");
+                }
+
+                $pdo->beginTransaction();
+                $pdo->prepare("UPDATE students SET status = 'Past' WHERE id = :id")->execute([':id' => $studentDbId]);
+                $pdo->prepare("DELETE FROM class_assignments WHERE student_id = :sid")->execute([':sid' => $studentDbId]);
+                $pdo->commit();
+
+                pcm_log_enrolment_event($pdo, $studentDbId, null, 'student_moved_to_past', (string)$reviewer, 'Student moved to past students and removed from active class assignment.');
+                $flash = 'Student <strong>' . h((string)$student['student_name']) . '</strong> moved to past students.';
+                $ok = true;
+
+            } elseif ($action === 'restore_active') {
+                $stu = $pdo->prepare("SELECT student_name FROM students WHERE id = :id LIMIT 1");
+                $stu->execute([':id' => $studentDbId]);
+                $student = $stu->fetch(PDO::FETCH_ASSOC);
+                if (!$student) {
+                    throw new Exception("Student not found.");
+                }
+
+                $pdo->prepare("UPDATE students SET status = 'Active' WHERE id = :id")->execute([':id' => $studentDbId]);
+                pcm_log_enrolment_event($pdo, $studentDbId, null, 'student_restored_active', (string)$reviewer, 'Student restored from past students.');
+                $flash = 'Student <strong>' . h((string)$student['student_name']) . '</strong> restored to active students.';
+                $ok = true;
+
             } elseif ($action === 'delete') {
                 $stu = $pdo->prepare("SELECT student_name FROM students WHERE id = :id LIMIT 1");
                 $stu->execute([':id' => $studentDbId]);
@@ -364,6 +394,7 @@ $total    = count($students);
 $pending  = count(array_filter($students, fn($r) => strtolower($r['approval_status'] ?? '') === 'pending'));
 $approved = count(array_filter($students, fn($r) => strtolower($r['approval_status'] ?? '') === 'approved'));
 $rejected = count(array_filter($students, fn($r) => strtolower($r['approval_status'] ?? '') === 'rejected'));
+$past     = count(array_filter($students, fn($r) => strtolower($r['status'] ?? '') === 'past'));
 $pageScripts = [
     "https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js",
     "https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap4.min.js",
@@ -402,6 +433,7 @@ $pageScripts = [
         .filter-pill.active-pending   { background:#f6c23e;color:#000;border-color:#f6c23e; }
         .filter-pill.active-approved  { background:#1cc88a;color:#fff;border-color:#1cc88a; }
         .filter-pill.active-rejected  { background:#e74a3b;color:#fff;border-color:#e74a3b; }
+        .filter-pill.active-past      { background:#6c757d;color:#fff;border-color:#6c757d; }
 
         /* Detail slide-down */
         .detail-panel { background:#f8f9fc; border-radius:10px; padding:24px; margin:12px 0; display:none; }
@@ -584,6 +616,17 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         </div>
     </div>
+    <div class="col-xl-3 col-md-6 mb-3">
+        <div class="card stat-card shadow-sm status-clickable js-status-card" data-status="Past">
+            <div class="card-body d-flex align-items-center py-3">
+                <div class="stat-icon mr-3" style="background:rgba(108,117,125,.12);color:#6c757d;"><i class="fas fa-archive"></i></div>
+                <div>
+                    <div class="stat-number text-gray-800"><?= $past ?></div>
+                    <div class="stat-label">Past Students</div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- ─── Filter Pills + Search ─── -->
@@ -593,6 +636,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <button class="btn filter-pill btn-outline-warning" data-status="Pending"><i class="fas fa-clock mr-1"></i> Pending</button>
         <button class="btn filter-pill btn-outline-success" data-status="Approved"><i class="fas fa-check mr-1"></i> Approved</button>
         <button class="btn filter-pill btn-outline-danger"  data-status="Rejected"><i class="fas fa-times mr-1"></i> Rejected</button>
+        <button class="btn filter-pill btn-outline-secondary"  data-status="Past"><i class="fas fa-archive mr-1"></i> Past</button>
     </div>
     <div class="row">
         <div class="col-md-3">
@@ -639,9 +683,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 <tbody>
                 <?php foreach ($students as $i => $s):
                     $st = strtolower($s['approval_status'] ?? '');
+                    $lifeStatus = strtolower((string)($s['status'] ?? 'active'));
+                    $isPastStudent = ($lifeStatus === 'past');
                     $registered = $s['registration_date'] ?? '';
                 ?>
-                <tr data-status="<?= strtolower($st) ?>">
+                <tr data-status="<?= strtolower($st) ?>" data-life-status="<?= h($lifeStatus) ?>">
                     <td><?= $i + 1 ?></td>
                     <td><code style="font-size:.82rem;background:#f0f0f0;padding:3px 8px;border-radius:4px;"><?= h($s['student_id'] ?? '') ?></code></td>
                     <td class="font-weight-bold"><?= h($s['student_name'] ?? '') ?></td>
@@ -652,6 +698,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="badge badge-pill-custom badge-<?= pcm_badge($s['approval_status'] ?? 'Pending') ?>">
                             <?= h($s['approval_status'] ?? 'Pending') ?>
                         </span>
+                        <?php if ($isPastStudent): ?>
+                            <span class="badge badge-secondary ml-1">Past</span>
+                        <?php endif; ?>
                     </td>
                     <td>
                         <div style="font-size:.86rem;"><?= h($s['parent_name'] ?? '—') ?></div>
@@ -670,7 +719,12 @@ document.addEventListener('DOMContentLoaded', () => {
                             <button class="btn-act act-ok" data-toggle="modal" data-target="#approveModal<?= $s['id'] ?>" title="Approve"><i class="fas fa-check"></i></button>
                             <button class="btn-act act-no" data-toggle="modal" data-target="#rejectModal<?= $s['id'] ?>" title="Reject"><i class="fas fa-times"></i></button>
                             <?php endif; ?>
-                            <button class="btn-act act-del delete-btn" data-id="<?= (int)$s['id'] ?>" data-name="<?= h($s['student_name'] ?? '') ?>" title="Delete"><i class="fas fa-trash-alt"></i></button>
+                            <?php if ($isPastStudent): ?>
+                                <button class="btn-act act-ok restore-btn" data-id="<?= (int)$s['id'] ?>" data-name="<?= h($s['student_name'] ?? '') ?>" title="Restore to active"><i class="fas fa-undo"></i></button>
+                            <?php else: ?>
+                                <button class="btn-act act-del move-past-btn" data-id="<?= (int)$s['id'] ?>" data-name="<?= h($s['student_name'] ?? '') ?>" title="Move to past students"><i class="fas fa-archive"></i></button>
+                            <?php endif; ?>
+                            <button class="btn-act act-del delete-btn" data-id="<?= (int)$s['id'] ?>" data-name="<?= h($s['student_name'] ?? '') ?>" title="Delete permanently"><i class="fas fa-trash-alt"></i></button>
                         </div>
                     </td>
                 </tr>
@@ -1016,7 +1070,17 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 </div>
 
-<!-- Delete form (hidden, submitted via JS) -->
+<!-- Student lifecycle forms (hidden, submitted via JS) -->
+<form id="movePastForm" method="POST" style="display:none;">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="move_past">
+    <input type="hidden" name="student_id" id="movePastStudentId" value="">
+</form>
+<form id="restoreActiveForm" method="POST" style="display:none;">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="restore_active">
+    <input type="hidden" name="student_id" id="restoreActiveStudentId" value="">
+</form>
 <form id="deleteForm" method="POST" style="display:none;">
     <?= csrf_field() ?>
     <input type="hidden" name="action" value="delete">
@@ -1052,6 +1116,13 @@ $(function(){
         if (activeStatusFilter === 'all') return true;
         var rowNode = dt.row(dataIndex).node();
         if (!rowNode) return true;
+        var rowLifeStatus = String($(rowNode).attr('data-life-status') || '').toLowerCase();
+        if (String(activeStatusFilter).toLowerCase() === 'past') {
+            return rowLifeStatus === 'past';
+        }
+        if (rowLifeStatus === 'past') {
+            return false;
+        }
         var rowStatus = String($(rowNode).attr('data-status') || '').toLowerCase();
         return rowStatus === String(activeStatusFilter).toLowerCase();
     });
@@ -1059,6 +1130,7 @@ $(function(){
     // Filter pills
     $('.filter-pill').on('click', function(){
         $('.filter-pill').removeClass('active-all active-pending active-approved active-rejected')
+            .removeClass('active-past')
             .addClass(function(){ return 'btn-outline-' + ($(this).data('status')==='Pending'?'warning':$(this).data('status')==='Approved'?'success':$(this).data('status')==='Rejected'?'danger':'secondary'); });
         var s = $(this).data('status');
         $(this).removeClass('btn-outline-warning btn-outline-success btn-outline-danger btn-outline-secondary');
@@ -1079,7 +1151,7 @@ $(function(){
 
     // Reset
     $('#resetBtn').on('click', function(){
-        $('.filter-pill').removeClass('active-all active-pending active-approved active-rejected')
+        $('.filter-pill').removeClass('active-all active-pending active-approved active-rejected active-past')
             .addClass(function(){ return 'btn-outline-secondary'; });
         $('.filter-pill[data-status="all"]').removeClass('btn-outline-secondary').addClass('active-all');
         $('#colSelect').val('-1');
@@ -1101,6 +1173,50 @@ $(function(){
             row.child(html).show();
             $(this).find('i').removeClass('fa-eye').addClass('fa-eye-slash');
         }
+    });
+
+    // Move to past students
+    $(document).on('click', '.move-past-btn', function(e){
+        e.preventDefault();
+        var id = $(this).data('id');
+        var name = $(this).data('name');
+        Swal.fire({
+            title: 'Move to Past Students?',
+            html: '<strong>' + name + '</strong> will be removed from their current class but history will be kept.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#6c757d',
+            cancelButtonColor: '#858796',
+            confirmButtonText: '<i class="fas fa-archive mr-1"></i> Move to Past',
+            cancelButtonText: 'Cancel'
+        }).then(function(result){
+            if (result.isConfirmed) {
+                $('#movePastStudentId').val(id);
+                $('#movePastForm').submit();
+            }
+        });
+    });
+
+    // Restore from past students
+    $(document).on('click', '.restore-btn', function(e){
+        e.preventDefault();
+        var id = $(this).data('id');
+        var name = $(this).data('name');
+        Swal.fire({
+            title: 'Restore Student?',
+            html: 'Restore <strong>' + name + '</strong> to active students? You can assign a class again afterward.',
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonColor: '#1cc88a',
+            cancelButtonColor: '#858796',
+            confirmButtonText: '<i class="fas fa-undo mr-1"></i> Restore',
+            cancelButtonText: 'Cancel'
+        }).then(function(result){
+            if (result.isConfirmed) {
+                $('#restoreActiveStudentId').val(id);
+                $('#restoreActiveForm').submit();
+            }
+        });
     });
 
     // Delete with SweetAlert

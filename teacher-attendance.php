@@ -108,7 +108,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
             "SELECT DISTINCT s.id, s.student_name
              FROM class_assignments ca
              INNER JOIN students s ON s.id = ca.student_id
-             WHERE ca.class_id = :class_id AND s.approval_status = 'Approved'
+             WHERE ca.class_id = :class_id
+               AND s.approval_status = 'Approved'
+               AND LOWER(COALESCE(s.status,'active')) <> 'past'
              ORDER BY s.student_name"
         );
         $stmt->execute([':class_id' => $classId]);
@@ -187,7 +189,9 @@ if ($selectedClassId > 0) {
             FROM pcm_absence_requests
             WHERE status <> 'Rejected'
          ) ar ON ar.child_id = s.id AND ar.absence_date = :attendance_date
-         WHERE ca.class_id = :class_id AND s.approval_status = 'Approved'
+         WHERE ca.class_id = :class_id
+           AND s.approval_status = 'Approved'
+           AND LOWER(COALESCE(s.status,'active')) <> 'past'
          ORDER BY s.student_name"
     );
     $stmt->execute([

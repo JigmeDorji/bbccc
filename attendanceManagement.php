@@ -133,7 +133,9 @@ if ($classId) {
             FROM pcm_absence_requests
             WHERE status <> 'Rejected'
         ) ar ON ar.child_id = s.id AND ar.absence_date = :d
-        WHERE ca.class_id = :cid AND LOWER(s.approval_status) = 'approved'
+        WHERE ca.class_id = :cid
+          AND LOWER(s.approval_status) = 'approved'
+          AND LOWER(COALESCE(s.status,'active')) <> 'past'
         ORDER BY s.student_name ASC
     ");
     $stmtStudents->execute([':cid' => $classId, ':d' => $date]);
