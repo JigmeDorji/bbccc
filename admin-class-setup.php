@@ -483,6 +483,24 @@ $teachers = $pdo->query(
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        .teacher-select-list {
+            max-height: 210px;
+            overflow-y: auto;
+            border: 1px solid #d1d3e2;
+            border-radius: 10px;
+            padding: 8px 10px;
+            background: #fff;
+        }
+        .teacher-select-list .custom-control {
+            padding-top: 5px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #f1f2f6;
+        }
+        .teacher-select-list .custom-control:last-child {
+            border-bottom: 0;
+        }
+    </style>
 </head>
 <body id="page-top">
 <div id="wrapper">
@@ -568,12 +586,19 @@ $teachers = $pdo->query(
                                     </div>
                                     <div class="form-group">
                                         <label><i class="fas fa-chalkboard-teacher mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Teacher(s)</label>
-                                        <select name="teacher_ids[]" class="form-control" multiple size="6">
+                                        <div class="teacher-select-list">
                                             <?php foreach ($teachers as $teacher): ?>
-                                                <option value="<?= (int)$teacher['id'] ?>"><?= htmlspecialchars($teacher['full_name']) ?></option>
+                                                <?php $createTeacherId = (int)$teacher['id']; ?>
+                                                <div class="custom-control custom-checkbox">
+                                                    <input type="checkbox" class="custom-control-input" id="create_teacher_<?= $createTeacherId ?>" name="teacher_ids[]" value="<?= $createTeacherId ?>">
+                                                    <label class="custom-control-label" for="create_teacher_<?= $createTeacherId ?>"><?= htmlspecialchars($teacher['full_name']) ?></label>
+                                                </div>
                                             <?php endforeach; ?>
-                                        </select>
-                                        <small class="text-muted">Hold Cmd/Ctrl to select multiple teachers. The first selected teacher is primary.</small>
+                                            <?php if (empty($teachers)): ?>
+                                                <div class="text-muted small">No active teachers found.</div>
+                                            <?php endif; ?>
+                                        </div>
+                                        <small class="text-muted">Tick one or more teachers. Unticked teachers are not assigned.</small>
                                     </div>
                                     <button type="submit" class="btn btn-primary" style="border-radius:10px;"><i class="fas fa-plus mr-1"></i> Create Class</button>
                                 </form>
@@ -605,12 +630,19 @@ $teachers = $pdo->query(
                                         </div>
                                         <div class="form-group col-md-5">
                                             <label><i class="fas fa-chalkboard-teacher mr-1" style="color:var(--brand,#881b12);font-size:.7rem;"></i> Teachers</label>
-                                            <select name="teacher_ids[]" class="form-control" id="assign_teacher_ids" multiple size="6">
+                                            <div class="teacher-select-list">
                                                 <?php foreach ($teachers as $teacher): ?>
-                                                    <option value="<?= (int)$teacher['id'] ?>"><?= htmlspecialchars($teacher['full_name']) ?></option>
+                                                    <?php $assignTeacherId = (int)$teacher['id']; ?>
+                                                    <div class="custom-control custom-checkbox">
+                                                        <input type="checkbox" class="custom-control-input assign-teacher-check" id="assign_teacher_<?= $assignTeacherId ?>" name="teacher_ids[]" value="<?= $assignTeacherId ?>">
+                                                        <label class="custom-control-label" for="assign_teacher_<?= $assignTeacherId ?>"><?= htmlspecialchars($teacher['full_name']) ?></label>
+                                                    </div>
                                                 <?php endforeach; ?>
-                                            </select>
-                                            <small class="text-muted">Hold Cmd/Ctrl to select multiple teachers. Leave blank to unassign all.</small>
+                                                <?php if (empty($teachers)): ?>
+                                                    <div class="text-muted small">No active teachers found.</div>
+                                                <?php endif; ?>
+                                            </div>
+                                            <small class="text-muted">Tick teachers to add. Untick teachers to remove from the selected class.</small>
                                         </div>
                                         <div class="form-group col-md-2">
                                             <button type="submit" class="btn btn-primary btn-block" style="border-radius:10px;"><i class="fas fa-link mr-1"></i> Update</button>
@@ -843,12 +875,19 @@ $teachers = $pdo->query(
                     </div>
                     <div class="form-group mt-2">
                         <label><i class="fas fa-chalkboard-teacher mr-1" style="color:#881b12;font-size:.7rem;"></i> Assign Teacher(s)</label>
-                        <select class="form-control" name="teacher_ids[]" id="edit_class_teachers" multiple size="6">
+                        <div class="teacher-select-list">
                             <?php foreach ($teachers as $t): ?>
-                                <option value="<?= (int)$t['id'] ?>"><?= htmlspecialchars($t['full_name']) ?></option>
+                                <?php $editTeacherId = (int)$t['id']; ?>
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input edit-teacher-check" id="edit_class_teacher_<?= $editTeacherId ?>" name="teacher_ids[]" value="<?= $editTeacherId ?>">
+                                    <label class="custom-control-label" for="edit_class_teacher_<?= $editTeacherId ?>"><?= htmlspecialchars($t['full_name']) ?></label>
+                                </div>
                             <?php endforeach; ?>
-                        </select>
-                        <small class="text-muted">Hold Cmd/Ctrl to choose multiple teachers. First selected is treated as primary.</small>
+                            <?php if (empty($teachers)): ?>
+                                <div class="text-muted small">No active teachers found.</div>
+                            <?php endif; ?>
+                        </div>
+                        <small class="text-muted">Tick teachers to add. Untick teachers to remove. The first checked teacher is primary.</small>
                     </div>
                     <div class="custom-control custom-switch mt-2">
                         <input type="checkbox" class="custom-control-input" id="edit_active" name="active" value="1">
@@ -939,9 +978,9 @@ $(function(){
     $('#assign_class_id').on('change', function () {
         var teacherIdsCsv = String($(this).find('option:selected').attr('data-teacher-ids') || '').trim();
         var teacherIds = teacherIdsCsv ? teacherIdsCsv.split(',').map(function(v){ return String(v).trim(); }).filter(Boolean) : [];
-        $('#assign_teacher_ids option').prop('selected', false);
+        $('.assign-teacher-check').prop('checked', false);
         teacherIds.forEach(function (id) {
-            $('#assign_teacher_ids option[value="' + id + '"]').prop('selected', true);
+            $('.assign-teacher-check[value="' + id + '"]').prop('checked', true);
         });
     });
 });
@@ -958,9 +997,9 @@ $(document).on('click', '.btn-edit-class', function(){
     $('#edit_active').prop('checked', btn.data('active') == 1);
     var teacherIdsCsv = String(btn.attr('data-teacher-ids') || '').trim();
     var teacherIds = teacherIdsCsv ? teacherIdsCsv.split(',').map(function(v){ return String(v).trim(); }).filter(Boolean) : [];
-    $('#edit_class_teachers option').prop('selected', false);
+    $('.edit-teacher-check').prop('checked', false);
     teacherIds.forEach(function (id) {
-        $('#edit_class_teachers option[value="' + id + '"]').prop('selected', true);
+        $('.edit-teacher-check[value="' + id + '"]').prop('checked', true);
     });
     $('#editClassModal').modal('show');
 });
