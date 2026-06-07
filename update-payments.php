@@ -150,7 +150,7 @@ function fm_apply_class_charge(PDO $pdo, int $chargeId): int {
 
 function badge_class(string $status): string {
     $s = strtolower(trim($status));
-    if ($s === 'approved') return 'success';
+    if (in_array($s, ['approved', 'verified'], true)) return 'success';
     if ($s === 'rejected') return 'danger';
     return 'warning';
 }
@@ -314,19 +314,20 @@ if (isset($_GET['fee_action'], $_GET['fee_id'])) {
 
         if ($feeId <= 0) throw new Exception("Invalid fee ID.");
 
-        // approve / reject keep as before
+        // approve / reject current PCM fee rows
         if (in_array($act, ['approve','reject'], true)) {
-            $newStatus = ($act === 'approve') ? 'Approved' : 'Rejected';
+            $newStatus = ($act === 'approve') ? 'Verified' : 'Rejected';
             $verifiedBy = $_SESSION['username'] ?? 'admin';
 
             $stmt = $pdo->prepare("
-                UPDATE fees_payments
+                UPDATE pcm_fee_payments
                 SET status = :st,
+                    paid_amount = CASE WHEN :st_paid = 'Verified' AND paid_amount <= 0 THEN due_amount ELSE paid_amount END,
                     verified_by = :vb,
                     verified_at = NOW()
                 WHERE id = :id
             ");
-            $stmt->execute([':st'=>$newStatus, ':vb'=>$verifiedBy, ':id'=>$feeId]);
+            $stmt->execute([':st'=>$newStatus, ':st_paid'=>$newStatus, ':vb'=>$verifiedBy, ':id'=>$feeId]);
 
             $message = "Installment {$newStatus} successfully.";
             $success = true;
@@ -348,31 +349,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
         $newStatus = trim((string)($_POST['new_status'] ?? ''));
 
         if ($feeId <= 0) throw new Exception("Invalid fee ID.");
-        if (!in_array($newStatus, ['Pending','Approved','Rejected'], true)) {
+        if (!in_array($newStatus, ['Unpaid','Pending','Verified','Approved','Rejected'], true)) {
             throw new Exception("Invalid status.");
         }
 
         $verifiedBy = $_SESSION['username'] ?? 'admin';
+        $pcmStatus = ($newStatus === 'Approved') ? 'Verified' : $newStatus;
 
-        // If Approved/Rejected => set verified_*; if Pending => clear verified_*
-        if ($newStatus === 'Pending') {
+        // If Verified/Rejected => set verified_*; if Unpaid/Pending => clear verified_*
+        if (in_array($pcmStatus, ['Unpaid','Pending'], true)) {
             $stmt = $pdo->prepare("
-                UPDATE fees_payments
-                SET status = 'Pending',
+                UPDATE pcm_fee_payments
+                SET status = :st,
                     verified_by = NULL,
                     verified_at = NULL
                 WHERE id = :id
             ");
-            $stmt->execute([':id'=>$feeId]);
+            $stmt->execute([':st'=>$pcmStatus, ':id'=>$feeId]);
         } else {
             $stmt = $pdo->prepare("
-                UPDATE fees_payments
+                UPDATE pcm_fee_payments
                 SET status = :st,
+                    paid_amount = CASE WHEN :st_paid = 'Verified' AND paid_amount <= 0 THEN due_amount ELSE paid_amount END,
                     verified_by = :vb,
                     verified_at = NOW()
                 WHERE id = :id
             ");
-            $stmt->execute([':st'=>$newStatus, ':vb'=>$verifiedBy, ':id'=>$feeId]);
+            $stmt->execute([':st'=>$pcmStatus, ':st_paid'=>$pcmStatus, ':vb'=>$verifiedBy, ':id'=>$feeId]);
         }
 
         $message = "Installment updated successfully.";
@@ -452,11 +455,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
 
 // ---------------- LOAD ALL FEE DATA ----------------
 // Parent column can be either parentId (legacy) or parent_id (newer)
-$studentParentColumn = 'parentId';
-$colStmt = $pdo->query("SHOW COLUMNS FROM students LIKE 'parent_id'");
-if ($colStmt && $colStmt->fetch(PDO::FETCH_ASSOC)) {
-    $studentParentColumn = 'parent_id';
-}
+$hasStudentParentIdNew = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parent_id'")->fetch(PDO::FETCH_ASSOC);
+$hasStudentParentIdLegacy = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parentId'")->fetch(PDO::FETCH_ASSOC);
+$studentParentExpr = $hasStudentParentIdNew && $hasStudentParentIdLegacy
+    ? "COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0))"
+    : ($hasStudentParentIdNew ? "s.parent_id" : "s.parentId");
 
 // 1) Enrollment base rows: ensures student details appear under each payment method
 $stmtEnroll = $pdo->prepare("
@@ -476,30 +479,55 @@ $stmtEnroll = $pdo->prepare("
         p.address AS parent_address
     FROM pcm_enrolments e
     JOIN students s ON s.id = e.student_id
-    LEFT JOIN parents p ON p.id = s.`{$studentParentColumn}`
+    LEFT JOIN parents p ON p.id = COALESCE(e.parent_id, {$studentParentExpr})
     WHERE e.fee_plan IN ('Term-wise','Half-yearly','Yearly')
     ORDER BY s.id DESC, e.id DESC
 ");
 $stmtEnroll->execute();
 $enrollmentRows = $stmtEnroll->fetchAll();
 
-// 2) Installment rows: keep payment-status details/actions from existing fees_payments table
+// 2) Installment rows: keep payment-status details/actions from current PCM fee table
 $stmt = $pdo->prepare("
     SELECT
-        fp.*,
+        fp.id,
+        fp.enrolment_id,
+        fp.student_id,
+        fp.parent_id,
+        fp.plan_type,
+        fp.instalment_label,
+        CASE
+            WHEN fp.instalment_label = 'Term 1' THEN 'TERM1'
+            WHEN fp.instalment_label = 'Term 2' THEN 'TERM2'
+            WHEN fp.instalment_label = 'Term 3' THEN 'TERM3'
+            WHEN fp.instalment_label = 'Term 4' THEN 'TERM4'
+            WHEN fp.instalment_label = 'Half 1' THEN 'HALF1'
+            WHEN fp.instalment_label = 'Half 2' THEN 'HALF2'
+            WHEN fp.instalment_label = 'Yearly' THEN 'YEARLY'
+            ELSE ''
+        END AS installment_code,
+        fp.due_amount,
+        fp.paid_amount,
+        fp.proof_path,
+        fp.payment_ref AS payment_reference,
+        fp.status,
+        fp.submitted_at,
+        fp.verified_by,
+        fp.verified_at,
         s.student_id AS public_student_id,
         s.student_name,
-        s.approval_status AS enrollment_status,
-        s.payment_plan,
-        s.payment_reference AS enrollment_reference,
-        s.payment_proof AS enrollment_proof,
+        COALESCE(e.status, s.approval_status) AS enrollment_status,
+        COALESCE(e.fee_plan, fp.plan_type, s.payment_plan) AS payment_plan,
+        COALESCE(e.payment_ref, fp.payment_ref, s.payment_reference) AS enrollment_reference,
+        COALESCE(e.proof_path, fp.proof_path, s.payment_proof) AS enrollment_proof,
         p.full_name AS parent_name,
         p.email AS parent_email,
         p.phone AS parent_phone,
         p.address AS parent_address
-    FROM fees_payments fp
+    FROM pcm_fee_payments fp
     JOIN students s ON s.id = fp.student_id
-    LEFT JOIN parents p ON p.id = s.`{$studentParentColumn}`
+    LEFT JOIN pcm_enrolments e ON e.id = fp.enrolment_id
+    LEFT JOIN parents p ON p.id = COALESCE(fp.parent_id, e.parent_id, {$studentParentExpr})
+    WHERE fp.plan_type IN ('Term-wise','Half-yearly','Yearly')
     ORDER BY s.id DESC, fp.id ASC
 ");
 $stmt->execute();
@@ -627,7 +655,7 @@ foreach ($rows as $r) {
     $sid  = (string)($r['student_id'] ?? '');
     if ($sid === '' || $code === '') continue;
 
-    if (normalize_status($r['status'] ?? '') === 'approved') {
+    if (in_array(normalize_status($r['status'] ?? ''), ['approved', 'verified'], true)) {
         $paidSeen[$code][$sid] = true;
     }
 }
