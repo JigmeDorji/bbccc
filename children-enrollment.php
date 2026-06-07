@@ -43,6 +43,10 @@ $banks = $hasBankCore ? [[
 ]] : [];
 
 // ── POST ACTIONS ──
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
+    $flash = 'The enrollment form was not received properly. Please upload a smaller proof file and try again.';
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     verify_csrf();
     $act = $_POST['action'];
@@ -99,14 +103,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $existingEnrol->execute([':id'=>$childId]);
             $existingEnrol = $existingEnrol->fetch(PDO::FETCH_ASSOC);
 
-            if ($existingEnrol && strtolower((string)($existingEnrol['status'] ?? '')) !== 'needs update') {
+            $existingStatus = strtolower(trim((string)($existingEnrol['status'] ?? '')));
+            $canResubmitExisting = in_array($existingStatus, ['needs update', 'rejected'], true);
+            if ($existingEnrol && !$canResubmitExisting) {
                 $flash = 'This child already has an enrolment on file.';
             } else {
                 $amount = pcm_plan_amount($plan);
                 $proofPath = null;
 
-                if (empty($_FILES['proof']['name']) || (int)($_FILES['proof']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+                $proofError = (int)($_FILES['proof']['error'] ?? UPLOAD_ERR_NO_FILE);
+                if (empty($_FILES['proof']['name']) || $proofError === UPLOAD_ERR_NO_FILE) {
                     $flash = 'Payment proof is required.';
+                } elseif (in_array($proofError, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
+                    $flash = 'Payment proof is too large. Please upload a JPG, PNG, or PDF under 5 MB.';
+                } elseif ($proofError !== UPLOAD_ERR_OK) {
+                    $flash = 'Payment proof upload failed. Please try again with a smaller JPG, PNG, or PDF.';
                 } else {
                     $allowed = ['jpg','jpeg','png','pdf'];
                     $ext = strtolower(pathinfo($_FILES['proof']['name'], PATHINFO_EXTENSION));
@@ -116,10 +127,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $flash = 'File must be under 5 MB.';
                     } else {
                         $dir = 'uploads/enrolments';
-                        pcm_ensure_dir($dir);
+                        $dirAbs = __DIR__ . '/' . $dir;
+                        try {
+                            pcm_ensure_dir($dirAbs);
+                        } catch (Throwable $e) {
+                            $flash = 'Upload folder is not writable. Please contact admin.';
+                            error_log('[BBCC] enrolment upload directory error: ' . $e->getMessage());
+                        }
+                    }
+
+                    if ($flash === '' && $proofPath === null) {
                         $filename  = 'enrol_' . $childId . '_' . time() . '.' . $ext;
                         $proofPath = $dir . '/' . $filename;
-                        if (!move_uploaded_file($_FILES['proof']['tmp_name'], $proofPath)) {
+                        $targetPath = $dirAbs . '/' . $filename;
+                        if (!is_uploaded_file($_FILES['proof']['tmp_name']) || !move_uploaded_file($_FILES['proof']['tmp_name'], $targetPath)) {
                             $flash = 'Failed to upload file.';
                             $proofPath = null;
                         }
@@ -128,49 +149,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                 if ($flash === '') {
                     $campusStored = implode(',', $campusSelection);
-                    $actor = (string)($_SESSION['username'] ?? $parent['full_name'] ?? 'parent');
-                    if ($existingEnrol) {
-                        $eid = (int)$existingEnrol['id'];
-                        $upd = $pdo->prepare("
-                            UPDATE pcm_enrolments
-                            SET parent_id=:pid, fee_plan=:plan, campus_preference=:campus, fee_amount=:amt, payment_ref=:ref, proof_path=:proof,
-                                status='Pending', admin_note=NULL, reviewed_by=NULL, reviewed_at=NULL, submitted_at=NOW()
-                            WHERE id=:id
-                        ");
-                        $upd->execute([
-                            ':pid' => $parentId,
-                            ':plan' => $plan,
-                            ':campus' => $campusStored,
-                            ':amt' => $amount,
-                            ':ref' => $ref ?: null,
-                            ':proof' => $proofPath,
-                            ':id' => $eid
-                        ]);
-                        pcm_log_enrolment_event($pdo, $childId, $eid, 'enrolment_resubmitted', $actor, 'Parent resubmitted enrollment after requested changes.');
-                    } else {
-                        $ins = $pdo->prepare("INSERT INTO pcm_enrolments (student_id, parent_id, fee_plan, campus_preference, fee_amount, payment_ref, proof_path) VALUES (:sid, :pid, :plan, :campus, :amt, :ref, :proof)");
-                        $ins->execute([':sid'=>$childId, ':pid'=>$parentId, ':plan'=>$plan, ':campus'=>$campusStored, ':amt'=>$amount, ':ref'=>$ref?:null, ':proof'=>$proofPath]);
-                        $eid = (int)$pdo->lastInsertId();
-                        pcm_log_enrolment_event($pdo, $childId, $eid, 'enrolment_submitted', $actor, 'Parent submitted enrollment.');
+                    $eid = 0;
+                    try {
+                        if ($existingEnrol) {
+                            $eid = (int)$existingEnrol['id'];
+                            $upd = $pdo->prepare("
+                                UPDATE pcm_enrolments
+                                SET parent_id=:pid, fee_plan=:plan, campus_preference=:campus, fee_amount=:amt, payment_ref=:ref, proof_path=:proof,
+                                    status='Pending', admin_note=NULL, reviewed_by=NULL, reviewed_at=NULL, submitted_at=NOW()
+                                WHERE id=:id
+                            ");
+                            $upd->execute([
+                                ':pid' => $parentId,
+                                ':plan' => $plan,
+                                ':campus' => $campusStored,
+                                ':amt' => $amount,
+                                ':ref' => $ref ?: null,
+                                ':proof' => $proofPath,
+                                ':id' => $eid
+                            ]);
+                        } else {
+                            $ins = $pdo->prepare("INSERT INTO pcm_enrolments (student_id, parent_id, fee_plan, campus_preference, fee_amount, payment_ref, proof_path) VALUES (:sid, :pid, :plan, :campus, :amt, :ref, :proof)");
+                            $ins->execute([':sid'=>$childId, ':pid'=>$parentId, ':plan'=>$plan, ':campus'=>$campusStored, ':amt'=>$amount, ':ref'=>$ref?:null, ':proof'=>$proofPath]);
+                            $eid = (int)$pdo->lastInsertId();
+                        }
+                    } catch (Throwable $e) {
+                        $flash = 'Enrollment could not be saved. Please contact admin.';
+                        error_log('[BBCC] parent enrollment save error: ' . $e->getMessage());
                     }
 
-                    try {
-                        pcm_notify_admin_enrolment($child['student_name'], $parent['full_name']);
-                    } catch (Throwable $e) {
-                        error_log('[BBCC] enrolment admin email skipped: ' . $e->getMessage());
+                    if ($flash === '') {
+                        error_log('[BBCC] parent enrollment saved: student_id=' . $childId . ', enrolment_id=' . (int)$eid);
+                        $flash = "Enrollment submitted for <strong>{$child['student_name']}</strong>. You will be notified once reviewed.";
+                        $ok = true;
                     }
-                    try {
-                        bbcc_notify_admins(
-                            $pdo,
-                            'Enrollment Submitted',
-                            (string)$child['student_name'] . ' enrollment was submitted by ' . (string)$parent['full_name'] . '.',
-                            'admin-enrolments'
-                        );
-                    } catch (Throwable $e) {
-                        error_log('[BBCC] enrolment admin notification skipped: ' . $e->getMessage());
-                    }
-                    $flash = "Enrollment submitted for <strong>{$child['student_name']}</strong>. You will be notified once reviewed.";
-                    $ok = true;
                 }
             }
         }
@@ -191,7 +203,7 @@ $eligible = $pdo->prepare("
     WHERE {$studentParentExprWithAlias} = :pid
       AND LOWER(COALESCE(s.approval_status,'pending')) = 'approved'
       AND LOWER(COALESCE(s.status,'active')) <> 'past'
-      AND (e.id IS NULL OR LOWER(COALESCE(e.status,'')) = 'needs update')
+      AND (e.id IS NULL OR LOWER(COALESCE(e.status,'')) IN ('needs update','rejected'))
     ORDER BY s.student_name
 ");
 $eligible->execute([':pid'=>$parentId]);
@@ -205,6 +217,7 @@ $enrolments = $pdo->prepare("
     LEFT JOIN class_assignments ca ON ca.student_id = s.id
     LEFT JOIN classes c ON c.id = ca.class_id
     WHERE COALESCE(NULLIF(e.parent_id,0), {$studentParentExprWithAlias}) = :pid
+      AND LOWER(COALESCE(s.status,'active')) <> 'past'
     ORDER BY e.submitted_at DESC
 ");
 $enrolments->execute([':pid'=>$parentId]);
