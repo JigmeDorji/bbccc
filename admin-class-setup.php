@@ -19,14 +19,25 @@ try {
     bbcc_fail_db($e);
 }
 
-function bbcc_ensure_class_campus_column(PDO $pdo): void {
+function bbcc_ensure_class_campus_column(PDO $pdo): bool {
     static $done = false;
-    if ($done) return;
-    $stmt = $pdo->query("SHOW COLUMNS FROM classes LIKE 'campus_key'");
-    if (!$stmt || !$stmt->fetch(PDO::FETCH_ASSOC)) {
-        $pdo->exec("ALTER TABLE classes ADD COLUMN campus_key VARCHAR(20) NOT NULL DEFAULT 'c1' AFTER class_name");
+    static $available = false;
+    if ($done) return $available;
+
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM classes LIKE 'campus_key'");
+        $available = (bool)($stmt && $stmt->fetch(PDO::FETCH_ASSOC));
+        if (!$available) {
+            $pdo->exec("ALTER TABLE classes ADD COLUMN campus_key VARCHAR(20) NOT NULL DEFAULT 'c1' AFTER class_name");
+            $available = true;
+        }
+    } catch (Throwable $e) {
+        error_log('[BBCC] class campus column unavailable on admin-class-setup: ' . $e->getMessage());
+        $available = false;
     }
+
     $done = true;
+    return $available;
 }
 
 function bbcc_campus_options(PDO $pdo): array {
@@ -66,7 +77,7 @@ function bbcc_filter_existing_teacher_ids(PDO $pdo, array $teacherIds): array {
     return $ordered;
 }
 
-bbcc_ensure_class_campus_column($pdo);
+$hasClassCampusColumn = bbcc_ensure_class_campus_column($pdo);
 bbcc_ensure_class_teacher_schema($pdo);
 $campusOptions = bbcc_campus_options($pdo);
 $validCampusKeys = array_keys($campusOptions);
@@ -97,17 +108,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new Exception("A class with this name already exists.");
             }
 
-            $stmt = $pdo->prepare(
-                "INSERT INTO classes (class_name, campus_key, description, capacity, schedule_text)
-                 VALUES (:class_name, :campus_key, :description, :capacity, :schedule_text)"
-            );
-            $stmt->execute([
+            $classColumns = "class_name, description, capacity, schedule_text";
+            $classValues = ":class_name, :description, :capacity, :schedule_text";
+            $classParams = [
                 ':class_name' => $className,
-                ':campus_key' => $campusKey,
                 ':description' => $description === '' ? null : $description,
                 ':capacity' => $capacity,
                 ':schedule_text' => $scheduleText === '' ? null : $scheduleText
-            ]);
+            ];
+            if ($hasClassCampusColumn) {
+                $classColumns = "class_name, campus_key, description, capacity, schedule_text";
+                $classValues = ":class_name, :campus_key, :description, :capacity, :schedule_text";
+                $classParams[':campus_key'] = $campusKey;
+            }
+
+            $stmt = $pdo->prepare(
+                "INSERT INTO classes ({$classColumns})
+                 VALUES ({$classValues})"
+            );
+            $stmt->execute($classParams);
 
             $message = "Class created successfully.";
         } catch (Exception $e) {
@@ -142,20 +161,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $teacherIds = bbcc_filter_existing_teacher_ids($pdo, array_map('intval', (array)($_POST['teacher_ids'] ?? [])));
 
             $pdo->beginTransaction();
-            $stmt = $pdo->prepare(
-                "UPDATE classes SET class_name = :class_name, description = :description,
-                 campus_key = :campus_key, capacity = :capacity, schedule_text = :schedule_text, active = :active
-                 WHERE id = :id"
-            );
-            $stmt->execute([
+            $campusSql = $hasClassCampusColumn ? "campus_key = :campus_key, " : "";
+            $classParams = [
                 ':class_name'   => $className,
-                ':campus_key'   => $campusKey,
                 ':description'  => $description === '' ? null : $description,
                 ':capacity'     => $capacity,
                 ':schedule_text'=> $scheduleText === '' ? null : $scheduleText,
                 ':active'       => $active,
                 ':id'           => $editId
-            ]);
+            ];
+            if ($hasClassCampusColumn) {
+                $classParams[':campus_key'] = $campusKey;
+            }
+            $stmt = $pdo->prepare(
+                "UPDATE classes SET class_name = :class_name, description = :description,
+                 {$campusSql}capacity = :capacity, schedule_text = :schedule_text, active = :active
+                 WHERE id = :id"
+            );
+            $stmt->execute($classParams);
             bbcc_set_class_teachers(
                 $pdo,
                 $editId,

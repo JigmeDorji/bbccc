@@ -27,6 +27,30 @@ try {
 }
 bbcc_ensure_class_teacher_schema($pdo);
 
+function bbcc_class_students_has_campus_column(PDO $pdo): bool {
+    static $done = false;
+    static $available = false;
+    if ($done) return $available;
+
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM classes LIKE 'campus_key'");
+        $available = (bool)($stmt && $stmt->fetch(PDO::FETCH_ASSOC));
+        if (!$available) {
+            $pdo->exec("ALTER TABLE classes ADD COLUMN campus_key VARCHAR(20) NOT NULL DEFAULT 'c1' AFTER class_name");
+            $available = true;
+        }
+    } catch (Throwable $e) {
+        error_log('[BBCC] class campus column unavailable on admin-class-students: ' . $e->getMessage());
+        $available = false;
+    }
+
+    $done = true;
+    return $available;
+}
+
+$hasClassCampusColumn = bbcc_class_students_has_campus_column($pdo);
+$classCampusSelectExpr = $hasClassCampusColumn ? 'c.campus_key' : "'c1' AS campus_key";
+
 [$campusOneName, $campusTwoName] = pcm_campus_names();
 $campusChoices = [
     'c1' => $campusOneName,
@@ -95,7 +119,7 @@ $rows = $pdo->query("
     SELECT
         c.id AS class_id,
         c.class_name,
-        c.campus_key,
+        {$classCampusSelectExpr},
         COALESCE(tt.teacher_names, tlegacy.full_name) AS teacher_name,
         s.id AS student_db_id,
         s.student_id,

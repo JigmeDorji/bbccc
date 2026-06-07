@@ -18,17 +18,30 @@ try {
     bbcc_fail_db($e);
 }
 
-function bbcc_ensure_class_campus_column(PDO $pdo): void {
+function bbcc_ensure_class_campus_column(PDO $pdo): bool {
     static $done = false;
-    if ($done) return;
-    $stmt = $pdo->query("SHOW COLUMNS FROM classes LIKE 'campus_key'");
-    if (!$stmt || !$stmt->fetch(PDO::FETCH_ASSOC)) {
-        $pdo->exec("ALTER TABLE classes ADD COLUMN campus_key VARCHAR(20) NOT NULL DEFAULT 'c1' AFTER class_name");
+    static $available = false;
+    if ($done) return $available;
+
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM classes LIKE 'campus_key'");
+        $available = (bool)($stmt && $stmt->fetch(PDO::FETCH_ASSOC));
+        if (!$available) {
+            $pdo->exec("ALTER TABLE classes ADD COLUMN campus_key VARCHAR(20) NOT NULL DEFAULT 'c1' AFTER class_name");
+            $available = true;
+        }
+    } catch (Throwable $e) {
+        error_log('[BBCC] class campus column unavailable on admin-assign-class: ' . $e->getMessage());
+        $available = false;
     }
+
     $done = true;
+    return $available;
 }
 
-bbcc_ensure_class_campus_column($pdo);
+$hasClassCampusColumn = bbcc_ensure_class_campus_column($pdo);
+$classCampusSelectExpr = $hasClassCampusColumn ? 'campus_key' : "'c1' AS campus_key";
+$classCampusValueExpr = $hasClassCampusColumn ? 'campus_key' : "'c1'";
 $campusChoices = pcm_campus_choice_labels();
 $validCampusKeys = array_keys($campusChoices);
 
@@ -47,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($studentId === 0 || $classId === 0 || $campusKey === '') throw new Exception("Campus, student and class are required.");
             if (!in_array($campusKey, $validCampusKeys, true)) throw new Exception("Please select a valid campus.");
 
-            $classRow = $pdo->prepare("SELECT id, campus_key FROM classes WHERE id = :id AND active = 1 LIMIT 1");
+            $classRow = $pdo->prepare("SELECT id, {$classCampusSelectExpr} FROM classes WHERE id = :id AND active = 1 LIMIT 1");
             $classRow->execute([':id' => $classId]);
             $classRow = $classRow->fetch(PDO::FETCH_ASSOC);
             if (!$classRow) throw new Exception("Selected class is not available.");
@@ -109,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 if (!isset($classCampusCache[$classId])) {
-                    $classRow = $pdo->prepare("SELECT id, campus_key FROM classes WHERE id = :id AND active = 1 LIMIT 1");
+                    $classRow = $pdo->prepare("SELECT id, {$classCampusSelectExpr} FROM classes WHERE id = :id AND active = 1 LIMIT 1");
                     $classRow->execute([':id' => $classId]);
                     $classCampusCache[$classId] = $classRow->fetch(PDO::FETCH_ASSOC) ?: null;
                 }
@@ -175,6 +188,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception("Unknown action.");
         }
     } catch (Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
         $status = 'error';
         $msg    = $e->getMessage();
     }
@@ -189,7 +205,7 @@ $flash = $_SESSION['assign_flash'] ?? null;
 unset($_SESSION['assign_flash']);
 
 // ─── Data ────────────────────────────────────────────────
-$allClasses = $pdo->query("SELECT id, class_name, campus_key FROM classes WHERE active=1 ORDER BY class_name")->fetchAll();
+$allClasses = $pdo->query("SELECT id, class_name, {$classCampusSelectExpr} FROM classes WHERE active=1 ORDER BY class_name")->fetchAll();
 
 $unassignedStudents = $pdo->query(
     "SELECT s.id, s.student_name, s.student_id, e.campus_preference
@@ -358,6 +374,15 @@ foreach ($assignedStudents as $row) {
                                         <input type="hidden" name="action" value="assign_selected">
                                         <input type="hidden" name="campus_key" id="assignSelectedCampus" value="">
                                         <div id="assignCampusTableWrap" style="display:none;">
+                                            <div class="form-row align-items-end mb-3">
+                                                <div class="form-group col-md-6 mb-md-0">
+                                                    <label><i class="fas fa-chalkboard mr-1" style="color:var(--brand);font-size:.7rem;"></i> Class for selected students</label>
+                                                    <select id="assignBulkClass" class="form-control">
+                                                        <option value="">— Select class —</option>
+                                                    </select>
+                                                    <small class="text-muted">This applies to checked rows. You can still adjust a row individually.</small>
+                                                </div>
+                                            </div>
                                             <div class="d-flex align-items-center justify-content-between mb-2">
                                                 <div>
                                                     <button type="button" class="btn btn-sm btn-outline-secondary mr-1" id="assignSelectAllBtn" style="border-radius:8px;">Select All</button>
@@ -544,10 +569,12 @@ $(function () {
         var $help = $('#assignStudentHelp');
         var $campusHidden = $('#assignSelectedCampus');
         var $submitBtn = $('#assignSelectedSubmit');
+        var $bulkClass = $('#assignBulkClass');
 
         $tableBody.empty();
         $campusHidden.val(campus);
         $submitBtn.prop('disabled', true);
+        $bulkClass.html('<option value="">— Select class —</option>').prop('disabled', true);
 
         if (!campus) {
             $tableWrap.hide();
@@ -571,6 +598,7 @@ $(function () {
         $.each(classes, function(_, c){
             classOptionsHtml += '<option value="' + parseInt(c.id, 10) + '">' + escapeHtml(c.name || '') + '</option>';
         });
+        $bulkClass.html(classOptionsHtml).prop('disabled', classes.length === 0);
 
         $.each(students, function(i, s){
             var sid = s.sid ? '<code>' + escapeHtml(s.sid) + '</code>' : '—';
@@ -596,11 +624,34 @@ $(function () {
         $submitBtn.prop('disabled', students.length === 0);
     }
 
+    function applyBulkClassToCheckedRows() {
+        var classId = $('#assignBulkClass').val() || '';
+        if (!classId) return;
+        $('.assign-select-one:checked').each(function () {
+            var studentId = parseInt($(this).val(), 10) || 0;
+            $('select.assign-class-select[data-student-id="' + studentId + '"]').val(classId);
+            $('.assign-class-error[data-student-id="' + studentId + '"]').addClass('d-none');
+        });
+    }
+
     $('#assignCampus').on('change', refreshAssignOptions);
     refreshAssignOptions();
 
+    $('#assignBulkClass').on('change', applyBulkClassToCheckedRows);
+
+    $(document).on('change', '.assign-select-one', function () {
+        if ($(this).is(':checked')) {
+            var classId = $('#assignBulkClass').val() || '';
+            if (classId) {
+                var studentId = parseInt($(this).val(), 10) || 0;
+                $('select.assign-class-select[data-student-id="' + studentId + '"]').val(classId);
+            }
+        }
+    });
+
     $('#assignSelectAllBtn').on('click', function () {
         $('.assign-select-one').prop('checked', true);
+        applyBulkClassToCheckedRows();
     });
 
     $('#assignDeselectAllBtn').on('click', function () {
