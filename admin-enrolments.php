@@ -446,7 +446,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
 // ── Fetch all enrolments ──
 $all = $pdo->query("
     SELECT e.*, s.student_id AS stu_code, s.student_name, s.dob, s.class_option,
-           p.full_name AS parent_name, p.email AS parent_email, p.phone AS parent_phone,
+           p.id AS parent_db_id, p.full_name AS parent_name, p.email AS parent_email, p.phone AS parent_phone,
            ca.class_id AS assigned_class_id, c.class_name AS assigned_class_name,
            EXISTS(
                SELECT 1 FROM pcm_enrolment_audit a
@@ -456,11 +456,24 @@ $all = $pdo->query("
            ) AS is_manual_enrolment
     FROM pcm_enrolments e
     JOIN students s ON s.id = e.student_id
-    JOIN parents  p ON p.id = e.parent_id
+    JOIN parents  p ON p.id = COALESCE(NULLIF(e.parent_id,0), COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0)))
     LEFT JOIN class_assignments ca ON ca.student_id = e.student_id
     LEFT JOIN classes c ON c.id = ca.class_id
     ORDER BY FIELD(e.status,'Pending','Approved','Rejected'), e.submitted_at DESC
 ")->fetchAll();
+
+foreach ($all as $row) {
+    $enrolmentParentId = (int)($row['parent_id'] ?? 0);
+    $resolvedParentId = (int)($row['parent_db_id'] ?? 0);
+    if ($resolvedParentId > 0 && $enrolmentParentId !== $resolvedParentId) {
+        try {
+            $syncParent = $pdo->prepare("UPDATE pcm_enrolments SET parent_id = :pid WHERE id = :id");
+            $syncParent->execute([':pid' => $resolvedParentId, ':id' => (int)$row['id']]);
+        } catch (Throwable $e) {
+            error_log('[BBCC] enrolment parent sync skipped: ' . $e->getMessage());
+        }
+    }
+}
 
 $auditRows = [];
 $allEnrolmentIds = array_map(static fn($r) => (int)($r['id'] ?? 0), $all);

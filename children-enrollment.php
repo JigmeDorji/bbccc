@@ -20,15 +20,8 @@ if (!$parent) die("Parent account not found.");
 $parentId = (int)$parent['id'];
 $flash    = '';
 $ok       = false;
-$hasParentIdNew = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parent_id'")->fetch(PDO::FETCH_ASSOC);
-$hasParentIdLegacy = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parentId'")->fetch(PDO::FETCH_ASSOC);
-$studentParentCol = $hasParentIdNew ? 'parent_id' : 'parentId';
-$studentParentExpr = $hasParentIdNew && $hasParentIdLegacy
-    ? "COALESCE(NULLIF(parent_id,0), NULLIF(parentId,0))"
-    : $studentParentCol;
-$studentParentExprWithAlias = $hasParentIdNew && $hasParentIdLegacy
-    ? "COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0))"
-    : 's.' . $studentParentCol;
+$studentParentExpr = pcm_students_parent_expr($pdo);
+$studentParentExprWithAlias = pcm_students_parent_expr($pdo, 's');
 
 if (empty($_SESSION['enrol_submit_nonce'])) {
     $_SESSION['enrol_submit_nonce'] = bin2hex(random_bytes(16));
@@ -102,7 +95,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         } elseif (!in_array($plan, ['Term-wise','Half-yearly','Yearly'])) {
             $flash = 'Invalid fee plan.';
         } else {
-            $existingEnrol = $pdo->prepare("SELECT id, status FROM pcm_enrolments WHERE student_id=:id LIMIT 1");
+            $existingEnrol = $pdo->prepare("SELECT id, status, parent_id FROM pcm_enrolments WHERE student_id=:id LIMIT 1");
             $existingEnrol->execute([':id'=>$childId]);
             $existingEnrol = $existingEnrol->fetch(PDO::FETCH_ASSOC);
 
@@ -140,11 +133,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         $eid = (int)$existingEnrol['id'];
                         $upd = $pdo->prepare("
                             UPDATE pcm_enrolments
-                            SET fee_plan=:plan, campus_preference=:campus, fee_amount=:amt, payment_ref=:ref, proof_path=:proof,
+                            SET parent_id=:pid, fee_plan=:plan, campus_preference=:campus, fee_amount=:amt, payment_ref=:ref, proof_path=:proof,
                                 status='Pending', admin_note=NULL, reviewed_by=NULL, reviewed_at=NULL, submitted_at=NOW()
                             WHERE id=:id
                         ");
                         $upd->execute([
+                            ':pid' => $parentId,
                             ':plan' => $plan,
                             ':campus' => $campusStored,
                             ':amt' => $amount,
@@ -188,6 +182,7 @@ $eligible = $pdo->prepare("
     LEFT JOIN pcm_enrolments e ON e.student_id = s.id
     WHERE {$studentParentExprWithAlias} = :pid
       AND LOWER(COALESCE(s.approval_status,'pending')) = 'approved'
+      AND LOWER(COALESCE(s.status,'active')) <> 'past'
       AND (e.id IS NULL OR LOWER(COALESCE(e.status,'')) = 'needs update')
     ORDER BY s.student_name
 ");
@@ -201,7 +196,7 @@ $enrolments = $pdo->prepare("
     JOIN students s ON s.id = e.student_id
     LEFT JOIN class_assignments ca ON ca.student_id = s.id
     LEFT JOIN classes c ON c.id = ca.class_id
-    WHERE e.parent_id = :pid
+    WHERE COALESCE(NULLIF(e.parent_id,0), {$studentParentExprWithAlias}) = :pid
     ORDER BY e.submitted_at DESC
 ");
 $enrolments->execute([':pid'=>$parentId]);
