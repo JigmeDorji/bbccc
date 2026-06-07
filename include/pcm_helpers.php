@@ -95,11 +95,11 @@ function pcm_send_notification_mail(string $toEmail, string $toName, string $sub
         return @send_mail($toEmail, $toName, $subject, $html, $timeoutSeconds);
     }
 
-    // Hosted/prod: queue-first for faster user-facing actions.
+    // Hosted/prod: queue only. Direct SMTP fallback can make form submissions hang on cPanel.
     $queued = bbcc_queue_mail($toEmail, $toName, $subject, $html);
     if ($queued) return true;
-    // Fallback to direct send if queue insert fails.
-    return @send_mail($toEmail, $toName, $subject, $html, $timeoutSeconds);
+    bbcc_mail_log('MAIL QUEUE SKIP DIRECT SEND: queue unavailable for "' . $subject . '" to ' . $toEmail);
+    return false;
 }
 
 function pcm_ensure_fees_campus_columns(PDO $pdo): void {

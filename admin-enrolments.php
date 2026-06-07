@@ -459,6 +459,7 @@ $all = $pdo->query("
     JOIN parents  p ON p.id = COALESCE(NULLIF(e.parent_id,0), COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0)))
     LEFT JOIN class_assignments ca ON ca.student_id = e.student_id
     LEFT JOIN classes c ON c.id = ca.class_id
+    WHERE LOWER(COALESCE(s.status,'active')) <> 'past'
     ORDER BY FIELD(e.status,'Pending','Approved','Rejected'), e.submitted_at DESC
 ")->fetchAll();
 
@@ -510,6 +511,7 @@ $registeredChildren = $pdo->query("
     LEFT JOIN parents p ON p.id = COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0))
     LEFT JOIN pcm_enrolments e ON e.student_id = s.id
     WHERE e.id IS NULL
+      AND LOWER(COALESCE(s.status,'active')) <> 'past'
     ORDER BY s.id DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
 

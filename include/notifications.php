@@ -88,11 +88,10 @@ function bbcc_notify_admins(PDO $pdo, string $title, string $body = '', string $
                 " . ($safeBody !== '' ? "<p style='margin:0 0 10px;'>{$safeBody}</p>" : "") . "
                 " . ($safeLink !== '' ? "<p style='margin:0;'><strong>Link:</strong> {$safeLink}</p>" : "") . "
             ";
-            // Queue-first to keep user-facing requests fast.
-            // Fallback to short-timeout direct send only if queue insert fails.
+            // Queue only to keep user-facing requests fast on shared hosting.
             $queued = bbcc_queue_mail($to, 'Admin', $title, $html, 5);
             if (!$queued) {
-                @send_mail($to, 'Admin', $title, $html, 3);
+                bbcc_mail_log('NOTIFY ADMIN MAIL SKIP DIRECT SEND: queue unavailable for "' . $title . '" to ' . $to);
             }
         }
     } catch (Throwable $e) {

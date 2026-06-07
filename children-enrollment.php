@@ -154,13 +154,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                         pcm_log_enrolment_event($pdo, $childId, $eid, 'enrolment_submitted', $actor, 'Parent submitted enrollment.');
                     }
 
-                    pcm_notify_admin_enrolment($child['student_name'], $parent['full_name']);
-                    bbcc_notify_admins(
-                        $pdo,
-                        'Enrollment Submitted',
-                        (string)$child['student_name'] . ' enrollment was submitted by ' . (string)$parent['full_name'] . '.',
-                        'admin-enrolments'
-                    );
+                    try {
+                        pcm_notify_admin_enrolment($child['student_name'], $parent['full_name']);
+                    } catch (Throwable $e) {
+                        error_log('[BBCC] enrolment admin email skipped: ' . $e->getMessage());
+                    }
+                    try {
+                        bbcc_notify_admins(
+                            $pdo,
+                            'Enrollment Submitted',
+                            (string)$child['student_name'] . ' enrollment was submitted by ' . (string)$parent['full_name'] . '.',
+                            'admin-enrolments'
+                        );
+                    } catch (Throwable $e) {
+                        error_log('[BBCC] enrolment admin notification skipped: ' . $e->getMessage());
+                    }
                     $flash = "Enrollment submitted for <strong>{$child['student_name']}</strong>. You will be notified once reviewed.";
                     $ok = true;
                 }

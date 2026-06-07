@@ -329,10 +329,27 @@ try {
         $contactMessages = (int)$pdo->query("SELECT COUNT(*) FROM contact")->fetchColumn();
 
         if (!$isWebsiteAdminDashboard) {
-            // Students
-            $totalStudents   = (int)$pdo->query("SELECT COUNT(*) FROM students")->fetchColumn();
-            $pendingStudents = (int)$pdo->query("SELECT COUNT(*) FROM students WHERE approval_status='Pending'")->fetchColumn();
-            $approvedStudents= (int)$pdo->query("SELECT COUNT(*) FROM students WHERE approval_status='Approved'")->fetchColumn();
+            // Keep dashboard student totals aligned with the enrolment dashboard.
+            $totalStudents = (int)$pdo->query("
+                SELECT COUNT(*)
+                FROM pcm_enrolments e
+                INNER JOIN students s ON s.id = e.student_id
+                WHERE LOWER(COALESCE(s.status,'active')) <> 'past'
+            ")->fetchColumn();
+            $pendingStudents = (int)$pdo->query("
+                SELECT COUNT(*)
+                FROM pcm_enrolments e
+                INNER JOIN students s ON s.id = e.student_id
+                WHERE e.status='Pending'
+                  AND LOWER(COALESCE(s.status,'active')) <> 'past'
+            ")->fetchColumn();
+            $approvedStudents = (int)$pdo->query("
+                SELECT COUNT(*)
+                FROM pcm_enrolments e
+                INNER JOIN students s ON s.id = e.student_id
+                WHERE e.status='Approved'
+                  AND LOWER(COALESCE(s.status,'active')) <> 'past'
+            ")->fetchColumn();
 
             // Parents
             $totalParents = (int)$pdo->query("SELECT COUNT(*) FROM parents")->fetchColumn();
@@ -379,6 +396,7 @@ try {
                     INNER JOIN class_assignments ca ON ca.class_id = c.id
                     INNER JOIN students s ON s.id = ca.student_id
                     WHERE cta.teacher_id = :teacher_id
+                      AND LOWER(COALESCE(s.status,'active')) <> 'past'
                 ");
                 $stmtTeacherStudentStats->execute([':teacher_id' => $teacherId]);
                 $teacherStudentStats = $stmtTeacherStudentStats->fetch(PDO::FETCH_ASSOC) ?: [];
