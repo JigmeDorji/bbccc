@@ -36,7 +36,9 @@ $stmtSet = $pdo->query("SELECT * FROM fees_settings WHERE id = 1 LIMIT 1");
 $feesSettings = $stmtSet->fetch() ?: [];
 
 // ---------------- HELPERS ----------------
-function h($v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+if (!function_exists('h')) {
+    function h($v): string { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); }
+}
 
 function fm_ensure_class_charge_schema(PDO $pdo): void {
     static $done = false;
