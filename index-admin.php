@@ -988,13 +988,17 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                     $totalKids = count($myChildren);
                     $approvedKids = count(array_filter($myChildren, fn($c) => strtolower($c['approval_status'] ?? '') === 'approved'));
                     $pendingKids  = count(array_filter($myChildren, fn($c) => strtolower($c['approval_status'] ?? '') === 'pending'));
+                    $needsEnrolmentKids = count(array_filter($myChildren, fn($c) =>
+                        strtolower($c['approval_status'] ?? '') === 'approved'
+                        && trim((string)($c['enrolment_status'] ?? '')) === ''
+                    ));
                 ?>
                 <div class="row mb-4">
                     <div class="col-md-3 col-6 mb-3">
                         <div class="parent-stat-card">
                             <div class="icon" style="background: linear-gradient(135deg, #4e73df, #224abe);"><i class="fas fa-user-graduate"></i></div>
                             <div class="number"><?php echo $totalKids; ?></div>
-                            <div class="label">Total Enrolled</div>
+                            <div class="label">Registered Children</div>
                         </div>
                     </div>
                     <div class="col-md-3 col-6 mb-3">
@@ -1007,8 +1011,8 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                     <div class="col-md-3 col-6 mb-3">
                         <div class="parent-stat-card">
                             <div class="icon" style="background: linear-gradient(135deg, #f6c23e, #dda20a);"><i class="fas fa-clock"></i></div>
-                            <div class="number"><?php echo $pendingKids; ?></div>
-                            <div class="label">Pending</div>
+                            <div class="number"><?php echo $needsEnrolmentKids; ?></div>
+                            <div class="label">Please Enroll</div>
                         </div>
                     </div>
                     <div class="col-md-3 col-6 mb-3">
@@ -1147,7 +1151,7 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                         <?php elseif (empty($myChildren)): ?>
                             <div class="p-4 text-center" style="color:#999;">
                                 <i class="fas fa-inbox fa-3x mb-3" style="opacity:0.3;"></i>
-                                <p>No enrollments yet. Click <strong>Add New Student</strong> to get started.</p>
+                                <p>No registered children yet. Click <strong>Add New Student</strong> to get started.</p>
                             </div>
                         <?php else: ?>
                             <div class="table-responsive">
@@ -1163,6 +1167,7 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                                         <th>Proof</th>
                                         <th>Reg Date</th>
                                         <th>Status</th>
+                                        <th>Action</th>
                                     </tr>
                                     </thead>
                                     <tbody>
@@ -1174,7 +1179,7 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                                                 $statusLabel = $enrolStatusRaw;
                                                 $statusClass = badge_class($enrolStatusRaw);
                                             } elseif ($regStatus === 'approved') {
-                                                $statusLabel = 'Enrollment Not Submitted';
+                                                $statusLabel = 'Please enroll';
                                                 $statusClass = 'warning';
                                             } elseif ($regStatus === 'rejected') {
                                                 $statusLabel = 'Child Registration Rejected';
@@ -1198,6 +1203,15 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                                             </td>
                                             <td><?php echo htmlspecialchars($c['registration_date'] ?? ''); ?></td>
                                             <td><span class="badge badge-<?php echo $statusClass; ?>"><?php echo htmlspecialchars($statusLabel); ?></span></td>
+                                            <td>
+                                                <?php if ($enrolStatusRaw === '' && $regStatus === 'approved'): ?>
+                                                    <a href="children-enrollment" class="btn btn-sm btn-primary" style="border-radius:8px;">
+                                                        Enroll now
+                                                    </a>
+                                                <?php else: ?>
+                                                    <span class="text-muted">-</span>
+                                                <?php endif; ?>
+                                            </td>
                                         </tr>
                                     <?php endforeach; ?>
                                     </tbody>

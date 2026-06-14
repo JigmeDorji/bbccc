@@ -276,9 +276,14 @@ function pcm_ensure_enrolment_start_term(PDO $pdo): void {
     static $done = false;
     if ($done) return;
 
+    pcm_ensure_enrolment_campus_preference($pdo);
     $stmt = $pdo->query("SHOW COLUMNS FROM pcm_enrolments LIKE 'start_term'");
     if (!$stmt || !$stmt->fetch(PDO::FETCH_ASSOC)) {
-        $pdo->exec("ALTER TABLE pcm_enrolments ADD COLUMN start_term TINYINT NOT NULL DEFAULT 1 AFTER campus_preference");
+        try {
+            $pdo->exec("ALTER TABLE pcm_enrolments ADD COLUMN start_term TINYINT NOT NULL DEFAULT 1 AFTER campus_preference");
+        } catch (Throwable $e) {
+            $pdo->exec("ALTER TABLE pcm_enrolments ADD COLUMN start_term TINYINT NOT NULL DEFAULT 1");
+        }
     }
     $done = true;
 }

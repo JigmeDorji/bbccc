@@ -45,6 +45,15 @@ $classCampusValueExpr = $hasClassCampusColumn ? 'campus_key' : "'c1'";
 $campusChoices = pcm_campus_choice_labels();
 $validCampusKeys = array_keys($campusChoices);
 
+function bbcc_assignment_campus_keys(?string $stored, array $validCampusKeys): array {
+    $raw = strtolower(trim((string)$stored));
+    if ($raw === '' || $raw === 'any') {
+        return $validCampusKeys;
+    }
+    $keys = pcm_normalize_campus_selection($raw);
+    return array_values(array_intersect($keys, $validCampusKeys));
+}
+
 // ─── POST handler with PRG pattern ───────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -72,7 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 SELECT s.id, e.campus_preference, ca.id AS assignment_id
                 FROM students s
                 LEFT JOIN class_assignments ca ON ca.student_id = s.id
-                LEFT JOIN pcm_enrolments e ON e.student_id = s.id AND e.status = 'Approved'
+                LEFT JOIN pcm_enrolments e ON e.student_id = s.id
                 WHERE s.id = :sid AND s.approval_status = 'Approved'
                 LIMIT 1
             ");
@@ -81,7 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$stuRow) throw new Exception("Selected student is not eligible.");
             if (!empty($stuRow['assignment_id'])) throw new Exception("Selected student is already assigned.");
 
-            $studentCampus = pcm_normalize_campus_selection((string)($stuRow['campus_preference'] ?? ''));
+            $studentCampus = bbcc_assignment_campus_keys((string)($stuRow['campus_preference'] ?? ''), $validCampusKeys);
             if (!in_array($campusKey, $studentCampus, true)) {
                 throw new Exception("Selected student is not eligible for selected campus.");
             }
@@ -136,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     SELECT s.id, e.campus_preference, ca.id AS assignment_id
                     FROM students s
                     LEFT JOIN class_assignments ca ON ca.student_id = s.id
-                    LEFT JOIN pcm_enrolments e ON e.student_id = s.id AND e.status = 'Approved'
+                    LEFT JOIN pcm_enrolments e ON e.student_id = s.id
                     WHERE s.id = :sid AND s.approval_status = 'Approved'
                     LIMIT 1
                 ");
@@ -145,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$stuRow) throw new Exception("One selected student is not eligible.");
                 if (!empty($stuRow['assignment_id'])) throw new Exception("One selected student is already assigned. Refresh and try again.");
 
-                $studentCampus = pcm_normalize_campus_selection((string)($stuRow['campus_preference'] ?? ''));
+                $studentCampus = bbcc_assignment_campus_keys((string)($stuRow['campus_preference'] ?? ''), $validCampusKeys);
                 if (!in_array($campusKey, $studentCampus, true)) {
                     throw new Exception("One selected student is not eligible for selected campus.");
                 }
@@ -211,7 +220,7 @@ $unassignedStudents = $pdo->query(
     "SELECT s.id, s.student_name, s.student_id, e.campus_preference
      FROM students s
      LEFT JOIN class_assignments ca ON ca.student_id = s.id
-     LEFT JOIN pcm_enrolments e ON e.student_id = s.id AND e.status = 'Approved'
+     LEFT JOIN pcm_enrolments e ON e.student_id = s.id
      WHERE s.approval_status='Approved'
        AND LOWER(COALESCE(s.status,'active')) <> 'past'
        AND ca.id IS NULL
@@ -236,7 +245,7 @@ foreach ($validCampusKeys as $ck) {
     $studentsByCampus[$ck] = [];
 }
 foreach ($unassignedStudents as $s) {
-    $campusKeys = pcm_normalize_campus_selection((string)($s['campus_preference'] ?? ''));
+    $campusKeys = bbcc_assignment_campus_keys((string)($s['campus_preference'] ?? ''), $validCampusKeys);
     foreach ($campusKeys as $ck) {
         if (!isset($studentsByCampus[$ck])) $studentsByCampus[$ck] = [];
         $studentsByCampus[$ck][] = [

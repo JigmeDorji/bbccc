@@ -223,11 +223,26 @@ function first_installment_code(string $planType): string {
     };
 }
 
+function installment_applies_to_start_term(string $planType, string $code, int $startTerm): bool {
+    $startTerm = max(1, min(4, $startTerm));
+    $allowed = match ($planType) {
+        'Term-wise' => array_slice(['TERM1','TERM2','TERM3','TERM4'], $startTerm - 1),
+        'Half-yearly' => $startTerm <= 2 ? ['HALF1','HALF2'] : ['HALF2'],
+        'Yearly' => ['YEARLY'],
+        default => [],
+    };
+    return in_array($code, $allowed, true);
+}
+
 function normalize_status($v): string {
     return strtolower(trim((string)$v));
 }
 
 fm_ensure_class_charge_schema($pdo);
+$hasStartTerm = $pdo->query("SHOW COLUMNS FROM pcm_enrolments LIKE 'start_term'")->fetch(PDO::FETCH_ASSOC);
+if (!$hasStartTerm) {
+    $pdo->exec("ALTER TABLE pcm_enrolments ADD COLUMN start_term TINYINT NOT NULL DEFAULT 1");
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['class_charge_action'])) {
     try {
@@ -518,6 +533,7 @@ $stmtEnroll = $pdo->prepare("
         e.id AS enrolment_id,
         e.student_id,
         e.fee_plan AS plan_type,
+        e.start_term,
         e.status AS enrolment_status,
         e.fee_amount AS enrollment_amount,
         e.payment_ref AS enrollment_reference,
@@ -605,6 +621,7 @@ foreach ($enrollmentRows as $r) {
             'public_student_id' => $r['public_student_id'] ?? '',
             'student_name' => $r['student_name'] ?? '',
             'payment_plan' => $r['plan_type'] ?? $plan,
+            'start_term' => (int)($r['start_term'] ?? 1),
             'enrollment_status' => $r['enrolment_status'] ?? 'Pending',
             'enrollment_amount' => (float)($r['enrollment_amount'] ?? 0),
             'enrollment_reference' => $r['enrollment_reference'] ?? '',
@@ -1159,37 +1176,37 @@ if ($updateOnlyMode) {
                 <div class="row mb-3">
                     <div class="col-xl-3 col-md-6 mb-3">
                         <div class="stat-card shadow-sm">
-                            <div class="stat-label text-success">Total Fees Collected</div>
+                            <div class="stat-label text-success">Total Expected Fees</div>
                             <div class="stat-value">$<?php echo number_format($totalFeesCollected, 2); ?></div>
-                            <div class="stat-sub">Based on confirmed enrollments</div>
+                            <div class="stat-sub">Based on active fee rows</div>
                         </div>
                     </div>
                     <div class="col-xl-3 col-md-6 mb-3">
                         <div class="stat-card shadow-sm">
-                            <div class="stat-label text-primary">Students Paid</div>
+                            <div class="stat-label text-primary">Approved Enrollments</div>
                             <div class="stat-value"><?php echo (int)$totalStudentsPaid; ?></div>
-                            <div class="stat-sub">Unique confirmed enrollments</div>
+                            <div class="stat-sub">Unique approved enrolments</div>
                         </div>
                     </div>
                     <div class="col-xl-2 col-md-4 mb-3">
                         <div class="stat-card shadow-sm">
                             <div class="stat-label text-info">Term-wise</div>
                             <div class="stat-value"><?php echo (int)$paidTermWise; ?></div>
-                            <div class="stat-sub">Students paid</div>
+                            <div class="stat-sub">Students enrolled</div>
                         </div>
                     </div>
                     <div class="col-xl-2 col-md-4 mb-3">
                         <div class="stat-card shadow-sm">
                             <div class="stat-label text-info">Half-yearly</div>
                             <div class="stat-value"><?php echo (int)$paidHalfYearly; ?></div>
-                            <div class="stat-sub">Students paid</div>
+                            <div class="stat-sub">Students enrolled</div>
                         </div>
                     </div>
                     <div class="col-xl-2 col-md-4 mb-3">
                         <div class="stat-card shadow-sm">
                             <div class="stat-label text-info">Yearly</div>
                             <div class="stat-value"><?php echo (int)$paidYearly; ?></div>
-                            <div class="stat-sub">Students paid</div>
+                            <div class="stat-sub">Students enrolled</div>
                         </div>
                     </div>
                 </div>
@@ -1403,9 +1420,12 @@ if ($updateOnlyMode) {
                                                                     $feeId = (int)($r['id'] ?? 0);
                                                                     $rowStatus = strtolower($status);
                                                                     $rowFormId = 'rowPaymentForm' . $feeId;
+                                                                    $isApplicable = installment_applies_to_start_term($planName, $code, (int)($info['start_term'] ?? 1));
                                                                 ?>
                                                                 <td class="update-payment-cell status-<?php echo h($rowStatus); ?>">
-                                                                    <?php if ($hasRow && $feeId > 0): ?>
+                                                                    <?php if (!$hasRow && !$isApplicable): ?>
+                                                                        <div class="mini text-muted">Not applicable</div>
+                                                                    <?php elseif ($hasRow && $feeId > 0): ?>
                                                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                                                             <label class="mb-0 mini">
                                                                                 <input type="checkbox" class="payment-row-check mr-1" name="payment_ids[]" value="<?php echo (int)$feeId; ?>" form="bulkPaymentForm">

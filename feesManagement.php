@@ -227,6 +227,11 @@ function first_installment_code(string $planType): string {
     };
 }
 
+function installment_applies_to_start_term(string $planType, string $code, int $startTerm): bool {
+    $labels = pcm_plan_instalments_for_start_term($planType, $startTerm);
+    return in_array(installment_label($code), $labels, true);
+}
+
 function normalize_status($v): string {
     return strtolower(trim((string)$v));
 }
@@ -340,6 +345,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'adjus
             ':id' => $enrolmentId,
         ]);
 
+        pcm_create_fee_rows(
+            $pdo,
+            $enrolmentId,
+            (int)$enrolment['student_id'],
+            (int)$enrolment['parent_id'],
+            $plan,
+            null,
+            $startTerm
+        );
+
         if ($plan === 'Yearly') {
             $pdo->prepare("
                 UPDATE pcm_fee_payments
@@ -353,7 +368,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'adjus
 
         $pdo->commit();
 
-        $message = "Fee start term adjusted for " . (string)$enrolment['student_name'] . ". Removed {$removed} earlier fee row(s).";
+        $message = "Fee start term adjusted for " . (string)$enrolment['student_name'] . ". Removed {$removed} earlier fee row(s) and reconciled remaining rows.";
         $success = true;
         $reload = true;
     } catch (Throwable $e) {
@@ -726,6 +741,7 @@ $stmtEnroll = $pdo->prepare("
         e.id AS enrolment_id,
         e.student_id,
         e.fee_plan AS plan_type,
+        e.start_term,
         e.status AS enrolment_status,
         e.fee_amount AS enrollment_amount,
         e.payment_ref AS enrollment_reference,
@@ -813,6 +829,7 @@ foreach ($enrollmentRows as $r) {
             'public_student_id' => $r['public_student_id'] ?? '',
             'student_name' => $r['student_name'] ?? '',
             'payment_plan' => $r['plan_type'] ?? $plan,
+            'start_term' => (int)($r['start_term'] ?? 1),
             'enrollment_status' => $r['enrolment_status'] ?? 'Pending',
             'enrollment_amount' => (float)($r['enrollment_amount'] ?? 0),
             'enrollment_reference' => $r['enrollment_reference'] ?? '',
@@ -1180,37 +1197,37 @@ if ($updateOnlyMode) {
                 <div class="row mb-3">
                     <div class="col-xl-3 col-md-6 mb-3">
                         <div class="stat-card shadow-sm">
-                            <div class="stat-label text-success">Total Fees Collected</div>
+                            <div class="stat-label text-success">Total Expected Fees</div>
                             <div class="stat-value">$<?php echo number_format($totalFeesCollected, 2); ?></div>
-                            <div class="stat-sub">Based on confirmed enrollments</div>
+                            <div class="stat-sub">Based on active fee rows</div>
                         </div>
                     </div>
                     <div class="col-xl-3 col-md-6 mb-3">
                         <div class="stat-card shadow-sm">
-                            <div class="stat-label text-primary">Students Paid</div>
+                            <div class="stat-label text-primary">Approved Enrollments</div>
                             <div class="stat-value"><?php echo (int)$totalStudentsPaid; ?></div>
-                            <div class="stat-sub">Unique confirmed enrollments</div>
+                            <div class="stat-sub">Unique approved enrolments</div>
                         </div>
                     </div>
                     <div class="col-xl-2 col-md-4 mb-3">
                         <div class="stat-card shadow-sm">
                             <div class="stat-label text-info">Term-wise</div>
                             <div class="stat-value"><?php echo (int)$paidTermWise; ?></div>
-                            <div class="stat-sub">Students paid</div>
+                            <div class="stat-sub">Students enrolled</div>
                         </div>
                     </div>
                     <div class="col-xl-2 col-md-4 mb-3">
                         <div class="stat-card shadow-sm">
                             <div class="stat-label text-info">Half-yearly</div>
                             <div class="stat-value"><?php echo (int)$paidHalfYearly; ?></div>
-                            <div class="stat-sub">Students paid</div>
+                            <div class="stat-sub">Students enrolled</div>
                         </div>
                     </div>
                     <div class="col-xl-2 col-md-4 mb-3">
                         <div class="stat-card shadow-sm">
                             <div class="stat-label text-info">Yearly</div>
                             <div class="stat-value"><?php echo (int)$paidYearly; ?></div>
-                            <div class="stat-sub">Students paid</div>
+                            <div class="stat-sub">Students enrolled</div>
                         </div>
                     </div>
                 </div>
@@ -1580,42 +1597,47 @@ Thank you.</textarea>
                                                         $proof = trim((string)($r['proof_path'] ?? ''));
                                                         $feeId = (int)($r['id'] ?? 0);
                                                         $amount = $hasRow ? (float)($r['due_amount'] ?? 0) : null;
+                                                        $isApplicable = installment_applies_to_start_term($planName, $code, (int)($info['start_term'] ?? 1));
 
                                                         $isVerified = in_array(normalize_status($status), ['approved','verified'], true);
                                                     ?>
                                                     <td>
-                                                        <div class="mini mb-1">
-                                                            <strong>Amount:</strong>
-                                                            <?php echo $amount === null ? '-' : ('$' . number_format($amount, 2)); ?>
-                                                        </div>
-                                                        <div class="mb-1">
-                                                            <span class="badge badge-<?php echo badge_class($status); ?>">
-                                                                <?php echo htmlspecialchars($status); ?>
-                                                            </span>
-                                                        </div>
-
-                                                        <?php if ($proof !== ''): ?>
-                                                            <?php $type = proof_type($proof); ?>
-                                                            <div class="mb-2">
-                                                                <a href="javascript:void(0)"
-                                                                   class="proof-thumb"
-                                                                   data-proof="<?php echo htmlspecialchars($proof); ?>"
-                                                                   data-type="<?php echo htmlspecialchars($type); ?>"
-                                                                   data-name="<?php echo htmlspecialchars(basename($proof)); ?>">
-                                                                    <?php if ($type === 'img'): ?>
-                                                                        <img class="thumb-img" src="<?php echo htmlspecialchars($proof); ?>" alt="proof">
-                                                                    <?php else: ?>
-                                                                        <span class="thumb-icon"><i class="fas fa-file-pdf"></i></span>
-                                                                    <?php endif; ?>
-                                                                    <span class="mini"><i class="fas fa-eye"></i> View</span>
-                                                                </a>
-                                                            </div>
+                                                        <?php if (!$hasRow && !$isApplicable): ?>
+                                                            <div class="mini text-muted">Not applicable</div>
                                                         <?php else: ?>
-                                                            <div class="mini text-muted mb-2">No proof</div>
-                                                        <?php endif; ?>
+                                                            <div class="mini mb-1">
+                                                                <strong>Amount:</strong>
+                                                                <?php echo $amount === null ? '-' : ('$' . number_format($amount, 2)); ?>
+                                                            </div>
+                                                            <div class="mb-1">
+                                                                <span class="badge badge-<?php echo badge_class($status); ?>">
+                                                                    <?php echo htmlspecialchars($status); ?>
+                                                                </span>
+                                                            </div>
 
-                                                        <?php if ($feeId <= 0): ?>
-                                                            <div class="mini text-muted">Missing fee row</div>
+                                                            <?php if ($proof !== ''): ?>
+                                                                <?php $type = proof_type($proof); ?>
+                                                                <div class="mb-2">
+                                                                    <a href="javascript:void(0)"
+                                                                       class="proof-thumb"
+                                                                       data-proof="<?php echo htmlspecialchars($proof); ?>"
+                                                                       data-type="<?php echo htmlspecialchars($type); ?>"
+                                                                       data-name="<?php echo htmlspecialchars(basename($proof)); ?>">
+                                                                        <?php if ($type === 'img'): ?>
+                                                                            <img class="thumb-img" src="<?php echo htmlspecialchars($proof); ?>" alt="proof">
+                                                                        <?php else: ?>
+                                                                            <span class="thumb-icon"><i class="fas fa-file-pdf"></i></span>
+                                                                        <?php endif; ?>
+                                                                        <span class="mini"><i class="fas fa-eye"></i> View</span>
+                                                                    </a>
+                                                                </div>
+                                                            <?php else: ?>
+                                                                <div class="mini text-muted mb-2">No proof</div>
+                                                            <?php endif; ?>
+
+                                                            <?php if ($feeId <= 0): ?>
+                                                                <div class="mini text-muted">Missing fee row</div>
+                                                            <?php endif; ?>
                                                         <?php endif; ?>
                                                     </td>
                                                 <?php endforeach; ?>

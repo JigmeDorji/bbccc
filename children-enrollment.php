@@ -11,6 +11,31 @@ require_login();
 
 if (!is_parent_role()) { header("Location: unauthorized"); exit; }
 
+function bbcc_enrol_ini_bytes(string $value): int {
+    $value = trim($value);
+    if ($value === '') return 0;
+    $unit = strtolower(substr($value, -1));
+    $num = (float)$value;
+    switch ($unit) {
+        case 'g': return (int)($num * 1024 * 1024 * 1024);
+        case 'm': return (int)($num * 1024 * 1024);
+        case 'k': return (int)($num * 1024);
+        default: return (int)$num;
+    }
+}
+
+function bbcc_enrol_bytes_label(int $bytes): string {
+    if ($bytes >= 1024 * 1024) {
+        $mb = $bytes / (1024 * 1024);
+        return rtrim(rtrim(number_format($mb, 1), '0'), '.') . ' MB';
+    }
+    if ($bytes >= 1024) {
+        $kb = $bytes / 1024;
+        return rtrim(rtrim(number_format($kb, 1), '0'), '.') . ' KB';
+    }
+    return $bytes . ' bytes';
+}
+
 $pdo      = pcm_pdo();
 $campusChoices = pcm_campus_choice_labels();
 [$campusOneName, $campusTwoName] = pcm_campus_names();
@@ -21,6 +46,17 @@ if (!$parent) die("Parent account not found.");
 $parentId = (int)$parent['id'];
 $flash    = '';
 $ok       = false;
+$appMaxProofBytes = 5 * 1024 * 1024;
+$uploadMaxBytes = bbcc_enrol_ini_bytes((string)ini_get('upload_max_filesize'));
+$postMaxBytes = bbcc_enrol_ini_bytes((string)ini_get('post_max_size'));
+$serverMaxCandidates = [];
+foreach ([$appMaxProofBytes, $uploadMaxBytes, $postMaxBytes] as $candidateMaxBytes) {
+    if ($candidateMaxBytes > 0) {
+        $serverMaxCandidates[] = $candidateMaxBytes;
+    }
+}
+$maxProofBytes = min($serverMaxCandidates ?: [$appMaxProofBytes]);
+$maxProofLabel = bbcc_enrol_bytes_label($maxProofBytes);
 $studentParentExpr = pcm_students_parent_expr($pdo);
 $studentParentExprWithAlias = pcm_students_parent_expr($pdo, 's');
 
@@ -45,7 +81,7 @@ $banks = $hasBankCore ? [[
 
 // ── POST ACTIONS ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
-    $flash = 'The enrollment form was not received properly. Please upload a smaller proof file and try again.';
+    $flash = 'The enrollment form was not received properly. Please upload a JPG, PNG, or PDF under ' . h($maxProofLabel) . ' and try again.';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
@@ -117,7 +153,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 if (empty($_FILES['proof']['name']) || $proofError === UPLOAD_ERR_NO_FILE) {
                     $flash = 'Payment proof is required.';
                 } elseif (in_array($proofError, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
-                    $flash = 'Payment proof is too large. Please upload a JPG, PNG, or PDF under 5 MB.';
+                    $flash = 'Payment proof is too large. Please upload a JPG, PNG, or PDF under ' . h($maxProofLabel) . '.';
+                } elseif ($proofError === UPLOAD_ERR_PARTIAL) {
+                    $flash = 'Payment proof upload was interrupted. Please try again with a smaller file or stronger connection.';
                 } elseif ($proofError !== UPLOAD_ERR_OK) {
                     $flash = 'Payment proof upload failed. Please try again with a smaller JPG, PNG, or PDF.';
                 } else {
@@ -125,13 +163,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $ext = strtolower(pathinfo($_FILES['proof']['name'], PATHINFO_EXTENSION));
                     if (!in_array($ext, $allowed)) {
                         $flash = 'Proof must be JPG, PNG, or PDF.';
-                    } elseif ($_FILES['proof']['size'] > 5 * 1024 * 1024) {
-                        $flash = 'File must be under 5 MB.';
+                    } elseif ($_FILES['proof']['size'] > $maxProofBytes) {
+                        $flash = 'File must be under ' . h($maxProofLabel) . '.';
                     } else {
                         $dir = 'uploads/enrolments';
                         $dirAbs = __DIR__ . '/' . $dir;
                         try {
                             pcm_ensure_dir($dirAbs);
+                            if (!is_writable($dirAbs)) {
+                                throw new RuntimeException('Upload directory is not writable: ' . $dirAbs);
+                            }
                         } catch (Throwable $e) {
                             $flash = 'Upload folder is not writable. Please contact admin.';
                             error_log('[BBCC] enrolment upload directory error: ' . $e->getMessage());
@@ -183,7 +224,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                     if ($flash === '') {
                         error_log('[BBCC] parent enrollment saved: student_id=' . $childId . ', enrolment_id=' . (int)$eid);
-                        $flash = "Enrollment submitted for <strong>{$child['student_name']}</strong>. You will be notified once reviewed.";
+                        $flash = 'Enrollment submitted for <strong>' . h($child['student_name']) . '</strong>. You will be notified once reviewed.';
                         $ok = true;
                     }
                 }
@@ -460,6 +501,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                 <input type="hidden" name="action" value="enrol">
                 <input type="hidden" name="submit_nonce" value="<?= h($enrolSubmitNonce) ?>">
                 <input type="hidden" name="fee_plan" id="selectedPlan" value="">
+                <input type="hidden" name="MAX_FILE_SIZE" value="<?= (int)$maxProofBytes ?>">
 
                 <!-- Step 1: Select Child -->
                 <div class="mb-4">
@@ -583,7 +625,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                             <div class="form-group">
                                 <label><i class="fas fa-file-upload mr-1" style="color:var(--brand);font-size:0.7rem;"></i> Payment Proof <span class="text-danger">*</span></label>
                                 <input type="file" name="proof" id="proofInput" class="form-control-file" accept=".jpg,.jpeg,.png,.pdf" required>
-                                <small class="text-muted">JPG / PNG / PDF — max 5 MB</small>
+                                <small class="text-muted">JPG / PNG / PDF — max <?= h($maxProofLabel) ?></small>
                             </div>
                         </div>
                     </div>
@@ -743,6 +785,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const paymentRefLabel = document.getElementById('paymentRefLabel');
     const proofInput = document.getElementById('proofInput');
     const startTermSelect = document.getElementById('startTermSelect');
+    const maxProofBytes = <?= (int)$maxProofBytes ?>;
+    const maxProofLabel = <?= json_encode($maxProofLabel) ?>;
+    const allowedProofExtensions = ['jpg', 'jpeg', 'png', 'pdf'];
 
     // Step 1 → Step 2: Show campus section when child is selected
     if (childSelect) {
@@ -849,10 +894,74 @@ document.addEventListener('DOMContentLoaded', function() {
         if (paymentRefLabel) paymentRefLabel.textContent = ref;
     }
 
+    function setProofFile(file) {
+        if (!proofInput || typeof DataTransfer === 'undefined' || typeof File === 'undefined') {
+            return false;
+        }
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        proofInput.files = dt.files;
+        return true;
+    }
+
+    function loadImageFromFile(file) {
+        return new Promise(function(resolve, reject) {
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+            img.onload = function() {
+                URL.revokeObjectURL(url);
+                resolve(img);
+            };
+            img.onerror = function() {
+                URL.revokeObjectURL(url);
+                reject(new Error('Image could not be loaded'));
+            };
+            img.src = url;
+        });
+    }
+
+    async function compressProofImage(file) {
+        const img = await loadImageFromFile(file);
+        const maxSide = 1600;
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        async function canvasToFile(quality) {
+            const blob = await new Promise(function(resolve) {
+                canvas.toBlob(resolve, 'image/jpeg', quality);
+            });
+            if (!blob) {
+                throw new Error('Image could not be compressed');
+            }
+            const baseName = (file.name || 'payment-proof').replace(/\.[^.]+$/, '');
+            return new File([blob], baseName + '.jpg', {type: 'image/jpeg'});
+        }
+
+        for (const quality of [0.82, 0.74, 0.66, 0.58, 0.5]) {
+            const compressed = await canvasToFile(quality);
+            if (compressed.size <= maxProofBytes || quality === 0.5) {
+                return compressed;
+            }
+        }
+        return file;
+    }
+
+    function resetSubmitButton() {
+        if (!enrolBtn) return;
+        enrolBtn.disabled = false;
+        enrolBtn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i>Submit Enrolment';
+    }
+
     // Form validation before submit
     const enrolForm = document.getElementById('enrolForm');
     if (enrolForm) {
-        enrolForm.addEventListener('submit', function(e) {
+        enrolForm.addEventListener('submit', async function(e) {
             if (enrolForm.dataset.submitting === '1') {
                 e.preventDefault();
                 return;
@@ -880,6 +989,35 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!proofInput || !proofInput.files || !proofInput.files.length) {
                 e.preventDefault();
                 Swal.fire({icon:'warning', title:'Please upload payment proof', confirmButtonColor:'#881b12'});
+                return;
+            }
+            const proofFile = proofInput.files[0];
+            const proofName = proofFile.name || '';
+            const proofExt = proofName.includes('.') ? proofName.split('.').pop().toLowerCase() : '';
+            if (!allowedProofExtensions.includes(proofExt)) {
+                e.preventDefault();
+                Swal.fire({icon:'warning', title:'Use JPG, PNG, or PDF proof only', confirmButtonColor:'#881b12'});
+                return;
+            }
+            if (proofFile.size > maxProofBytes) {
+                e.preventDefault();
+                if (['jpg', 'jpeg', 'png'].includes(proofExt)) {
+                    enrolBtn.disabled = true;
+                    enrolBtn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2"></span>Preparing screenshot...';
+                    try {
+                        const compressedProof = await compressProofImage(proofFile);
+                        if (compressedProof.size <= maxProofBytes && setProofFile(compressedProof)) {
+                            enrolForm.dataset.submitting = '1';
+                            enrolBtn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2"></span>Submitting...';
+                            enrolForm.submit();
+                            return;
+                        }
+                    } catch (err) {
+                        console.error(err);
+                    }
+                    resetSubmitButton();
+                }
+                Swal.fire({icon:'warning', title:'Payment proof is too large', text:'The screenshot could not be reduced below ' + maxProofLabel + '. Please crop it or send it as a smaller JPG.', confirmButtonColor:'#881b12'});
                 return;
             }
             enrolForm.dataset.submitting = '1';
