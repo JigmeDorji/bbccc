@@ -408,6 +408,14 @@ foreach ($rows as $r) {
                                 <?php endforeach; ?>
                             </select>
                         </div>
+                        <div class="col-md-2 d-flex align-items-end mt-2 mt-md-0">
+                            <button type="button" id="classStudentSearchBtn" class="btn btn-primary mr-2">
+                                <i class="fas fa-search mr-1"></i>Search
+                            </button>
+                            <button type="button" id="classStudentClearBtn" class="btn btn-outline-secondary">
+                                Clear
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -524,10 +532,12 @@ foreach ($rows as $r) {
 document.addEventListener('DOMContentLoaded', function () {
     const input = document.getElementById('classStudentSearch');
     const classFilter = document.getElementById('classFilterSelect');
+    const searchBtn = document.getElementById('classStudentSearchBtn');
+    const clearBtn = document.getElementById('classStudentClearBtn');
     const rows = document.querySelectorAll('#classStudentTable tbody tr');
     function applyFilters() {
-        const q = (input.value || '').trim().toLowerCase();
-        const cls = (classFilter.value || '').trim().toLowerCase();
+        const q = input ? (input.value || '').trim().toLowerCase() : '';
+        const cls = classFilter ? (classFilter.value || '').trim().toLowerCase() : '';
         rows.forEach((row) => {
             const hay = row.getAttribute('data-search') || '';
             const rowCls = row.getAttribute('data-class-name') || '';
@@ -537,7 +547,20 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
     if (input) input.addEventListener('input', applyFilters);
+    if (input) input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            applyFilters();
+        }
+    });
     if (classFilter) classFilter.addEventListener('change', applyFilters);
+    if (searchBtn) searchBtn.addEventListener('click', applyFilters);
+    if (clearBtn) clearBtn.addEventListener('click', function () {
+        if (input) input.value = '';
+        if (classFilter) classFilter.value = '';
+        applyFilters();
+        if (input) input.focus();
+    });
 });
 </script>
 </body>
