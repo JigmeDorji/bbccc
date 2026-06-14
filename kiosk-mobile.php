@@ -310,12 +310,13 @@ $csrfToken = csrf_token();
             if (r.ok) {
                 var c = (parentData.children || []).find(function(x){ return String(x.id) === key; });
                 if (c) {
+                    var signedTime = (r.data && r.data.raw_time) ? r.data.raw_time : '';
                     if (mode === 'in') {
                         c.status = 'signed_in';
-                        c.time_in = (new Date()).toTimeString().slice(0,8);
+                        c.time_in = signedTime;
                     } else {
                         c.status = 'done';
-                        c.time_out = (new Date()).toTimeString().slice(0,8);
+                        c.time_out = signedTime;
                     }
                 }
                 renderChildren();

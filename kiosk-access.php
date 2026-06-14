@@ -241,12 +241,19 @@ $mobileBaseUrl = $base . "/kiosk-mobile.php";
 
     function tickClock() {
         var d = new Date();
-        var h = d.getHours(), m = String(d.getMinutes()).padStart(2, '0');
-        var ap = h >= 12 ? 'PM' : 'AM';
-        $('#clockTime').textContent = (h % 12 || 12) + ':' + m + ' ' + ap;
-        var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-        var mos = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        $('#clockDate').textContent = days[d.getDay()] + ', ' + d.getDate() + ' ' + mos[d.getMonth()] + ' ' + d.getFullYear();
+        $('#clockTime').textContent = new Intl.DateTimeFormat('en-AU', {
+            timeZone: 'Australia/Sydney',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        }).format(d);
+        $('#clockDate').textContent = new Intl.DateTimeFormat('en-AU', {
+            timeZone: 'Australia/Sydney',
+            weekday: 'long',
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+        }).format(d);
     }
 
     function renderQR(url) {

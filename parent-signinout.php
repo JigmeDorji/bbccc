@@ -28,6 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'sign'
         $studentId = (int)($_POST['student_id'] ?? 0);
         $note = trim($_POST['note'] ?? '');
         $mode = $_POST['mode'] ?? 'in';
+        $nowSql = bbcc_now_sql();
 
         $stmt = $pdo->prepare(
             "SELECT s.id, ca.class_id
@@ -50,12 +51,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'sign'
         if ($mode === 'in') {
             $stmt = $pdo->prepare(
                 "INSERT INTO sign_in_out (class_id, student_id, parent_id, signed_in_at, note)
-                 VALUES (:class_id, :student_id, :parent_id, NOW(), :note)"
+                 VALUES (:class_id, :student_id, :parent_id, :signed_in_at, :note)"
             );
             $stmt->execute([
                 ':class_id' => $classId,
                 ':student_id' => $studentId,
                 ':parent_id' => $parentId,
+                ':signed_in_at' => $nowSql,
                 ':note' => $note === '' ? null : $note
             ]);
             $message = "Signed in successfully.";
@@ -73,9 +75,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'sign'
             }
 
             $stmt = $pdo->prepare(
-                "UPDATE sign_in_out SET signed_out_at = NOW(), note = :note WHERE id = :id"
+                "UPDATE sign_in_out SET signed_out_at = :signed_out_at, note = :note WHERE id = :id"
             );
             $stmt->execute([
+                ':signed_out_at' => $nowSql,
                 ':note' => $note === '' ? null : $note,
                 ':id' => $openRow['id']
             ]);
@@ -195,8 +198,8 @@ $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
                                     <tr>
                                         <td><?php echo htmlspecialchars($log['student_name']); ?></td>
                                         <td><?php echo htmlspecialchars($log['class_name']); ?></td>
-                                        <td><?php echo htmlspecialchars($log['signed_in_at']); ?></td>
-                                        <td><?php echo htmlspecialchars($log['signed_out_at'] ?? ''); ?></td>
+                                        <td><?php echo htmlspecialchars(bbcc_format_au_datetime($log['signed_in_at'])); ?></td>
+                                        <td><?php echo htmlspecialchars(bbcc_format_au_datetime($log['signed_out_at'] ?? '')); ?></td>
                                         <td><?php echo htmlspecialchars($log['note'] ?? ''); ?></td>
                                     </tr>
                                 <?php endforeach; ?>

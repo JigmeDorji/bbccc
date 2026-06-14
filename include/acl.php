@@ -182,6 +182,7 @@ function bbcc_acl_page_rules(): array {
         'admin-class-setup' => ['admin'],
         'admin-assign-class' => ['admin'],
         'admin-enrolments' => ['admin'],
+        'admin-parents-children' => ['admin'],
         'dzoclassmanagement' => ['admin'],
         'feessetting' => ['admin'],
         'admin-fee-verification' => ['admin'],
@@ -270,6 +271,7 @@ function bbcc_acl_route_module_rules(): array {
         // Enrollment flows
         'dzoclassmanagement' => ['enrollment', 'approve'],
         'admin-enrolments' => ['enrollment', 'approve'],
+        'admin-parents-children' => ['enrollment', 'view'],
         'admin-student-approvals' => ['enrollment', 'approve'],
         'children-enrollment' => ['enrollment', 'submit'],
         'parent-children' => ['enrollment', 'view'],

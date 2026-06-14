@@ -64,17 +64,19 @@ if ($action === 'generate_token') {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 
-    // Clean up expired tokens (older than 10 min)
-    $pdo->exec("DELETE FROM pcm_kiosk_tokens WHERE expires_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)");
+    // Clean up expired tokens (older than 10 min) using app timezone, not server/database timezone.
+    $tokenCleanupBefore = (new DateTimeImmutable('now', bbcc_app_timezone()))
+        ->modify('-10 minutes')
+        ->format('Y-m-d H:i:s');
+    $cleanup = $pdo->prepare("DELETE FROM pcm_kiosk_tokens WHERE expires_at < :cutoff");
+    $cleanup->execute([':cutoff' => $tokenCleanupBefore]);
 
     // Generate a cryptographically secure token
     $token = bin2hex(random_bytes(32));
     // Valid until end of current day (server timezone)
-    $expiresAtTs = strtotime('today 23:59:59');
-    if ($expiresAtTs === false) {
-        $expiresAtTs = time() + 86400;
-    }
-    $expiresAt = date('Y-m-d H:i:s', $expiresAtTs);
+    $nowDt = new DateTimeImmutable('now', bbcc_app_timezone());
+    $expiresAtDt = $nowDt->setTime(23, 59, 59);
+    $expiresAt = $expiresAtDt->format('Y-m-d H:i:s');
 
     $stmt = $pdo->prepare("INSERT INTO pcm_kiosk_tokens (token, expires_at) VALUES (:t, :e)");
     $stmt->execute([':t' => $token, ':e' => $expiresAt]);
@@ -82,7 +84,7 @@ if ($action === 'generate_token') {
     echo json_encode([
         'ok'    => true,
         'token' => $token,
-        'expires_in' => max(1, $expiresAtTs - time()), // seconds to end-of-day
+        'expires_in' => max(1, $expiresAtDt->getTimestamp() - $nowDt->getTimestamp()), // seconds to end-of-day
     ]);
     exit;
 }
@@ -210,7 +212,7 @@ if ($action === 'auth') {
     $children = $kids->fetchAll();
 
     // Get today's sign status for each child
-    $today = date('Y-m-d');
+    $today = bbcc_today_date();
     $childData = [];
     foreach ($children as $c) {
         $chk = $pdo->prepare("SELECT time_in, time_out FROM pcm_kiosk_log WHERE child_id = :cid AND log_date = :d LIMIT 1");
@@ -263,8 +265,8 @@ if ($action === 'sign_batch') {
         exit;
     }
 
-    $today = date('Y-m-d');
-    $now = date('H:i:s');
+    $today = bbcc_today_date();
+    $now = bbcc_now_time();
     $results = [];
     $successCount = 0;
     $failedCount = 0;
@@ -390,9 +392,9 @@ if ($action === 'sign') {
         exit;
     }
 
-    $today = date('Y-m-d');
-    $now   = date('H:i:s');
-    $nowDisplay = date('h:i A');
+    $today = bbcc_today_date();
+    $now   = bbcc_now_time();
+    $nowDisplay = bbcc_format_au_time($now);
 
     if ($signMode === 'in') {
         // Sign in: insert new row or skip if already signed in
@@ -421,6 +423,7 @@ if ($action === 'sign') {
             'data' => [
                 'action'       => 'in',
                 'child_name'   => $child['student_name'],
+                'raw_time'     => $now,
                 'time'         => $nowDisplay,
                 'message'      => $child['student_name'] . ' signed in at ' . $nowDisplay,
             ],
@@ -446,6 +449,7 @@ if ($action === 'sign') {
             'data' => [
                 'action'       => 'out',
                 'child_name'   => $child['student_name'],
+                'raw_time'     => $now,
                 'time'         => $nowDisplay,
                 'message'      => $child['student_name'] . ' signed out at ' . $nowDisplay,
             ],

@@ -53,12 +53,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $upd = $pdo->prepare("
                 UPDATE pcm_absence_requests
-                SET status = :st, decided_by = :db, decided_at = NOW()
+                SET status = :st, decided_by = :db, decided_at = :dt
                 WHERE id = :id
             ");
             $upd->execute([
                 ':st' => $newStatus,
                 ':db' => (string)($_SESSION['username'] ?? 'admin'),
+                ':dt' => bbcc_now_sql(),
                 ':id' => $absenceId
             ]);
             if ($upd->rowCount() > 0) {
@@ -88,7 +89,7 @@ $qrDisplayUrl = $origin . '/kiosk-qr';
 $mobileKioskUrl = $origin . '/kiosk-mobile';
 
 // ── Kiosk logs ──
-$filterDate = $_GET['date'] ?? date('Y-m-d');
+$filterDate = $_GET['date'] ?? bbcc_today_date();
 $kioskLogs = $pdo->prepare("
     SELECT k.*, s.student_name, s.student_id AS stu_code, p.full_name AS parent_name
     FROM pcm_kiosk_log k
@@ -221,8 +222,8 @@ document.addEventListener('DOMContentLoaded',()=>{
                     <td><?= h($k['student_name']) ?></td>
                     <td><code><?= h($k['stu_code']) ?></code></td>
                     <td><?= h($k['parent_name'] ?? '-') ?></td>
-                    <td><?= $k['time_in'] ? date('h:i A', strtotime($k['time_in'])) : '—' ?></td>
-                    <td><?= $k['time_out'] ? date('h:i A', strtotime($k['time_out'])) : '—' ?></td>
+                    <td><?= $k['time_in'] ? h(bbcc_format_au_time($k['time_in'])) : '—' ?></td>
+                    <td><?= $k['time_out'] ? h(bbcc_format_au_time($k['time_out'])) : '—' ?></td>
                     <td><span class="badge badge-<?= $k['method']==='KIOSK'?'info':'secondary' ?>"><?= h($k['method']) ?></span></td>
                 </tr>
                 <?php endforeach; ?>
@@ -252,7 +253,7 @@ document.addEventListener('DOMContentLoaded',()=>{
             </div>
             <div class="form-group">
                 <label class="font-weight-bold">Date <span class="text-danger">*</span></label>
-                <input type="date" name="log_date" class="form-control" required value="<?= date('Y-m-d') ?>">
+                <input type="date" name="log_date" class="form-control" required value="<?= h(bbcc_today_date()) ?>">
             </div>
             <div class="row">
                 <div class="col-md-6 form-group">

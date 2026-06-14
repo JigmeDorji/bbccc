@@ -351,7 +351,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
     <?php if (!isParent() && !isTeacher() && !isPatron()) { ?>
         <?php
             $websiteActive = in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','schoolContentSetup.php','taraContentSetup.php','sponsorSetup.php','ProgramDetailsSetup.php','sponsorProgramDetailEdit.php','downloadFileSetup.php','serviceSetup.php','ourTeamSetup.php','viewFeedback.php'], true);
-            $dzoActive = in_array($currentPage, ['dzo-dashboard.php','dzoClassManagement.php','admin-enrolments.php','feesManagement.php','update-payments.php','manual-payments.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php','admin-class-students.php'], true);
+            $dzoActive = in_array($currentPage, ['dzo-dashboard.php','dzoClassManagement.php','admin-enrolments.php','admin-parents-children.php','feesManagement.php','update-payments.php','manual-payments.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php','admin-class-students.php'], true);
             $eventsActive = in_array($currentPage, ['eventManagement.php','bookingManagement.php'], true);
             $adminSettingsActive = in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php','audit-logs.php','run-migration.php','module-access.php'], true);
             $canWebsiteManage = function_exists('bbcc_can') ? bbcc_can('website', 'manage') : false;
@@ -399,7 +399,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                 <div class="bg-white py-2 collapse-inner rounded">
                     <?php
                         $dzoDashboardActive = ($currentPage === 'dzo-dashboard.php');
-                        $dzoEnrollActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','admin-assign-class.php','admin-class-students.php'], true);
+                        $dzoEnrollActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','admin-parents-children.php','admin-assign-class.php','admin-class-students.php'], true);
                         $dzoFeesActive = in_array($currentPage, ['feesManagement.php','update-payments.php','manual-payments.php','admin-fee-verification.php','feesSetting.php'], true);
                         $dzoOpsActive = in_array($currentPage, ['dzongkha-classroom.php','parent-email.php','admin-attendance.php'], true);
                         $dzoAttendanceActive = in_array($currentPage, ['attendanceManagement.php','attendance-records.php'], true);
@@ -413,6 +413,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                     <div id="collapseDzoEnroll" class="collapse dzo-subgroup-links <?= $dzoEnrollActive ? 'show' : '' ?>" data-parent="#collapseOrders">
                         <a class="collapse-item <?= ($currentPage === 'dzoClassManagement.php') ? 'active' : '' ?>" href="dzoClassManagement"><i class="fas fa-user-plus fa-sm mr-1 text-muted"></i> Child Registration</a>
                         <a class="collapse-item <?= ($currentPage === 'admin-enrolments.php') ? 'active' : '' ?>" href="admin-enrolments"><i class="fas fa-file-signature fa-sm mr-1 text-muted"></i> Enrollment</a>
+                        <a class="collapse-item <?= ($currentPage === 'admin-parents-children.php') ? 'active' : '' ?>" href="admin-parents-children"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Parents & Children</a>
                         <a class="collapse-item <?= ($currentPage == 'admin-assign-class.php') ? 'active' : '' ?>" href="admin-assign-class"><i class="fas fa-user-plus fa-sm mr-1 text-muted"></i> Assign Students</a>
                         <a class="collapse-item <?= ($currentPage == 'admin-class-students.php') ? 'active' : '' ?>" href="admin-class-students"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Class Allocation</a>
                     </div>
