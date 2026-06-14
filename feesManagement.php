@@ -860,9 +860,11 @@ $paidStudentsByPlan = [
 
 try {
     $stmtConfirmed = $pdo->query("
-        SELECT student_id, fee_plan, fee_amount
-        FROM pcm_enrolments
-        WHERE status = 'Approved'
+        SELECT e.student_id, e.fee_plan, COALESCE(SUM(fp.due_amount), e.fee_amount, 0) AS fee_amount
+        FROM pcm_enrolments e
+        LEFT JOIN pcm_fee_payments fp ON fp.enrolment_id = e.id
+        WHERE e.status = 'Approved'
+        GROUP BY e.id, e.student_id, e.fee_plan, e.fee_amount
     ");
     $confirmedRows = $stmtConfirmed->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {

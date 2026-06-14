@@ -15,6 +15,7 @@ $pdo      = pcm_pdo();
 $campusChoices = pcm_campus_choice_labels();
 [$campusOneName, $campusTwoName] = pcm_campus_names();
 pcm_ensure_enrolment_campus_preference($pdo);
+pcm_ensure_enrolment_start_term($pdo);
 $parent   = pcm_current_parent($pdo);
 if (!$parent) die("Parent account not found.");
 $parentId = (int)$parent['id'];
@@ -82,6 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $campusSelection = array_values(array_unique(array_filter(array_map('strval', $campusSelection))));
         $allowedCampusChoices = array_keys($campusChoices);
         $plan    = trim($_POST['fee_plan'] ?? '');
+        $startTerm = pcm_normalize_start_term($_POST['start_term'] ?? 1);
         $ref     = trim($_POST['payment_ref'] ?? '');
 
         $chk = $pdo->prepare("SELECT id, student_name FROM students WHERE id=:id AND {$studentParentExpr}=:pid LIMIT 1");
@@ -108,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             if ($existingEnrol && !$canResubmitExisting) {
                 $flash = 'This child already has an enrolment on file.';
             } else {
-                $amount = pcm_plan_amount($plan);
+                $amount = pcm_plan_total_for_start_term($plan, $startTerm);
                 $proofPath = null;
 
                 $proofError = (int)($_FILES['proof']['error'] ?? UPLOAD_ERR_NO_FILE);
@@ -155,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                             $eid = (int)$existingEnrol['id'];
                             $upd = $pdo->prepare("
                                 UPDATE pcm_enrolments
-                                SET parent_id=:pid, fee_plan=:plan, campus_preference=:campus, fee_amount=:amt, payment_ref=:ref, proof_path=:proof,
+                                SET parent_id=:pid, fee_plan=:plan, campus_preference=:campus, start_term=:start_term, fee_amount=:amt, payment_ref=:ref, proof_path=:proof,
                                     status='Pending', admin_note=NULL, reviewed_by=NULL, reviewed_at=NULL, submitted_at=NOW()
                                 WHERE id=:id
                             ");
@@ -163,14 +165,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                 ':pid' => $parentId,
                                 ':plan' => $plan,
                                 ':campus' => $campusStored,
+                                ':start_term' => $startTerm,
                                 ':amt' => $amount,
                                 ':ref' => $ref ?: null,
                                 ':proof' => $proofPath,
                                 ':id' => $eid
                             ]);
                         } else {
-                            $ins = $pdo->prepare("INSERT INTO pcm_enrolments (student_id, parent_id, fee_plan, campus_preference, fee_amount, payment_ref, proof_path) VALUES (:sid, :pid, :plan, :campus, :amt, :ref, :proof)");
-                            $ins->execute([':sid'=>$childId, ':pid'=>$parentId, ':plan'=>$plan, ':campus'=>$campusStored, ':amt'=>$amount, ':ref'=>$ref?:null, ':proof'=>$proofPath]);
+                            $ins = $pdo->prepare("INSERT INTO pcm_enrolments (student_id, parent_id, fee_plan, campus_preference, start_term, fee_amount, payment_ref, proof_path) VALUES (:sid, :pid, :plan, :campus, :start_term, :amt, :ref, :proof)");
+                            $ins->execute([':sid'=>$childId, ':pid'=>$parentId, ':plan'=>$plan, ':campus'=>$campusStored, ':start_term'=>$startTerm, ':amt'=>$amount, ':ref'=>$ref?:null, ':proof'=>$proofPath]);
                             $eid = (int)$pdo->lastInsertId();
                         }
                     } catch (Throwable $e) {
@@ -486,6 +489,15 @@ document.addEventListener('DOMContentLoaded',()=>{
                 <!-- Step 3: Choose Fee Plan -->
                 <div class="mb-4" id="planSection" style="display:none;">
                     <label class="font-weight-bold mb-2"><i class="fas fa-tags mr-1 text-primary"></i>Choose Fee Plan</label>
+                    <div class="form-group mb-3">
+                        <label class="font-weight-bold mb-1">Starting Term</label>
+                        <select name="start_term" class="form-control" id="startTermSelect" required>
+                            <option value="1">Term 1</option>
+                            <option value="2">Term 2</option>
+                            <option value="3">Term 3</option>
+                            <option value="4">Term 4</option>
+                        </select>
+                    </div>
                     <div class="row" id="planCards">
                         <div class="col-md-4 mb-2">
                             <div class="plan-card" data-plan="Term-wise" data-amount="65">
@@ -730,6 +742,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const paymentRefInput = document.getElementById('paymentRefInput');
     const paymentRefLabel = document.getElementById('paymentRefLabel');
     const proofInput = document.getElementById('proofInput');
+    const startTermSelect = document.getElementById('startTermSelect');
 
     // Step 1 → Step 2: Show campus section when child is selected
     if (childSelect) {
@@ -773,9 +786,8 @@ document.addEventListener('DOMContentLoaded', function() {
             planCards.forEach(c => c.classList.remove('selected'));
             this.classList.add('selected');
             const plan = this.dataset.plan;
-            const amount = this.dataset.amount;
             selectedPlanInput.value = plan;
-            amountDisplay.textContent = '$' + amount;
+            updateAmountDisplay();
             updateSuggestedReference();
 
             paymentSection.style.display = 'block';
@@ -791,6 +803,24 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedPlanInput.value = '';
         amountDisplay.textContent = '$0';
         enrolBtn.disabled = true;
+    }
+
+    function adjustedAmount(plan, startTerm) {
+        const term = Math.min(4, Math.max(1, parseInt(startTerm || '1', 10)));
+        if (plan === 'Term-wise') return 65 * (5 - term);
+        if (plan === 'Half-yearly') return 125 * (term <= 2 ? 2 : 1);
+        if (plan === 'Yearly') return (250 / 4) * (5 - term);
+        return 0;
+    }
+
+    function updateAmountDisplay() {
+        if (!amountDisplay || !selectedPlanInput) return;
+        const amount = adjustedAmount(selectedPlanInput.value, startTermSelect ? startTermSelect.value : 1);
+        amountDisplay.textContent = '$' + amount.toFixed(2);
+    }
+
+    if (startTermSelect) {
+        startTermSelect.addEventListener('change', updateAmountDisplay);
     }
 
     function slugifyRef(value) {

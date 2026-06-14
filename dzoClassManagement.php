@@ -14,6 +14,7 @@ if (!is_admin_role()) {
 }
 
 $pdo   = pcm_pdo();
+pcm_ensure_enrolment_start_term($pdo);
 $studentParentColumn = pcm_students_parent_column($pdo);
 $campusChoices = pcm_campus_choice_labels();
 $flash = '';
@@ -163,6 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ok = true;
             } elseif ($action === 'admin_update_enrolment') {
                 $plan = trim((string)($_POST['fee_plan'] ?? 'Term-wise'));
+                $startTerm = pcm_normalize_start_term($_POST['start_term'] ?? 1);
                 $approveNow = (int)($_POST['approve_now'] ?? 0) === 1;
                 $allowedPlans = ['Term-wise', 'Half-yearly', 'Yearly'];
                 if (!in_array($plan, $allowedPlans, true)) {
@@ -176,7 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new Exception("Please select at least one valid campus.");
                 }
                 $campusStored = implode(',', $campusSelection);
-                $amount = (float)($_POST['fee_amount'] ?? pcm_plan_amount($plan));
+                $amount = (float)($_POST['fee_amount'] ?? pcm_plan_total_for_start_term($plan, $startTerm));
                 if ($amount < 0) $amount = 0;
                 $ref = trim((string)($_POST['payment_ref'] ?? ''));
                 $note = trim((string)($_POST['admin_note'] ?? ''));
@@ -202,12 +204,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $eid = (int)$row['id'];
                     $upd = $pdo->prepare("
                         UPDATE pcm_enrolments
-                        SET fee_plan=:plan, campus_preference=:campus, fee_amount=:amt, payment_ref=:ref, admin_note=:note,
+                        SET fee_plan=:plan, campus_preference=:campus, start_term=:start_term, fee_amount=:amt, payment_ref=:ref, admin_note=:note,
                             status=:status, reviewed_by=:reviewed_by, reviewed_at=:reviewed_at
                         WHERE id=:id
                     ");
                     $upd->execute([
-                        ':plan' => $plan, ':campus' => $campusStored, ':amt' => $amount,
+                        ':plan' => $plan, ':campus' => $campusStored, ':start_term' => $startTerm, ':amt' => $amount,
                         ':ref' => ($ref !== '' ? $ref : null),
                         ':note' => ($note !== '' ? $note : null),
                         ':status' => $approveNow ? 'Approved' : 'Pending',
@@ -218,11 +220,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_enrolment_updated', (string)$reviewer, 'Updated from child registration page.');
                 } else {
                     $ins = $pdo->prepare("
-                        INSERT INTO pcm_enrolments (student_id, parent_id, fee_plan, campus_preference, fee_amount, payment_ref, status, admin_note, submitted_at, reviewed_by, reviewed_at)
-                        VALUES (:sid,:pid,:plan,:campus,:amt,:ref,:status,:note,NOW(),:reviewed_by,:reviewed_at)
+                        INSERT INTO pcm_enrolments (student_id, parent_id, fee_plan, campus_preference, start_term, fee_amount, payment_ref, status, admin_note, submitted_at, reviewed_by, reviewed_at)
+                        VALUES (:sid,:pid,:plan,:campus,:start_term,:amt,:ref,:status,:note,NOW(),:reviewed_by,:reviewed_at)
                     ");
                     $ins->execute([
                         ':sid' => $studentDbId, ':pid' => $parentId, ':plan' => $plan, ':campus' => $campusStored,
+                        ':start_term' => $startTerm,
                         ':amt' => $amount,
                         ':ref' => ($ref !== '' ? $ref : null),
                         ':status' => $approveNow ? 'Approved' : 'Pending',
@@ -239,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $feeCountStmt->execute([':eid' => $eid]);
                 $feeCount = (int)$feeCountStmt->fetchColumn();
                 if ($feeCount === 0) {
-                    pcm_create_fee_rows($pdo, $eid, $studentDbId, $parentId, $plan, null);
+                    pcm_create_fee_rows($pdo, $eid, $studentDbId, $parentId, $plan, null, $startTerm);
                     pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_fee_rows_created', (string)$reviewer, 'Fee instalment rows created for manual enrollment.');
                 }
                 if ($approveNow) {
@@ -384,7 +387,7 @@ $parentList = $pdo->query("
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 $enrolByStudent = [];
-$enrolRows = $pdo->query("SELECT id, student_id, fee_plan, campus_preference, fee_amount, payment_ref, admin_note FROM pcm_enrolments")->fetchAll(PDO::FETCH_ASSOC);
+$enrolRows = $pdo->query("SELECT id, student_id, fee_plan, campus_preference, start_term, fee_amount, payment_ref, admin_note FROM pcm_enrolments")->fetchAll(PDO::FETCH_ASSOC);
 foreach ($enrolRows as $er) {
     $enrolByStudent[(int)$er['student_id']] = $er;
 }
@@ -975,8 +978,9 @@ document.addEventListener('DOMContentLoaded', () => {
 <?php foreach ($students as $s):
     $existingEn = $enrolByStudent[(int)$s['id']] ?? null;
     $existingPlan = (string)($existingEn['fee_plan'] ?? 'Term-wise');
+    $existingStartTerm = pcm_normalize_start_term($existingEn['start_term'] ?? 1);
     $existingCampus = array_filter(array_map('trim', explode(',', (string)($existingEn['campus_preference'] ?? ''))));
-    $existingAmt = (string)($existingEn['fee_amount'] ?? pcm_plan_amount($existingPlan));
+    $existingAmt = (string)($existingEn['fee_amount'] ?? pcm_plan_total_for_start_term($existingPlan, $existingStartTerm));
 ?>
 <div class="modal fade" id="enrolModal<?= $s['id'] ?>" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
@@ -1033,6 +1037,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         <?php endforeach; ?>
                     </div>
                     <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Starting Term</label>
+                            <select class="form-control" name="start_term" required>
+                                <?php for ($termNo = 1; $termNo <= 4; $termNo++): ?>
+                                    <option value="<?= $termNo ?>" <?= $existingStartTerm === $termNo ? 'selected' : '' ?>>Term <?= $termNo ?></option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
                         <div class="form-group col-md-6">
                             <label>Fee Amount</label>
                             <input type="number" min="0" step="0.01" class="form-control" name="fee_amount" value="<?= h($existingAmt) ?>">

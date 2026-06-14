@@ -272,16 +272,67 @@ function pcm_plan_amount(string $plan): float {
     return 0.00;
 }
 
+function pcm_ensure_enrolment_start_term(PDO $pdo): void {
+    static $done = false;
+    if ($done) return;
+
+    $stmt = $pdo->query("SHOW COLUMNS FROM pcm_enrolments LIKE 'start_term'");
+    if (!$stmt || !$stmt->fetch(PDO::FETCH_ASSOC)) {
+        $pdo->exec("ALTER TABLE pcm_enrolments ADD COLUMN start_term TINYINT NOT NULL DEFAULT 1 AFTER campus_preference");
+    }
+    $done = true;
+}
+
+function pcm_normalize_start_term($value): int {
+    $term = (int)$value;
+    if ($term < 1) return 1;
+    if ($term > 4) return 4;
+    return $term;
+}
+
+function pcm_plan_instalments_for_start_term(string $plan, int $startTerm): array {
+    $startTerm = pcm_normalize_start_term($startTerm);
+    $p = strtolower(trim($plan));
+    if ($p === 'term-wise') {
+        return array_slice(['Term 1','Term 2','Term 3','Term 4'], $startTerm - 1);
+    }
+    if ($p === 'half-yearly') {
+        return $startTerm <= 2 ? ['Half 1','Half 2'] : ['Half 2'];
+    }
+    if ($p === 'yearly') {
+        return ['Yearly'];
+    }
+    return [];
+}
+
+function pcm_plan_total_for_start_term(string $plan, int $startTerm): float {
+    $startTerm = pcm_normalize_start_term($startTerm);
+    $p = strtolower(trim($plan));
+    if ($p === 'term-wise') {
+        return pcm_plan_amount($plan) * (5 - $startTerm);
+    }
+    if ($p === 'half-yearly') {
+        return pcm_plan_amount($plan) * ($startTerm <= 2 ? 2 : 1);
+    }
+    if ($p === 'yearly') {
+        return round((pcm_plan_amount($plan) / 4) * (5 - $startTerm), 2);
+    }
+    return 0.00;
+}
+
 function pcm_instalment_amount(string $plan, string $label): float {
     // Every instalment costs the same per plan
     return pcm_plan_amount($plan);
 }
 
 // ─── Create fee rows when enrolment is approved ───────────
-function pcm_create_fee_rows(PDO $pdo, int $enrolmentId, int $studentId, int $parentId, string $plan, ?string $firstProof): void {
-    $labels = pcm_plan_instalments($plan);
+function pcm_create_fee_rows(PDO $pdo, int $enrolmentId, int $studentId, int $parentId, string $plan, ?string $firstProof, int $startTerm = 1): void {
+    pcm_ensure_enrolment_start_term($pdo);
+    $startTerm = pcm_normalize_start_term($startTerm);
+    $labels = pcm_plan_instalments_for_start_term($plan, $startTerm);
+    $yearlyDue = ($plan === 'Yearly') ? pcm_plan_total_for_start_term($plan, $startTerm) : null;
     foreach ($labels as $i => $label) {
-        $due = pcm_instalment_amount($plan, $label);
+        $due = ($yearlyDue !== null) ? $yearlyDue : pcm_instalment_amount($plan, $label);
         // First instalment uses enrolment proof
         $proof  = ($i === 0 && $firstProof) ? $firstProof : null;
         $status = ($i === 0 && $firstProof) ? 'Verified' : 'Unpaid';
@@ -369,6 +420,7 @@ function pcm_students_parent_insert_columns(PDO $pdo): array {
 }
 
 function pcm_fetch_student_review_context(PDO $pdo, int $studentId): ?array {
+    pcm_ensure_enrolment_start_term($pdo);
     $parentExpr = pcm_students_parent_expr($pdo, 's');
     $sql = "
         SELECT s.*,
@@ -377,6 +429,7 @@ function pcm_fetch_student_review_context(PDO $pdo, int $studentId): ?array {
                p.email AS parent_email,
                e.id AS pcm_enrolment_id,
                e.fee_plan AS pcm_fee_plan,
+               e.start_term AS pcm_start_term,
                e.fee_amount AS pcm_fee_amount,
                e.payment_ref AS pcm_payment_ref,
                e.proof_path AS pcm_proof_path,
@@ -420,6 +473,7 @@ function pcm_process_enrolment_decision(PDO $pdo, int $studentId, string $action
     }
 
     $feeAmount = (float)($ctx['pcm_fee_amount'] ?? 0);
+    $startTerm = pcm_normalize_start_term($ctx['pcm_start_term'] ?? 1);
     if ($feeAmount <= 0) {
         $feeAmount = (float)($ctx['payment_amount'] ?? 0);
     }
@@ -446,7 +500,7 @@ function pcm_process_enrolment_decision(PDO $pdo, int $studentId, string $action
             ]);
 
             if ($newStatus === 'Approved') {
-                pcm_create_fee_rows($pdo, $pcmEnrolmentId, $studentId, $parentId, $planType, $proofPath);
+                pcm_create_fee_rows($pdo, $pcmEnrolmentId, $studentId, $parentId, $planType, $proofPath, $startTerm);
             }
         }
 
