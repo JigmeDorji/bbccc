@@ -426,9 +426,9 @@ foreach ($rows as $r) {
                     </div>
                     <div class="card-body p-0">
                         <div class="table-responsive">
-                            <table class="table table-sm table-bordered mb-0">
+                            <table class="table table-sm table-bordered mb-0" id="unallocatedStudentsTable">
                                 <thead class="thead-light">
-                                    <tr>
+                                    <tr data-search="<?= htmlspecialchars(strtolower((string)$u['student_name'] . ' ' . (string)$u['student_id'])) ?>">
                                         <th style="width:40px">#</th>
                                         <th>Student ID</th>
                                         <th>Student Name</th>
@@ -535,6 +535,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const searchBtn = document.getElementById('classStudentSearchBtn');
     const clearBtn = document.getElementById('classStudentClearBtn');
     const rows = document.querySelectorAll('#classStudentTable tbody tr');
+    const unallocatedRows = document.querySelectorAll('#unallocatedStudentsTable tbody tr');
     function applyFilters() {
         const q = input ? (input.value || '').trim().toLowerCase() : '';
         const cls = classFilter ? (classFilter.value || '').trim().toLowerCase() : '';
@@ -544,6 +545,12 @@ document.addEventListener('DOMContentLoaded', function () {
             const matchSearch = (!q || hay.includes(q));
             const matchClass = (!cls || rowCls === cls);
             row.style.display = (matchSearch && matchClass) ? '' : 'none';
+        });
+        unallocatedRows.forEach((row) => {
+            const hay = row.getAttribute('data-search') || '';
+            const isEmptyRow = !hay;
+            const matchSearch = (!q || hay.includes(q));
+            row.style.display = (isEmptyRow || matchSearch) ? '' : 'none';
         });
     }
     if (input) input.addEventListener('input', applyFilters);
