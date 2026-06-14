@@ -26,21 +26,62 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// PDO connection
-try {
-    $pdo = new PDO(
-        "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
-        $DB_USER, $DB_PASSWORD,
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
-    );
-} catch (PDOException $e) {
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'message' => 'Service unavailable.']);
-    exit;
-}
-
 $action = $_POST['action'] ?? '';
 $ip     = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+
+function bbcc_kiosk_b64url_encode(string $value): string {
+    return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
+}
+
+function bbcc_kiosk_b64url_decode(string $value): string {
+    $pad = strlen($value) % 4;
+    if ($pad) {
+        $value .= str_repeat('=', 4 - $pad);
+    }
+    $decoded = base64_decode(strtr($value, '-_', '+/'), true);
+    return $decoded === false ? '' : $decoded;
+}
+
+function bbcc_kiosk_token_secret(): string {
+    global $DB_NAME, $DB_USER, $DB_PASSWORD;
+    return hash('sha256', $DB_NAME . '|' . $DB_USER . '|' . $DB_PASSWORD . '|' . __DIR__);
+}
+
+function bbcc_kiosk_make_token(): array {
+    $nowDt = new DateTimeImmutable('now', bbcc_app_timezone());
+    $expiresAtDt = $nowDt->setTime(23, 59, 59);
+    $payload = [
+        'exp' => $expiresAtDt->getTimestamp(),
+        'nonce' => bin2hex(random_bytes(16)),
+    ];
+    $payloadJson = json_encode($payload);
+    if ($payloadJson === false) {
+        throw new RuntimeException('Could not create QR token.');
+    }
+    $body = bbcc_kiosk_b64url_encode($payloadJson);
+    $sig = hash_hmac('sha256', $body, bbcc_kiosk_token_secret());
+    return [
+        'token' => $body . '.' . $sig,
+        'expires_in' => max(1, $expiresAtDt->getTimestamp() - $nowDt->getTimestamp()),
+    ];
+}
+
+function bbcc_kiosk_token_is_valid(string $token): bool {
+    $parts = explode('.', $token, 2);
+    if (count($parts) !== 2) {
+        return false;
+    }
+    list($body, $sig) = $parts;
+    $expected = hash_hmac('sha256', $body, bbcc_kiosk_token_secret());
+    if (!hash_equals($expected, $sig)) {
+        return false;
+    }
+    $payload = json_decode(bbcc_kiosk_b64url_decode($body), true);
+    if (!is_array($payload) || empty($payload['exp'])) {
+        return false;
+    }
+    return (int)$payload['exp'] >= time();
+}
 
 // ─── CSRF token endpoint (no verification needed) ───
 if ($action === 'csrf') {
@@ -50,42 +91,13 @@ if ($action === 'csrf') {
 
 // ─── Generate rotating QR token (called by QR display iPad) ───
 if ($action === 'generate_token') {
-    // Auto-create table if missing (first run)
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS `pcm_kiosk_tokens` (
-            `id` INT AUTO_INCREMENT PRIMARY KEY,
-            `token` VARCHAR(64) NOT NULL UNIQUE,
-            `expires_at` DATETIME NOT NULL,
-            `used` TINYINT(1) NOT NULL DEFAULT 0,
-            `used_by_ip` VARCHAR(45) DEFAULT NULL,
-            `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_token (`token`),
-            INDEX idx_expires (`expires_at`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-
-    // Clean up expired tokens (older than 10 min) using app timezone, not server/database timezone.
-    $tokenCleanupBefore = (new DateTimeImmutable('now', bbcc_app_timezone()))
-        ->modify('-10 minutes')
-        ->format('Y-m-d H:i:s');
-    $cleanup = $pdo->prepare("DELETE FROM pcm_kiosk_tokens WHERE expires_at < :cutoff");
-    $cleanup->execute([':cutoff' => $tokenCleanupBefore]);
-
-    // Generate a cryptographically secure token
-    $token = bin2hex(random_bytes(32));
-    // Valid until end of current day (server timezone)
-    $nowDt = new DateTimeImmutable('now', bbcc_app_timezone());
-    $expiresAtDt = $nowDt->setTime(23, 59, 59);
-    $expiresAt = $expiresAtDt->format('Y-m-d H:i:s');
-
-    $stmt = $pdo->prepare("INSERT INTO pcm_kiosk_tokens (token, expires_at) VALUES (:t, :e)");
-    $stmt->execute([':t' => $token, ':e' => $expiresAt]);
-
-    echo json_encode([
-        'ok'    => true,
-        'token' => $token,
-        'expires_in' => max(1, $expiresAtDt->getTimestamp() - $nowDt->getTimestamp()), // seconds to end-of-day
-    ]);
+    try {
+        echo json_encode(array_merge(['ok' => true], bbcc_kiosk_make_token()));
+    } catch (Throwable $e) {
+        error_log('[BBCC] kiosk token generation failed: ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'message' => 'Could not create QR code.']);
+    }
     exit;
 }
 
@@ -98,20 +110,8 @@ if ($action === 'validate_token') {
         exit;
     }
 
-    $stmt = $pdo->prepare("
-        SELECT id, token, expires_at FROM pcm_kiosk_tokens
-        WHERE token = :t LIMIT 1
-    ");
-    $stmt->execute([':t' => $qrToken]);
-    $row = $stmt->fetch();
-
-    if (!$row) {
+    if (!bbcc_kiosk_token_is_valid($qrToken)) {
         echo json_encode(['ok' => false, 'message' => 'Invalid QR code. Please scan again at the door.']);
-        exit;
-    }
-
-    if (strtotime($row['expires_at']) < time()) {
-        echo json_encode(['ok' => false, 'message' => 'QR code has expired. Please scan the new code at the door.']);
         exit;
     }
 
@@ -125,6 +125,19 @@ if ($action === 'validate_token') {
         'session_key' => $sessionKey,
         'message'     => 'Token valid. You may proceed.',
     ]);
+    exit;
+}
+
+// PDO connection for parent authentication and sign-in/out actions.
+try {
+    $pdo = new PDO(
+        "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
+        $DB_USER, $DB_PASSWORD,
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
+    );
+} catch (PDOException $e) {
+    http_response_code(500);
+    echo json_encode(['ok' => false, 'message' => 'Service unavailable.']);
     exit;
 }
 
