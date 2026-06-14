@@ -74,27 +74,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
                 throw new Exception('Selected class is not active.');
             }
 
-            $exists = $pdo->prepare("SELECT id FROM class_assignments WHERE student_id=:sid LIMIT 1");
-            $exists->execute([':sid' => $studentDbId]);
-            $row = $exists->fetch(PDO::FETCH_ASSOC);
-            if ($row) {
-                $upd = $pdo->prepare("UPDATE class_assignments SET class_id=:cid, assigned_by=:by, assigned_at=NOW() WHERE student_id=:sid");
-                $upd->execute([
-                    ':cid' => $newClassId,
-                    ':by' => ($_SESSION['userid'] ?? null),
-                    ':sid' => $studentDbId,
-                ]);
-            } else {
-                $ins = $pdo->prepare("INSERT INTO class_assignments (class_id, student_id, assigned_by) VALUES (:cid,:sid,:by)");
-                $ins->execute([
-                    ':cid' => $newClassId,
-                    ':sid' => $studentDbId,
-                    ':by' => ($_SESSION['userid'] ?? null),
-                ]);
+            $checkStudent = $pdo->prepare("
+                SELECT id
+                FROM students
+                WHERE id=:id
+                  AND approval_status='Approved'
+                  AND LOWER(COALESCE(status,'active')) <> 'past'
+                LIMIT 1
+            ");
+            $checkStudent->execute([':id' => $studentDbId]);
+            if (!$checkStudent->fetch(PDO::FETCH_ASSOC)) {
+                throw new Exception('Selected student is not active and approved.');
             }
+
+            $pdo->beginTransaction();
+            $pdo->prepare("DELETE FROM class_assignments WHERE student_id=:sid")->execute([':sid' => $studentDbId]);
+            $ins = $pdo->prepare("INSERT INTO class_assignments (class_id, student_id, assigned_by, assigned_at) VALUES (:cid,:sid,:by,:assigned_at)");
+            $ins->execute([
+                ':cid' => $newClassId,
+                ':sid' => $studentDbId,
+                ':by' => ($_SESSION['userid'] ?? null),
+                ':assigned_at' => function_exists('bbcc_now_sql') ? bbcc_now_sql() : date('Y-m-d H:i:s'),
+            ]);
+            $pdo->commit();
             $flash = 'Student class updated successfully.';
             $ok = true;
         } catch (Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             $flash = 'Error: ' . $e->getMessage();
         }
     }
@@ -104,14 +112,26 @@ $classOptions = $pdo->query("SELECT id, class_name FROM classes WHERE active=1 O
 $unallocatedStudents = (int)$pdo->query("
     SELECT COUNT(*)
     FROM students s
-    LEFT JOIN class_assignments ca ON ca.student_id = s.id
-    WHERE ca.id IS NULL
+    WHERE s.approval_status='Approved'
+      AND LOWER(COALESCE(s.status,'active')) <> 'past'
+      AND NOT EXISTS (
+          SELECT 1
+          FROM class_assignments ca
+          INNER JOIN classes c ON c.id = ca.class_id AND c.active = 1
+          WHERE ca.student_id = s.id
+      )
 ")->fetchColumn();
 $unallocatedList = $pdo->query("
     SELECT s.id AS student_db_id, s.student_id, s.student_name
     FROM students s
-    LEFT JOIN class_assignments ca ON ca.student_id = s.id
-    WHERE ca.id IS NULL
+    WHERE s.approval_status='Approved'
+      AND LOWER(COALESCE(s.status,'active')) <> 'past'
+      AND NOT EXISTS (
+          SELECT 1
+          FROM class_assignments ca
+          INNER JOIN classes c ON c.id = ca.class_id AND c.active = 1
+          WHERE ca.student_id = s.id
+      )
     ORDER BY s.student_name ASC
 ")->fetchAll();
 
@@ -134,10 +154,20 @@ $rows = $pdo->query("
         GROUP BY cta.class_id
     ) tt ON tt.class_id = c.id
     LEFT JOIN teachers tlegacy ON tlegacy.id = c.teacher_id
-    LEFT JOIN class_assignments ca ON ca.class_id = c.id
+    LEFT JOIN (
+        SELECT ca1.*
+        FROM class_assignments ca1
+        INNER JOIN (
+            SELECT ca2.student_id, MAX(ca2.id) AS assignment_id
+            FROM class_assignments ca2
+            INNER JOIN classes c2 ON c2.id = ca2.class_id AND c2.active = 1
+            GROUP BY ca2.student_id
+        ) latest_ca ON latest_ca.assignment_id = ca1.id
+    ) ca ON ca.class_id = c.id
     LEFT JOIN students s ON s.id = ca.student_id
     WHERE c.active = 1
       AND (s.id IS NULL OR LOWER(COALESCE(s.status,'active')) <> 'past')
+      AND (s.id IS NULL OR s.approval_status='Approved')
     ORDER BY c.class_name ASC, s.student_name ASC
 ")->fetchAll();
 
