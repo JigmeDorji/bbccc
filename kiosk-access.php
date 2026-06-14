@@ -272,6 +272,14 @@ $mobileBaseUrl = $base . "/kiosk-mobile.php";
         $('#qrUrl').textContent = url;
     }
 
+    function showQrError(message) {
+        var node = $('#qrCode');
+        if (!node) return;
+        var size = getQrSize();
+        document.documentElement.style.setProperty('--qr-size', size + 'px');
+        node.innerHTML = '<div style="width:' + size + 'px;height:' + size + 'px;display:flex;align-items:center;justify-content:center;text-align:center;padding:16px;color:#9f1239;background:#fff1f2;border:2px solid #fecdd3;border-radius:12px;font-weight:700;">' + message + '</div>';
+    }
+
     function getQrSize() {
         var w = Math.max(320, window.innerWidth || 820);
         if (w <= 480) return 210;
@@ -301,14 +309,26 @@ $mobileBaseUrl = $base . "/kiosk-mobile.php";
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({ action: 'generate_token', _csrf: csrf })
         })
-        .then(function (res) { return res.json(); })
+        .then(function (res) {
+            return res.text().then(function(text) {
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    return { ok: false, message: 'QR service returned an invalid response.' };
+                }
+            });
+        })
         .then(function (data) {
-            if (!data || !data.ok) throw new Error('Failed');
+            if (!data || !data.ok) {
+                showQrError((data && data.message) ? data.message : 'Could not create QR code.');
+                throw new Error('Failed');
+            }
             var url = baseUrl + '?t=' + data.token;
             renderQR(url);
             setCountdown(ROTATE_SEC);
         })
         .catch(function () {
+            showQrError('Could not connect to QR service.');
             setTimeout(refreshToken, 5000);
         });
     }

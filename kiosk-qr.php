@@ -258,6 +258,13 @@ $mobileBaseUrl = "{$protocol}://{$host}{$path}/kiosk-mobile.php";
     var countdownId = null;
     var remaining   = 0;
 
+    function showQrError(message) {
+        var el = document.getElementById('qrCode');
+        if (!el) return;
+        el.classList.remove('qr-fading');
+        el.innerHTML = '<div style="width:280px;height:280px;display:flex;align-items:center;justify-content:center;text-align:center;padding:18px;color:#9f1239;background:#fff1f2;border:2px solid #fecdd3;border-radius:12px;font-weight:700;">' + message + '</div>';
+    }
+
     // Clock
     function tick() {
         var d = new Date();
@@ -288,7 +295,15 @@ $mobileBaseUrl = "{$protocol}://{$host}{$path}/kiosk-mobile.php";
             method: 'POST',
             body: new URLSearchParams({ action: 'generate_token', _csrf: csrf })
         })
-        .then(function(r) { return r.json(); })
+        .then(function(r) {
+            return r.text().then(function(text) {
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    return { ok: false, message: 'QR service returned an invalid response.' };
+                }
+            });
+        })
         .then(function(data) {
             if (data.csrf_error) {
                 // Refresh CSRF first
@@ -307,6 +322,7 @@ $mobileBaseUrl = "{$protocol}://{$host}{$path}/kiosk-mobile.php";
         .then(function(data) {
             if (!data || !data.ok) {
                 console.error('Token generation failed', data);
+                showQrError((data && data.message) ? data.message : 'Could not create QR code.');
                 setTimeout(refreshToken, 5000); // retry in 5s
                 return;
             }
@@ -342,6 +358,7 @@ $mobileBaseUrl = "{$protocol}://{$host}{$path}/kiosk-mobile.php";
         })
         .catch(function(err) {
             console.error('Token fetch error:', err);
+            showQrError('Could not connect to QR service.');
             setTimeout(refreshToken, 5000);
         });
     }

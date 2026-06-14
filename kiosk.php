@@ -574,6 +574,12 @@ if (!$kioskCssVersion) {
         });
     }
 
+    function showMiniQrError(message) {
+        var node = $('#authMiniQr');
+        if (!node) return;
+        node.innerHTML = '<div style="width:112px;height:112px;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px;color:#9f1239;background:#fff1f2;border:1px solid #fecdd3;border-radius:10px;font-size:.72rem;font-weight:700;">' + message + '</div>';
+    }
+
     function renderIdleQr(url) {
         var node = $('#idleBigQr');
         if (!node || typeof QRCode === 'undefined') return;
@@ -588,9 +594,20 @@ if (!$kioskCssVersion) {
         });
     }
 
+    function showIdleQrError(message) {
+        var node = $('#idleBigQr');
+        if (!node) return;
+        node.innerHTML = '<div style="width:260px;height:260px;display:flex;align-items:center;justify-content:center;text-align:center;padding:18px;color:#9f1239;background:#fff1f2;border:2px solid #fecdd3;border-radius:14px;font-weight:700;">' + message + '</div>';
+    }
+
     function refreshMiniQr() {
         api({ action: 'generate_token' }).then(function(r) {
-            if (!r || !r.ok || !r.token) return;
+            if (!r || !r.ok || !r.token) {
+                var message = (r && r.message) ? r.message : 'Could not create QR code.';
+                showMiniQrError(message);
+                showIdleQrError(message);
+                return;
+            }
             var url = mobileBaseUrl + '?t=' + encodeURIComponent(r.token);
             renderMiniQr(url);
             renderIdleQr(url);

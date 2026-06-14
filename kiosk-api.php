@@ -29,6 +29,40 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $action = $_POST['action'] ?? '';
 $ip     = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
 
+if (!function_exists('bbcc_app_timezone')) {
+    function bbcc_app_timezone(): DateTimeZone {
+        static $tz = null;
+        if ($tz === null) {
+            $tz = new DateTimeZone('Australia/Sydney');
+        }
+        return $tz;
+    }
+}
+
+if (!function_exists('bbcc_today_date')) {
+    function bbcc_today_date(): string {
+        return (new DateTimeImmutable('now', bbcc_app_timezone()))->format('Y-m-d');
+    }
+}
+
+if (!function_exists('bbcc_now_time')) {
+    function bbcc_now_time(): string {
+        return (new DateTimeImmutable('now', bbcc_app_timezone()))->format('H:i:s');
+    }
+}
+
+if (!function_exists('bbcc_format_au_time')) {
+    function bbcc_format_au_time($value): string {
+        $value = trim((string)$value);
+        if ($value === '') return '';
+        try {
+            return (new DateTimeImmutable($value, bbcc_app_timezone()))->format('h:i A');
+        } catch (Throwable $e) {
+            return $value;
+        }
+    }
+}
+
 function bbcc_kiosk_b64url_encode(string $value): string {
     return rtrim(strtr(base64_encode($value), '+/', '-_'), '=');
 }
