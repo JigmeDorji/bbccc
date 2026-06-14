@@ -2,6 +2,7 @@
 require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/mailer.php";
+require_once "include/pcm_helpers.php";
 require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
@@ -289,6 +290,77 @@ function sync_legacy_fee_to_pcm(PDO $pdo, int $legacyFeeId): void {
 }
 
 fm_ensure_class_charge_schema($pdo);
+pcm_ensure_enrolment_start_term($pdo);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'adjust_enrolment_start_term') {
+    try {
+        $enrolmentId = (int)($_POST['adjust_enrolment_id'] ?? 0);
+        $startTerm = pcm_normalize_start_term($_POST['adjust_start_term'] ?? 1);
+
+        if ($enrolmentId <= 0) throw new Exception("Please select a student enrollment.");
+
+        $stmtEn = $pdo->prepare("
+            SELECT e.id, e.student_id, e.parent_id, e.fee_plan, s.student_name
+            FROM pcm_enrolments e
+            INNER JOIN students s ON s.id = e.student_id
+            WHERE e.id = :id
+            LIMIT 1
+        ");
+        $stmtEn->execute([':id' => $enrolmentId]);
+        $enrolment = $stmtEn->fetch(PDO::FETCH_ASSOC);
+        if (!$enrolment) throw new Exception("Enrollment not found.");
+
+        $plan = (string)$enrolment['fee_plan'];
+        $keepLabels = pcm_plan_instalments_for_start_term($plan, $startTerm);
+        if (empty($keepLabels)) throw new Exception("No fee rows available for this plan/start term.");
+        $newAmount = pcm_plan_total_for_start_term($plan, $startTerm);
+
+        $pdo->beginTransaction();
+
+        $delSql = "
+            DELETE FROM pcm_fee_payments
+            WHERE enrolment_id = ?
+              AND plan_type IN ('Term-wise','Half-yearly','Yearly')
+              AND instalment_label NOT IN (" . implode(',', array_fill(0, count($keepLabels), '?')) . ")
+        ";
+        $del = $pdo->prepare($delSql);
+        $del->execute(array_merge([$enrolmentId], $keepLabels));
+        $removed = $del->rowCount();
+
+        $pdo->prepare("
+            UPDATE pcm_enrolments
+            SET start_term = :start_term,
+                fee_amount = :amount
+            WHERE id = :id
+        ")->execute([
+            ':start_term' => $startTerm,
+            ':amount' => $newAmount,
+            ':id' => $enrolmentId,
+        ]);
+
+        if ($plan === 'Yearly') {
+            $pdo->prepare("
+                UPDATE pcm_fee_payments
+                SET due_amount = :amount,
+                    paid_amount = CASE WHEN status = 'Verified' THEN :amount ELSE paid_amount END
+                WHERE enrolment_id = :eid
+                  AND plan_type = 'Yearly'
+                  AND instalment_label = 'Yearly'
+            ")->execute([':amount' => $newAmount, ':eid' => $enrolmentId]);
+        }
+
+        $pdo->commit();
+
+        $message = "Fee start term adjusted for " . (string)$enrolment['student_name'] . ". Removed {$removed} earlier fee row(s).";
+        $success = true;
+        $reload = true;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        $message = "Error: " . $e->getMessage();
+        $success = false;
+        $reload = false;
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['class_charge_action'])) {
     try {
@@ -915,6 +987,18 @@ $classCharges = $pdo->query("
     ORDER BY cc.created_at DESC, cc.id DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
+$adjustableEnrolments = $pdo->query("
+    SELECT e.id, e.student_id, e.fee_plan, e.start_term, e.fee_amount,
+           s.student_name, s.student_id AS stu_code,
+           p.full_name AS parent_name
+    FROM pcm_enrolments e
+    INNER JOIN students s ON s.id = e.student_id
+    LEFT JOIN parents p ON p.id = e.parent_id
+    WHERE e.fee_plan IN ('Term-wise','Half-yearly','Yearly')
+      AND e.status = 'Approved'
+    ORDER BY s.student_name ASC
+")->fetchAll(PDO::FETCH_ASSOC);
+
 $unpaidEmailRows = $pdo->query("
     SELECT
         f.id, f.plan_type, f.instalment_label, f.due_amount, f.status,
@@ -1194,6 +1278,51 @@ if ($updateOnlyMode) {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-sliders-h mr-1"></i>Manual Fee Term Adjustment</h6>
+                        <span class="mini">Use this for existing students who joined after Term 1</span>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST">
+                            <input type="hidden" name="action" value="adjust_enrolment_start_term">
+                            <div class="row align-items-end">
+                                <div class="col-lg-6 mb-3">
+                                    <label class="mini font-weight-bold text-uppercase mb-1">Student Enrollment</label>
+                                    <select name="adjust_enrolment_id" class="form-control" required>
+                                        <option value="">Select student</option>
+                                        <?php foreach ($adjustableEnrolments as $en): ?>
+                                            <option value="<?= (int)$en['id'] ?>">
+                                                <?= h((string)$en['student_name']) ?> (<?= h((string)$en['stu_code']) ?>)
+                                                - <?= h((string)$en['fee_plan']) ?>
+                                                - current start Term <?= (int)($en['start_term'] ?? 1) ?>
+                                                <?= !empty($en['parent_name']) ? ' - ' . h((string)$en['parent_name']) : '' ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="col-lg-3 col-md-6 mb-3">
+                                    <label class="mini font-weight-bold text-uppercase mb-1">New Starting Term</label>
+                                    <select name="adjust_start_term" class="form-control" required>
+                                        <option value="1">Term 1</option>
+                                        <option value="2">Term 2</option>
+                                        <option value="3">Term 3</option>
+                                        <option value="4">Term 4</option>
+                                    </select>
+                                </div>
+                                <div class="col-lg-3 col-md-6 mb-3">
+                                    <button type="submit" class="btn btn-primary btn-block" data-confirm="Adjust this student's fees? Earlier fee rows will be removed.">
+                                        <i class="fas fa-check mr-1"></i>Apply Adjustment
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="mini text-muted">
+                                This removes earlier fee rows for the selected enrolment and updates the expected fee total used by the dashboard.
+                            </div>
+                        </form>
                     </div>
                 </div>
 
