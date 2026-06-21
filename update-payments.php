@@ -540,6 +540,14 @@ $latestClassJoin = "
     ) current_ca ON current_ca.student_id = s.id
     LEFT JOIN classes current_class ON current_class.id = current_ca.class_id AND current_class.active = 1
 ";
+$attendanceTotalJoin = "
+    LEFT JOIN (
+        SELECT student_id,
+               SUM(CASE WHEN LOWER(COALESCE(status, '')) = 'present' THEN 1 ELSE 0 END) AS total_attendance
+        FROM attendance
+        GROUP BY student_id
+    ) attendance_totals ON attendance_totals.student_id = s.id
+";
 
 // 1) Enrollment base rows: ensures student details appear under each payment method
 $stmtEnroll = $pdo->prepare("
@@ -556,6 +564,7 @@ $stmtEnroll = $pdo->prepare("
         s.student_name,
         current_class.id AS class_id,
         current_class.class_name,
+        COALESCE(attendance_totals.total_attendance, 0) AS total_attendance,
         p.full_name AS parent_name,
         p.email AS parent_email,
         p.phone AS parent_phone,
@@ -563,6 +572,7 @@ $stmtEnroll = $pdo->prepare("
     FROM pcm_enrolments e
     JOIN students s ON s.id = e.student_id
     {$latestClassJoin}
+    {$attendanceTotalJoin}
     LEFT JOIN parents p ON p.id = COALESCE(e.parent_id, {$studentParentExpr})
     WHERE e.fee_plan IN ('Term-wise','Half-yearly','Yearly')
     ORDER BY s.id DESC, e.id DESC
@@ -601,6 +611,7 @@ $stmt = $pdo->prepare("
         s.student_name,
         current_class.id AS class_id,
         current_class.class_name,
+        COALESCE(attendance_totals.total_attendance, 0) AS total_attendance,
         COALESCE(e.status, s.approval_status) AS enrollment_status,
         COALESCE(e.fee_plan, fp.plan_type, s.payment_plan) AS payment_plan,
         COALESCE(e.payment_ref, fp.payment_ref, s.payment_reference) AS enrollment_reference,
@@ -612,6 +623,7 @@ $stmt = $pdo->prepare("
     FROM pcm_fee_payments fp
     JOIN students s ON s.id = fp.student_id
     {$latestClassJoin}
+    {$attendanceTotalJoin}
     LEFT JOIN pcm_enrolments e ON e.id = fp.enrolment_id
     LEFT JOIN parents p ON p.id = COALESCE(fp.parent_id, e.parent_id, {$studentParentExpr})
     WHERE fp.plan_type IN ('Term-wise','Half-yearly','Yearly')
@@ -642,6 +654,7 @@ foreach ($enrollmentRows as $r) {
             'student_name' => $r['student_name'] ?? '',
             'class_id' => (int)($r['class_id'] ?? 0),
             'class_name' => $r['class_name'] ?? '',
+            'total_attendance' => (int)($r['total_attendance'] ?? 0),
             'payment_plan' => $r['plan_type'] ?? $plan,
             'start_term' => (int)($r['start_term'] ?? 1),
             'enrollment_status' => $r['enrolment_status'] ?? 'Pending',
@@ -669,6 +682,7 @@ foreach ($rows as $r) {
             'student_name' => $r['student_name'] ?? '',
             'class_id' => (int)($r['class_id'] ?? 0),
             'class_name' => $r['class_name'] ?? '',
+            'total_attendance' => (int)($r['total_attendance'] ?? 0),
             'payment_plan' => $r['payment_plan'] ?? $plan,
             'enrollment_status' => $r['enrollment_status'] ?? 'Pending',
             'enrollment_amount' => 0.0,
@@ -1385,6 +1399,7 @@ if ($updateOnlyMode) {
                                                     <tr>
                                                         <th>Student</th>
                                                         <th>Class</th>
+                                                        <th class="nowrap">Total Attendance</th>
                                                         <th>Parent</th>
                                                         <th class="nowrap">Amount</th>
                                                         <th class="nowrap">Status</th>
@@ -1440,6 +1455,9 @@ if ($updateOnlyMode) {
                                                                 <?php else: ?>
                                                                     <span class="text-muted">Not assigned</span>
                                                                 <?php endif; ?>
+                                                            </td>
+                                                            <td class="text-center nowrap" title="Total Present attendance records">
+                                                                <strong><?php echo (int)($info['total_attendance'] ?? 0); ?></strong>
                                                             </td>
                                                             <td class="wrap">
                                                                 <?php echo h($info['parent_name'] ?: '-'); ?><br>
