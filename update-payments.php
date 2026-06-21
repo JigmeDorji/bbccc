@@ -527,6 +527,20 @@ $studentParentExpr = $hasStudentParentIdNew && $hasStudentParentIdLegacy
     ? "COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0))"
     : ($hasStudentParentIdNew ? "s.parent_id" : "s.parentId");
 
+$latestClassJoin = "
+    LEFT JOIN (
+        SELECT ca1.student_id, ca1.class_id
+        FROM class_assignments ca1
+        INNER JOIN (
+            SELECT ca2.student_id, MAX(ca2.id) AS assignment_id
+            FROM class_assignments ca2
+            INNER JOIN classes c2 ON c2.id = ca2.class_id AND c2.active = 1
+            GROUP BY ca2.student_id
+        ) latest_ca ON latest_ca.assignment_id = ca1.id
+    ) current_ca ON current_ca.student_id = s.id
+    LEFT JOIN classes current_class ON current_class.id = current_ca.class_id AND current_class.active = 1
+";
+
 // 1) Enrollment base rows: ensures student details appear under each payment method
 $stmtEnroll = $pdo->prepare("
     SELECT
@@ -540,12 +554,15 @@ $stmtEnroll = $pdo->prepare("
         e.proof_path AS enrollment_proof,
         s.student_id AS public_student_id,
         s.student_name,
+        current_class.id AS class_id,
+        current_class.class_name,
         p.full_name AS parent_name,
         p.email AS parent_email,
         p.phone AS parent_phone,
         p.address AS parent_address
     FROM pcm_enrolments e
     JOIN students s ON s.id = e.student_id
+    {$latestClassJoin}
     LEFT JOIN parents p ON p.id = COALESCE(e.parent_id, {$studentParentExpr})
     WHERE e.fee_plan IN ('Term-wise','Half-yearly','Yearly')
     ORDER BY s.id DESC, e.id DESC
@@ -582,6 +599,8 @@ $stmt = $pdo->prepare("
         fp.verified_at,
         s.student_id AS public_student_id,
         s.student_name,
+        current_class.id AS class_id,
+        current_class.class_name,
         COALESCE(e.status, s.approval_status) AS enrollment_status,
         COALESCE(e.fee_plan, fp.plan_type, s.payment_plan) AS payment_plan,
         COALESCE(e.payment_ref, fp.payment_ref, s.payment_reference) AS enrollment_reference,
@@ -592,6 +611,7 @@ $stmt = $pdo->prepare("
         p.address AS parent_address
     FROM pcm_fee_payments fp
     JOIN students s ON s.id = fp.student_id
+    {$latestClassJoin}
     LEFT JOIN pcm_enrolments e ON e.id = fp.enrolment_id
     LEFT JOIN parents p ON p.id = COALESCE(fp.parent_id, e.parent_id, {$studentParentExpr})
     WHERE fp.plan_type IN ('Term-wise','Half-yearly','Yearly')
@@ -620,6 +640,8 @@ foreach ($enrollmentRows as $r) {
             'student_db_id' => $sid,
             'public_student_id' => $r['public_student_id'] ?? '',
             'student_name' => $r['student_name'] ?? '',
+            'class_id' => (int)($r['class_id'] ?? 0),
+            'class_name' => $r['class_name'] ?? '',
             'payment_plan' => $r['plan_type'] ?? $plan,
             'start_term' => (int)($r['start_term'] ?? 1),
             'enrollment_status' => $r['enrolment_status'] ?? 'Pending',
@@ -645,6 +667,8 @@ foreach ($rows as $r) {
             'student_db_id' => $sid,
             'public_student_id' => $r['public_student_id'] ?? '',
             'student_name' => $r['student_name'] ?? '',
+            'class_id' => (int)($r['class_id'] ?? 0),
+            'class_name' => $r['class_name'] ?? '',
             'payment_plan' => $r['payment_plan'] ?? $plan,
             'enrollment_status' => $r['enrollment_status'] ?? 'Pending',
             'enrollment_amount' => 0.0,
@@ -1324,6 +1348,19 @@ if ($updateOnlyMode) {
                                 </div>
                             </form>
 
+                            <div class="form-row mb-3">
+                                <div class="col-lg-4 col-md-6">
+                                    <label for="updateClassFilter" class="mini font-weight-bold text-uppercase mb-1">Filter by class</label>
+                                    <select id="updateClassFilter" class="form-control form-control-sm">
+                                        <option value="all">All classes</option>
+                                        <?php foreach ($classOptions as $classOption): ?>
+                                            <option value="<?= (int)$classOption['id'] ?>"><?= h((string)$classOption['class_name']) ?></option>
+                                        <?php endforeach; ?>
+                                        <option value="unassigned">Not assigned</option>
+                                    </select>
+                                </div>
+                            </div>
+
                             <div class="method-tabs-wrap">
                                 <div class="mini font-weight-bold text-uppercase mb-2" style="letter-spacing:.4px;">Payment Method</div>
                                 <button type="button" class="btn method-pill is-active-all js-method-pill" data-plan="all">All</button>
@@ -1347,6 +1384,7 @@ if ($updateOnlyMode) {
                                                     <thead class="thead-light">
                                                     <tr>
                                                         <th>Student</th>
+                                                        <th>Class</th>
                                                         <th>Parent</th>
                                                         <th class="nowrap">Amount</th>
                                                         <th class="nowrap">Status</th>
@@ -1386,7 +1424,7 @@ if ($updateOnlyMode) {
                                                             $ref = (string)($info['installments'][$firstCode]['payment_reference'] ?? '');
                                                             if ($ref === '') $ref = (string)($info['enrollment_reference'] ?? '');
                                                         ?>
-                                                        <tr>
+                                                        <tr class="update-student-row" data-class-id="<?php echo (int)($info['class_id'] ?? 0); ?>">
                                                             <td class="wrap">
                                                                 <strong><?php echo h($info['student_name']); ?></strong><br>
                                                                 <span class="mini">Student ID: <?php echo h($info['public_student_id']); ?></span><br>
@@ -1395,6 +1433,13 @@ if ($updateOnlyMode) {
                                                                         <?php echo h($info['enrollment_status'] ?? 'Pending'); ?>
                                                                     </span>
                                                                 </span>
+                                                            </td>
+                                                            <td class="nowrap">
+                                                                <?php if (!empty($info['class_name'])): ?>
+                                                                    <span class="badge badge-info"><?php echo h($info['class_name']); ?></span>
+                                                                <?php else: ?>
+                                                                    <span class="text-muted">Not assigned</span>
+                                                                <?php endif; ?>
                                                             </td>
                                                             <td class="wrap">
                                                                 <?php echo h($info['parent_name'] ?: '-'); ?><br>
@@ -1747,12 +1792,36 @@ document.addEventListener('DOMContentLoaded', function () {
     const selectedCount = document.getElementById('selectedPaymentCount');
     const selectAll = document.getElementById('selectAllPayments');
     const selectVisible = document.getElementById('selectVisiblePayments');
+    const classFilter = document.getElementById('updateClassFilter');
+
+    function applyClassFilter() {
+        const selectedClass = classFilter ? classFilter.value : 'all';
+        document.querySelectorAll('.update-student-row').forEach(row => {
+            const rowClass = row.getAttribute('data-class-id') || '0';
+            const show = selectedClass === 'all'
+                || (selectedClass === 'unassigned' && rowClass === '0')
+                || rowClass === selectedClass;
+            row.style.display = show ? '' : 'none';
+        });
+        updateSelectedCount();
+    }
+
+    if (classFilter) {
+        classFilter.addEventListener('change', applyClassFilter);
+        applyClassFilter();
+    }
 
     function paymentCheckboxes(scopeVisibleOnly) {
         if (updateTable && scopeVisibleOnly) {
             return Array.from(jQuery(updateTable.rows({ search: 'applied', page: 'current' }).nodes()).find('.payment-row-check'));
         }
-        return Array.from(document.querySelectorAll('.payment-row-check'));
+        const boxes = Array.from(document.querySelectorAll('.payment-row-check'));
+        if (!scopeVisibleOnly) return boxes;
+        return boxes.filter(cb => {
+            const row = cb.closest('.update-student-row');
+            const section = cb.closest('.fee-plan-section');
+            return (!row || row.style.display !== 'none') && (!section || section.style.display !== 'none');
+        });
     }
 
     function updateSelectedCount() {

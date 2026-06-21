@@ -1168,12 +1168,26 @@ if ($updateOnlyMode) {
             <?php include_once 'include/admin-header.php'; ?>
 
             <div class="container-fluid">
-                <div class="d-flex align-items-center justify-content-between mb-3">
+                <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap">
                     <h1 class="h3 text-gray-800 mb-0">Fees Management</h1>
 
-                    <a href="feesSetting" class="btn btn-sm btn-primary">
-                        <i class="fas fa-cog"></i> Fees Settings
-                    </a>
+                    <div class="d-flex align-items-center flex-wrap" style="gap:8px;">
+                        <form method="GET" action="exportClassFeeStatus.php" class="form-inline mb-0">
+                            <label for="feeExportClass" class="sr-only">Class to export</label>
+                            <select id="feeExportClass" name="class_id" class="form-control form-control-sm mr-2" aria-label="Class to export">
+                                <option value="0">All classes</option>
+                                <?php foreach ($classOptions as $classOption): ?>
+                                    <option value="<?= (int)$classOption['id'] ?>"><?= h((string)$classOption['class_name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button type="submit" class="btn btn-sm btn-success mr-2">
+                                <i class="fas fa-file-excel mr-1"></i>Download Student Fee Status (Excel)
+                            </button>
+                        </form>
+                        <a href="feesSetting" class="btn btn-sm btn-primary">
+                            <i class="fas fa-cog"></i> Fees Settings
+                        </a>
+                    </div>
                 </div>
 
                 <script>
