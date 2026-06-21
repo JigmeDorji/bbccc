@@ -44,12 +44,18 @@ function bbcc_mail_log(string $message): void {
     @file_put_contents($cfg['log_file'], date('c') . ' ' . $message . PHP_EOL, FILE_APPEND);
 }
 
-function send_mail(string $toEmail, string $toName, string $subject, string $htmlBody, ?int $timeoutSeconds = null): bool
+function bbcc_last_mail_error(): string {
+    return trim((string)($GLOBALS['BBCC_LAST_MAIL_ERROR'] ?? ''));
+}
+
+function send_mail(string $toEmail, string $toName, string $subject, string $htmlBody, ?int $timeoutSeconds = null, array $attachments = []): bool
 {
+    $GLOBALS['BBCC_LAST_MAIL_ERROR'] = '';
     $cfg = bbcc_mail_config();
 
     if ($cfg['username'] === '' || $cfg['password'] === '') {
-        bbcc_mail_log('MAIL CONFIG ERROR: MAIL_USERNAME or MAIL_PASSWORD is not set.');
+        $GLOBALS['BBCC_LAST_MAIL_ERROR'] = 'Mail username or password is not configured.';
+        bbcc_mail_log('MAIL CONFIG ERROR: ' . $GLOBALS['BBCC_LAST_MAIL_ERROR']);
         return false;
     }
 
@@ -91,9 +97,25 @@ function send_mail(string $toEmail, string $toName, string $subject, string $htm
         $mail->Subject = $subject;
         $mail->Body    = $htmlBody;
 
+        foreach ($attachments as $attachment) {
+            $path = trim((string)($attachment['path'] ?? ''));
+            if ($path === '' || !is_file($path) || !is_readable($path)) {
+                throw new Exception('Attachment is missing or unreadable: ' . $path);
+            }
+            $name = trim((string)($attachment['name'] ?? ''));
+            $mime = trim((string)($attachment['mime'] ?? ''));
+            $mail->addAttachment(
+                $path,
+                $name !== '' ? $name : basename($path),
+                PHPMailer::ENCODING_BASE64,
+                $mime
+            );
+        }
+
         return $mail->send();
 
     } catch (Exception $e) {
+        $GLOBALS['BBCC_LAST_MAIL_ERROR'] = trim($mail->ErrorInfo) !== '' ? $mail->ErrorInfo : $e->getMessage();
         bbcc_mail_log('MAIL ERROR: ' . $mail->ErrorInfo . ' | EX: ' . $e->getMessage());
         return false;
     }

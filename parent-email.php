@@ -52,6 +52,50 @@ function pe_apply_tokens(string $text, string $recipientName): string {
     ]);
 }
 
+function pe_store_attachment(array $file): ?array {
+    $error = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($error === UPLOAD_ERR_NO_FILE) return null;
+    if ($error !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('The attachment upload failed. Please try again.');
+    }
+
+    $size = (int)($file['size'] ?? 0);
+    if ($size <= 0 || $size > 10 * 1024 * 1024) {
+        throw new RuntimeException('Attachment must be smaller than 10 MB.');
+    }
+
+    $originalName = trim((string)($file['name'] ?? 'attachment'));
+    $originalName = preg_replace('/[^A-Za-z0-9._()\- ]/', '_', basename($originalName)) ?: 'attachment';
+    $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
+    $allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'txt'];
+    if (!in_array($extension, $allowedExtensions, true)) {
+        throw new RuntimeException('Unsupported attachment type. Use PDF, Office documents, JPG, PNG, or TXT.');
+    }
+
+    $tmpPath = (string)($file['tmp_name'] ?? '');
+    if ($tmpPath === '' || !is_uploaded_file($tmpPath)) {
+        throw new RuntimeException('The attachment upload could not be verified.');
+    }
+
+    $mime = 'application/octet-stream';
+    if (class_exists('finfo')) {
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $detected = $finfo->file($tmpPath);
+        if (is_string($detected) && $detected !== '') $mime = $detected;
+    }
+
+    $storageDir = __DIR__ . '/storage/mail-attachments';
+    if (!is_dir($storageDir) && !mkdir($storageDir, 0750, true) && !is_dir($storageDir)) {
+        throw new RuntimeException('Unable to create attachment storage.');
+    }
+    $storedPath = $storageDir . '/' . date('Ymd_His') . '_' . bin2hex(random_bytes(12)) . '.' . $extension;
+    if (!move_uploaded_file($tmpPath, $storedPath)) {
+        throw new RuntimeException('Unable to save the attachment.');
+    }
+
+    return ['path' => $storedPath, 'name' => $originalName, 'mime' => $mime];
+}
+
 function pe_build_email_html(string $recipientName, string $subject, string $body, string $senderName): string {
     $safeRecipient = pe_h($recipientName !== '' ? $recipientName : 'Parent');
     $safeSubject = pe_h($subject);
@@ -229,6 +273,7 @@ $selectedIds = array_map('intval', (array)($_POST['parent_ids'] ?? []));
 $previewHtml = '';
 $previewSubject = '';
 $previewCount = 0;
+$deliveryReport = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
@@ -285,8 +330,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($result !== 'error') {
+            $attachment = null;
+            try {
+                $attachment = pe_store_attachment((array)($_FILES['attachment'] ?? []));
+            } catch (Throwable $e) {
+                $result = 'error';
+                $message = $e->getMessage();
+            }
+        }
+
+        if ($result !== 'error') {
             $queued = 0;
             $skipped = 0;
+            $batchId = 'pe_' . date('YmdHis') . '_' . bin2hex(random_bytes(8));
+            $queueMetadata = [
+                'source' => 'parent-email',
+                'created_by' => $sessionUserId,
+                'batch_id' => $batchId,
+            ];
 
             foreach ($recipients as $p) {
                 $email = trim((string)($p['email'] ?? ''));
@@ -300,18 +361,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $bodyFinal = pe_apply_tokens($body, $name);
                 $html = pe_build_email_html($name, $subjectFinal, $bodyFinal, $senderName);
 
-                if (bbcc_queue_mail($email, $name, $subjectFinal, $html)) {
+                if (bbcc_queue_mail($email, $name, $subjectFinal, $html, 5, $attachment, $queueMetadata)) {
                     $queued++;
                 } else {
                     $skipped++;
                 }
             }
 
+            if ($queued === 0 && !empty($attachment['path'])) {
+                @unlink((string)$attachment['path']);
+            }
+
             $processed = bbcc_process_mail_queue(50);
-            $result = 'success';
-            $message = "Email queued for {$queued} parent(s). Skipped {$skipped}. Immediate send: {$processed['sent']} sent, {$processed['failed']} failed.";
+            $batchStatus = $pdo->prepare("
+                SELECT status, COUNT(*) AS total
+                FROM mail_queue
+                WHERE batch_id = :batch_id
+                GROUP BY status
+            ");
+            $batchStatus->execute([':batch_id' => $batchId]);
+            $deliveryReport = ['sent' => 0, 'queued' => 0, 'retry' => 0, 'failed' => 0];
+            foreach ($batchStatus->fetchAll(PDO::FETCH_ASSOC) as $statusRow) {
+                $statusKey = strtolower((string)($statusRow['status'] ?? ''));
+                if (isset($deliveryReport[$statusKey])) {
+                    $deliveryReport[$statusKey] = (int)$statusRow['total'];
+                }
+            }
+            $waiting = $deliveryReport['queued'] + $deliveryReport['retry'];
+            if ($queued === 0) {
+                $result = 'error';
+                $message = "No emails were queued. Skipped {$skipped}.";
+            } elseif ($deliveryReport['sent'] === $queued) {
+                $result = 'success';
+                $message = "Confirmed sent to {$deliveryReport['sent']} parent(s). Skipped {$skipped}.";
+            } else {
+                $result = 'warning';
+                $message = "Delivery is not fully confirmed: {$deliveryReport['sent']} sent, {$waiting} waiting/retrying, {$deliveryReport['failed']} failed. Check Recent Delivery Status below.";
+            }
         }
     }
+}
+
+$recentDeliveries = [];
+try {
+    bbcc_mail_queue_ensure_table();
+    $recentStmt = $pdo->prepare("
+        SELECT to_email, to_name, subject, status, attempts, max_attempts, last_error, created_at, sent_at, attachment_name
+        FROM mail_queue
+        WHERE source = 'parent-email'
+          AND created_by = :created_by
+        ORDER BY id DESC
+        LIMIT 100
+    ");
+    $recentStmt->execute([':created_by' => $sessionUserId]);
+    $recentDeliveries = $recentStmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    $recentDeliveries = [];
 }
 ?>
 <!DOCTYPE html>
@@ -337,6 +442,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 <?php if ($result === 'success'): ?>
                     <div class="alert alert-success"><?= pe_h($message) ?></div>
+                <?php elseif ($result === 'warning'): ?>
+                    <div class="alert alert-warning"><?= pe_h($message) ?></div>
                 <?php elseif ($result === 'error'): ?>
                     <div class="alert alert-danger"><?= pe_h($message) ?></div>
                 <?php endif; ?>
@@ -372,7 +479,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <h6 class="m-0 font-weight-bold text-primary">Compose Message</h6>
                     </div>
                     <div class="card-body">
-                        <form method="POST">
+                        <form method="POST" enctype="multipart/form-data">
                             <?= csrf_field() ?>
                             <?php if (!$isAdmin): ?>
                                 <input type="hidden" name="class_id" value="<?= (int)$classId ?>">
@@ -442,6 +549,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <textarea name="body" id="bodyInput" rows="8" class="form-control"><?= pe_h($body) ?></textarea>
                                 <small class="text-muted">Use Preview to review the exact email design before sending.</small>
                             </div>
+                            <div class="form-group">
+                                <label for="attachmentInput">Attachment <span class="text-muted">(optional)</span></label>
+                                <div class="custom-file">
+                                    <input type="file" name="attachment" id="attachmentInput" class="custom-file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.txt">
+                                    <label class="custom-file-label" for="attachmentInput">Choose file</label>
+                                </div>
+                                <small class="text-muted">Maximum 10 MB. PDF, Office documents, JPG, PNG, or TXT. Re-select the file after using Preview.</small>
+                            </div>
 
                             <button type="submit" name="email_action" value="preview" class="btn btn-outline-primary" <?= empty($parents) ? 'disabled' : '' ?>>
                                 <i class="fas fa-eye mr-1"></i> Preview Email
@@ -467,6 +582,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                     </div>
                 <?php endif; ?>
+
+                <div class="card shadow mt-3">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">Recent Delivery Status</h6>
+                        <small class="text-muted">Sent means accepted by the configured mail server</small>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered table-hover mb-0">
+                                <thead class="thead-light">
+                                    <tr><th>Recipient</th><th>Subject</th><th>Attachment</th><th>Status</th><th>Attempts</th><th>Sent At</th><th>Error</th></tr>
+                                </thead>
+                                <tbody>
+                                <?php if (empty($recentDeliveries)): ?>
+                                    <tr><td colspan="7" class="text-center text-muted">No tracked parent emails yet.</td></tr>
+                                <?php else: foreach ($recentDeliveries as $delivery): ?>
+                                    <?php
+                                        $deliveryStatus = strtolower((string)($delivery['status'] ?? 'queued'));
+                                        $deliveryLabel = match ($deliveryStatus) {
+                                            'sent' => 'Sent',
+                                            'retry' => 'Retrying',
+                                            'failed' => 'Failed',
+                                            default => 'Queued',
+                                        };
+                                        $deliveryBadge = match ($deliveryStatus) {
+                                            'sent' => 'success',
+                                            'retry' => 'warning',
+                                            'failed' => 'danger',
+                                            default => 'secondary',
+                                        };
+                                    ?>
+                                    <tr>
+                                        <td><?= pe_h((string)($delivery['to_name'] ?: $delivery['to_email'])) ?><br><small><?= pe_h((string)$delivery['to_email']) ?></small></td>
+                                        <td><?= pe_h((string)$delivery['subject']) ?></td>
+                                        <td><?= pe_h((string)($delivery['attachment_name'] ?: '—')) ?></td>
+                                        <td><span class="badge badge-<?= $deliveryBadge ?>"><?= $deliveryLabel ?></span></td>
+                                        <td><?= (int)$delivery['attempts'] ?>/<?= (int)$delivery['max_attempts'] ?></td>
+                                        <td class="nowrap"><?= pe_h((string)($delivery['sent_at'] ?: '—')) ?></td>
+                                        <td class="text-danger small"><?= pe_h((string)($delivery['last_error'] ?: '—')) ?></td>
+                                    </tr>
+                                <?php endforeach; endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         <?php include 'include/admin-footer.php'; ?>
@@ -487,6 +648,11 @@ $(function () {
         if (!key || !presets[key]) return;
         $('#subjectInput').val(presets[key].subject || '');
         $('#bodyInput').val(presets[key].body || '');
+    });
+
+    $('#attachmentInput').on('change', function () {
+        var name = this.files && this.files.length ? this.files[0].name : 'Choose file';
+        $(this).next('.custom-file-label').text(name);
     });
 });
 </script>

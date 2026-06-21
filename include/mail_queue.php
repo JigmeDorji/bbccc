@@ -46,6 +46,12 @@ function bbcc_mail_queue_ensure_table(): bool {
                 to_name VARCHAR(255) NULL,
                 subject VARCHAR(255) NOT NULL,
                 html_body MEDIUMTEXT NOT NULL,
+                attachment_path VARCHAR(1000) NULL,
+                attachment_name VARCHAR(255) NULL,
+                attachment_mime VARCHAR(150) NULL,
+                source VARCHAR(50) NULL,
+                created_by VARCHAR(100) NULL,
+                batch_id VARCHAR(64) NULL,
                 attempts INT NOT NULL DEFAULT 0,
                 max_attempts INT NOT NULL DEFAULT 5,
                 status VARCHAR(20) NOT NULL DEFAULT 'queued',
@@ -57,6 +63,20 @@ function bbcc_mail_queue_ensure_table(): bool {
                 KEY idx_created (created_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
+        $attachmentColumns = [
+            'attachment_path' => "ALTER TABLE mail_queue ADD COLUMN attachment_path VARCHAR(1000) NULL AFTER html_body",
+            'attachment_name' => "ALTER TABLE mail_queue ADD COLUMN attachment_name VARCHAR(255) NULL AFTER attachment_path",
+            'attachment_mime' => "ALTER TABLE mail_queue ADD COLUMN attachment_mime VARCHAR(150) NULL AFTER attachment_name",
+            'source' => "ALTER TABLE mail_queue ADD COLUMN source VARCHAR(50) NULL AFTER attachment_mime",
+            'created_by' => "ALTER TABLE mail_queue ADD COLUMN created_by VARCHAR(100) NULL AFTER source",
+            'batch_id' => "ALTER TABLE mail_queue ADD COLUMN batch_id VARCHAR(64) NULL AFTER created_by",
+        ];
+        foreach ($attachmentColumns as $column => $alterSql) {
+            $check = $pdo->query("SHOW COLUMNS FROM mail_queue LIKE " . $pdo->quote($column));
+            if (!$check || !$check->fetch(PDO::FETCH_ASSOC)) {
+                $pdo->exec($alterSql);
+            }
+        }
         $done = true;
         return true;
     } catch (Throwable $e) {
@@ -65,7 +85,7 @@ function bbcc_mail_queue_ensure_table(): bool {
     }
 }
 
-function bbcc_queue_mail(string $toEmail, string $toName, string $subject, string $htmlBody, int $maxAttempts = 5): bool {
+function bbcc_queue_mail(string $toEmail, string $toName, string $subject, string $htmlBody, int $maxAttempts = 5, ?array $attachment = null, array $metadata = []): bool {
     $toEmail = trim($toEmail);
     if ($toEmail === '' || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
         bbcc_mail_log('MAIL QUEUE ERROR: invalid recipient "' . $toEmail . '"');
@@ -78,14 +98,22 @@ function bbcc_queue_mail(string $toEmail, string $toName, string $subject, strin
     if (!$pdo) return false;
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO mail_queue (to_email, to_name, subject, html_body, max_attempts, status)
-            VALUES (:to_email, :to_name, :subject, :html_body, :max_attempts, 'queued')
+            INSERT INTO mail_queue
+                (to_email, to_name, subject, html_body, attachment_path, attachment_name, attachment_mime, source, created_by, batch_id, max_attempts, status)
+            VALUES
+                (:to_email, :to_name, :subject, :html_body, :attachment_path, :attachment_name, :attachment_mime, :source, :created_by, :batch_id, :max_attempts, 'queued')
         ");
         $stmt->execute([
             ':to_email' => $toEmail,
             ':to_name' => trim($toName) !== '' ? $toName : null,
             ':subject' => $subject,
             ':html_body' => $htmlBody,
+            ':attachment_path' => !empty($attachment['path']) ? (string)$attachment['path'] : null,
+            ':attachment_name' => !empty($attachment['name']) ? (string)$attachment['name'] : null,
+            ':attachment_mime' => !empty($attachment['mime']) ? (string)$attachment['mime'] : null,
+            ':source' => !empty($metadata['source']) ? substr((string)$metadata['source'], 0, 50) : null,
+            ':created_by' => !empty($metadata['created_by']) ? substr((string)$metadata['created_by'], 0, 100) : null,
+            ':batch_id' => !empty($metadata['batch_id']) ? substr((string)$metadata['batch_id'], 0, 64) : null,
             ':max_attempts' => max(1, $maxAttempts),
         ]);
 
@@ -153,12 +181,21 @@ function bbcc_process_mail_queue(int $limit = 20): array {
         $maxAttempts = (int)$row['max_attempts'];
         try {
             $queueTimeout = (int)bbcc_env('MAIL_QUEUE_SEND_TIMEOUT', '8');
+            $attachments = [];
+            if (!empty($row['attachment_path'])) {
+                $attachments[] = [
+                    'path' => (string)$row['attachment_path'],
+                    'name' => (string)($row['attachment_name'] ?? ''),
+                    'mime' => (string)($row['attachment_mime'] ?? ''),
+                ];
+            }
             $ok = send_mail(
                 (string)$row['to_email'],
                 (string)($row['to_name'] ?? ''),
                 (string)$row['subject'],
                 (string)$row['html_body'],
-                $queueTimeout > 0 ? $queueTimeout : null
+                $queueTimeout > 0 ? $queueTimeout : null,
+                $attachments
             );
             if ($ok) {
                 $upd = $pdo->prepare("UPDATE mail_queue SET status='sent', sent_at=NOW(), attempts=:a, last_error=NULL WHERE id=:id");
@@ -180,7 +217,7 @@ function bbcc_process_mail_queue(int $limit = 20): array {
                 $upd->execute([
                     ':st' => $status,
                     ':a' => $nextAttempts,
-                    ':err' => 'send_mail returned false',
+                    ':err' => bbcc_last_mail_error() !== '' ? bbcc_last_mail_error() : 'Mail server rejected the send request.',
                     ':mins' => $delayMinutes,
                     ':id' => $id
                 ]);
@@ -207,6 +244,20 @@ function bbcc_process_mail_queue(int $limit = 20): array {
                 ':id' => $id
             ]);
             $stats['failed']++;
+        }
+
+        $attachmentPath = trim((string)($row['attachment_path'] ?? ''));
+        if ($attachmentPath !== '') {
+            $active = $pdo->prepare("
+                SELECT COUNT(*)
+                FROM mail_queue
+                WHERE attachment_path = :path
+                  AND status IN ('queued', 'retry')
+            ");
+            $active->execute([':path' => $attachmentPath]);
+            if ((int)$active->fetchColumn() === 0) {
+                @unlink($attachmentPath);
+            }
         }
     }
 
