@@ -97,10 +97,8 @@ function pe_store_attachment(array $file): ?array {
 }
 
 function pe_build_email_html(string $recipientName, string $subject, string $body, string $senderName): string {
-    $safeRecipient = pe_h($recipientName !== '' ? $recipientName : 'Parent');
     $safeSubject = pe_h($subject);
     $safeBody = nl2br(pe_h($body));
-    $safeSender = pe_h($senderName);
 
     return '
 <!doctype html>
@@ -128,9 +126,7 @@ function pe_build_email_html(string $recipientName, string $subject, string $bod
           </tr>
           <tr>
             <td style="padding:8px 24px 10px 24px;font-size:15px;line-height:1.7;color:#1f2937;">
-              <p style="margin:0 0 14px 0;">Dear ' . $safeRecipient . ',</p>
-              <p style="margin:0 0 14px 0;">' . $safeBody . '</p>
-              <p style="margin:0;">Regards,<br>' . $safeSender . '<br>Bhutanese Language and Culture School</p>
+              <div style="margin:0 0 14px 0;">' . $safeBody . '</div>
             </td>
           </tr>
           <tr>
