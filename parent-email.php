@@ -340,7 +340,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($result !== 'error') {
+            $queueEnabled = bbcc_mail_queue_is_truthy(bbcc_env('MAIL_QUEUE_ENABLED', '1'));
             $queued = 0;
+            $sentDirect = 0;
+            $failedDirect = 0;
             $skipped = 0;
             $batchId = 'pe_' . date('YmdHis') . '_' . bin2hex(random_bytes(8));
             $queueMetadata = [
@@ -361,42 +364,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $bodyFinal = pe_apply_tokens($body, $name);
                 $html = pe_build_email_html($name, $subjectFinal, $bodyFinal, $senderName);
 
-                if (bbcc_queue_mail($email, $name, $subjectFinal, $html, 5, $attachment, $queueMetadata)) {
-                    $queued++;
+                if ($queueEnabled) {
+                    if (bbcc_queue_mail($email, $name, $subjectFinal, $html, 5, $attachment, $queueMetadata)) {
+                        $queued++;
+                    } else {
+                        $skipped++;
+                    }
                 } else {
-                    $skipped++;
+                    $attachments = $attachment ? [$attachment] : [];
+                    if (send_mail($email, $name, $subjectFinal, $html, 10, $attachments)) {
+                        $sentDirect++;
+                    } else {
+                        $failedDirect++;
+                        bbcc_mail_log('PARENT EMAIL DIRECT SEND FAIL to ' . $email . ': ' . bbcc_last_mail_error());
+                    }
                 }
             }
 
-            if ($queued === 0 && !empty($attachment['path'])) {
+            if ((!$queueEnabled || $queued === 0) && !empty($attachment['path'])) {
                 @unlink((string)$attachment['path']);
             }
 
-            $processed = bbcc_process_mail_queue(50);
-            $batchStatus = $pdo->prepare("
-                SELECT status, COUNT(*) AS total
-                FROM mail_queue
-                WHERE batch_id = :batch_id
-                GROUP BY status
-            ");
-            $batchStatus->execute([':batch_id' => $batchId]);
-            $deliveryReport = ['sent' => 0, 'queued' => 0, 'retry' => 0, 'failed' => 0];
-            foreach ($batchStatus->fetchAll(PDO::FETCH_ASSOC) as $statusRow) {
-                $statusKey = strtolower((string)($statusRow['status'] ?? ''));
-                if (isset($deliveryReport[$statusKey])) {
-                    $deliveryReport[$statusKey] = (int)$statusRow['total'];
+            if (!$queueEnabled) {
+                $deliveryReport = ['sent' => $sentDirect, 'queued' => 0, 'retry' => 0, 'failed' => $failedDirect];
+                if ($sentDirect > 0 && $failedDirect === 0) {
+                    $result = 'success';
+                    $message = "Confirmed sent directly to {$sentDirect} parent(s). Skipped {$skipped}.";
+                } elseif ($sentDirect > 0) {
+                    $result = 'warning';
+                    $message = "Sent to {$sentDirect} parent(s), but {$failedDirect} failed. Skipped {$skipped}. Check mail_error.log.";
+                } else {
+                    $result = 'error';
+                    $message = "No parent emails were sent. {$failedDirect} failed and {$skipped} skipped. Check mail_error.log.";
                 }
-            }
-            $waiting = $deliveryReport['queued'] + $deliveryReport['retry'];
-            if ($queued === 0) {
-                $result = 'error';
-                $message = "No emails were queued. Skipped {$skipped}.";
-            } elseif ($deliveryReport['sent'] === $queued) {
-                $result = 'success';
-                $message = "Confirmed sent to {$deliveryReport['sent']} parent(s). Skipped {$skipped}.";
             } else {
-                $result = 'warning';
-                $message = "Delivery is not fully confirmed: {$deliveryReport['sent']} sent, {$waiting} waiting/retrying, {$deliveryReport['failed']} failed. Check Recent Delivery Status below.";
+                $processed = bbcc_process_mail_queue(50);
+                $batchStatus = $pdo->prepare("
+                    SELECT status, COUNT(*) AS total
+                    FROM mail_queue
+                    WHERE batch_id = :batch_id
+                    GROUP BY status
+                ");
+                $batchStatus->execute([':batch_id' => $batchId]);
+                $deliveryReport = ['sent' => 0, 'queued' => 0, 'retry' => 0, 'failed' => 0];
+                foreach ($batchStatus->fetchAll(PDO::FETCH_ASSOC) as $statusRow) {
+                    $statusKey = strtolower((string)($statusRow['status'] ?? ''));
+                    if (isset($deliveryReport[$statusKey])) {
+                        $deliveryReport[$statusKey] = (int)$statusRow['total'];
+                    }
+                }
+                $waiting = $deliveryReport['queued'] + $deliveryReport['retry'];
+                if ($queued === 0) {
+                    $result = 'error';
+                    $message = "No emails were queued. Skipped {$skipped}.";
+                } elseif ($deliveryReport['sent'] === $queued) {
+                    $result = 'success';
+                    $message = "Confirmed sent to {$deliveryReport['sent']} parent(s). Skipped {$skipped}.";
+                } else {
+                    $result = 'warning';
+                    $message = "Delivery is not fully confirmed: {$deliveryReport['sent']} sent, {$waiting} waiting/retrying, {$deliveryReport['failed']} failed. Check Recent Delivery Status below.";
+                }
             }
         }
     }
