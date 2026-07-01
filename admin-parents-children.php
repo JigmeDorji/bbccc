@@ -106,9 +106,14 @@ foreach ($parents as $parent) {
             <h1 class="h3 mb-1 text-gray-800">Parents & Children</h1>
             <p class="text-muted mb-0">View each parent account with linked children, enrollment, and class status.</p>
         </div>
-        <a href="admin-enrolments" class="btn btn-sm btn-primary mt-2 mt-sm-0">
-            <i class="fas fa-file-signature mr-1"></i> Enrollment
-        </a>
+        <div class="mt-2 mt-sm-0">
+            <a href="exportStudents.php" class="btn btn-sm btn-success mr-2">
+                <i class="fas fa-download mr-1"></i> Export Students
+            </a>
+            <a href="admin-enrolments" class="btn btn-sm btn-primary">
+                <i class="fas fa-file-signature mr-1"></i> Enrollment
+            </a>
+        </div>
     </div>
 
     <div class="row mb-3">
