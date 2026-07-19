@@ -107,6 +107,9 @@ foreach ($parents as $parent) {
             <p class="text-muted mb-0">View each parent account with linked children, enrollment, and class status.</p>
         </div>
         <div class="mt-2 mt-sm-0">
+            <a href="exportStudentPaymentDetails.php" class="btn btn-sm btn-warning mr-2">
+                <i class="fas fa-file-excel mr-1"></i> Export Payments Excel
+            </a>
             <a href="exportStudents.php" class="btn btn-sm btn-success mr-2">
                 <i class="fas fa-download mr-1"></i> Export Students
             </a>
