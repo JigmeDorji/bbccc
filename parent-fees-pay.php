@@ -19,6 +19,7 @@ if ($feeId <= 0) {
     header("Location: parent-fees");
     exit;
 }
+$latestClassJoin = pcm_latest_class_assignment_join('s.id', 'ca', 'c');
 
 function pf_h(string $v): string { return htmlspecialchars($v, ENT_QUOTES, 'UTF-8'); }
 
@@ -43,12 +44,12 @@ $stmt = $pdo->prepare("
         e.id AS enrolment_id,
         s.student_name,
         s.student_id AS student_code,
-        c.class_name AS campus_name
+        COALESCE(c.class_name, ec.class_name) AS campus_name
     FROM pcm_fee_payments f
     INNER JOIN pcm_enrolments e ON e.id = f.enrolment_id
     INNER JOIN students s ON s.id = f.student_id
-    LEFT JOIN class_assignments ca ON ca.student_id = s.id
-    LEFT JOIN classes c ON c.id = ca.class_id
+    {$latestClassJoin}
+    LEFT JOIN classes ec ON ec.id = e.class_id AND ec.active = 1
     WHERE f.id = :fid
       AND f.parent_id = :pid
     LIMIT 1

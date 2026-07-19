@@ -24,6 +24,7 @@ if (!$parent) {
 }
 
 $parentId = (int)$parent['id'];
+$latestClassJoin = pcm_latest_class_assignment_join('s.id', 'ca', 'c');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_student') {
     try {
@@ -76,8 +77,7 @@ $stmt = $pdo->prepare(
     "SELECT s.*, c.class_name,
             (SELECT status FROM payments p WHERE p.student_id = s.id ORDER BY uploaded_at DESC LIMIT 1) AS payment_status
      FROM students s
-     LEFT JOIN class_assignments ca ON ca.student_id = s.id
-     LEFT JOIN classes c ON c.id = ca.class_id
+     {$latestClassJoin}
      WHERE " . pcm_students_parent_expr($pdo, 's') . " = :parent_id
      ORDER BY s.id DESC"
 );

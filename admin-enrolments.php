@@ -450,10 +450,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
 }
 
 // ── Fetch all enrolments ──
+$latestClassJoin = pcm_latest_class_assignment_join('e.student_id', 'ca', 'c');
 $all = $pdo->query("
     SELECT e.*, s.student_id AS stu_code, s.student_name, s.dob, s.class_option,
            p.id AS parent_db_id, p.full_name AS parent_name, p.email AS parent_email, p.phone AS parent_phone,
-           ca.class_id AS assigned_class_id, c.class_name AS assigned_class_name,
+           COALESCE(ca.class_id, e.class_id) AS assigned_class_id,
+           COALESCE(c.class_name, ec.class_name) AS assigned_class_name,
            EXISTS(
                SELECT 1 FROM pcm_enrolment_audit a
                WHERE a.enrolment_id = e.id
@@ -463,8 +465,8 @@ $all = $pdo->query("
     FROM pcm_enrolments e
     JOIN students s ON s.id = e.student_id
     JOIN parents  p ON p.id = COALESCE(NULLIF(e.parent_id,0), COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0)))
-    LEFT JOIN class_assignments ca ON ca.student_id = e.student_id
-    LEFT JOIN classes c ON c.id = ca.class_id
+    {$latestClassJoin}
+    LEFT JOIN classes ec ON ec.id = e.class_id AND ec.active = 1
     WHERE LOWER(COALESCE(s.status,'active')) <> 'past'
     ORDER BY FIELD(e.status,'Pending','Approved','Rejected'), e.submitted_at DESC
 ")->fetchAll();

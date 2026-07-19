@@ -86,11 +86,33 @@ function spx_payment_status(array $row): string
     return 'Unpaid';
 }
 
+function spx_has_column(PDO $pdo, string $table, string $column): bool
+{
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+
+    $stmt = $pdo->prepare("SHOW COLUMNS FROM `{$table}` LIKE :column");
+    $stmt->execute([':column' => $column]);
+    $cache[$key] = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+    return $cache[$key];
+}
+
 $studentParentExpr = pcm_students_parent_expr($pdo, 's');
+$latestClassJoin = pcm_latest_class_assignment_join('s.id', 'ca', 'c');
+$hasEnrolmentClassColumn = spx_has_column($pdo, 'pcm_enrolments', 'class_id');
+$enrolmentClassJoin = $hasEnrolmentClassColumn
+    ? "LEFT JOIN classes ec ON ec.id = e.class_id AND ec.active = 1"
+    : "";
+$classNameSelect = $hasEnrolmentClassColumn
+    ? "COALESCE(c.class_name, ec.class_name)"
+    : "c.class_name";
 
 $sql = "
     SELECT
-        c.class_name,
+        {$classNameSelect} AS class_name,
         s.id AS student_db_id,
         s.student_id AS student_code,
         s.student_name,
@@ -123,18 +145,17 @@ $sql = "
         ps.last_submitted_at,
         ps.last_verified_at
     FROM students s
+    {$latestClassJoin}
     LEFT JOIN (
-        SELECT ca1.student_id, ca1.class_id
-        FROM class_assignments ca1
+        SELECT e1.*
+        FROM pcm_enrolments e1
         INNER JOIN (
-            SELECT ca2.student_id, MAX(ca2.id) AS assignment_id
-            FROM class_assignments ca2
-            INNER JOIN classes c2 ON c2.id = ca2.class_id AND c2.active = 1
-            GROUP BY ca2.student_id
-        ) latest_ca ON latest_ca.assignment_id = ca1.id
-    ) ca ON ca.student_id = s.id
-    LEFT JOIN classes c ON c.id = ca.class_id
-    LEFT JOIN pcm_enrolments e ON e.student_id = s.id
+            SELECT student_id, MAX(id) AS enrolment_id
+            FROM pcm_enrolments
+            GROUP BY student_id
+        ) latest_e ON latest_e.enrolment_id = e1.id
+    ) e ON e.student_id = s.id
+    {$enrolmentClassJoin}
     LEFT JOIN parents p ON p.id = COALESCE(NULLIF(e.parent_id, 0), {$studentParentExpr})
     LEFT JOIN (
         SELECT
@@ -153,7 +174,7 @@ $sql = "
         FROM pcm_fee_payments
         GROUP BY student_id
     ) ps ON ps.student_id = s.id
-    ORDER BY c.class_name ASC, s.student_name ASC, s.student_id ASC
+    ORDER BY class_name ASC, s.student_name ASC, s.student_id ASC
 ";
 
 $stmt = $pdo->query($sql);

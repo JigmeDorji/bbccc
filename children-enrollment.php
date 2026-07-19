@@ -254,12 +254,12 @@ $eligible->execute([':pid'=>$parentId]);
 $eligible = $eligible->fetchAll();
 
 // ── Existing enrolments ──
+$latestClassJoin = pcm_latest_class_assignment_join('s.id', 'ca', 'c');
 $enrolments = $pdo->prepare("
     SELECT e.*, s.student_id AS stu_code, s.student_name, c.class_name AS assigned_class_name
     FROM pcm_enrolments e
     JOIN students s ON s.id = e.student_id
-    LEFT JOIN class_assignments ca ON ca.student_id = s.id
-    LEFT JOIN classes c ON c.id = ca.class_id
+    {$latestClassJoin}
     WHERE COALESCE(NULLIF(e.parent_id,0), {$studentParentExprWithAlias}) = :pid
       AND LOWER(COALESCE(s.status,'active')) <> 'past'
     ORDER BY e.submitted_at DESC

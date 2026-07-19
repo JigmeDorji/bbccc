@@ -424,6 +424,34 @@ function pcm_students_parent_insert_columns(PDO $pdo): array {
     return array_values(array_unique($columns));
 }
 
+function pcm_latest_class_assignment_join(string $studentIdExpr, string $assignmentAlias = 'ca', string $classAlias = 'c'): string {
+    $studentIdExpr = trim($studentIdExpr);
+    $assignmentAlias = preg_replace('/[^a-zA-Z0-9_]/', '', $assignmentAlias);
+    $classAlias = preg_replace('/[^a-zA-Z0-9_]/', '', $classAlias);
+    if ($studentIdExpr === '') {
+        $studentIdExpr = 's.id';
+    }
+    if ($assignmentAlias === '') {
+        $assignmentAlias = 'ca';
+    }
+    if ($classAlias === '') {
+        $classAlias = 'c';
+    }
+
+    return "
+    LEFT JOIN (
+        SELECT ca1.student_id, ca1.class_id, ca1.assigned_at
+        FROM class_assignments ca1
+        INNER JOIN (
+            SELECT ca2.student_id, MAX(ca2.id) AS assignment_id
+            FROM class_assignments ca2
+            INNER JOIN classes c2 ON c2.id = ca2.class_id AND c2.active = 1
+            GROUP BY ca2.student_id
+        ) latest_ca ON latest_ca.assignment_id = ca1.id
+    ) {$assignmentAlias} ON {$assignmentAlias}.student_id = {$studentIdExpr}
+    LEFT JOIN classes {$classAlias} ON {$classAlias}.id = {$assignmentAlias}.class_id";
+}
+
 function pcm_fetch_student_review_context(PDO $pdo, int $studentId): ?array {
     pcm_ensure_enrolment_start_term($pdo);
     $parentExpr = pcm_students_parent_expr($pdo, 's');

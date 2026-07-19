@@ -36,8 +36,10 @@ function bbcc_export_csv_value($value): string
 }
 
 $studentParentExpr = pcm_students_parent_expr($pdo, 's');
-$classCampusSelect = bbcc_export_has_column($pdo, 'classes', 'campus_key')
-    ? "c.campus_key"
+$hasClassCampusColumn = bbcc_export_has_column($pdo, 'classes', 'campus_key');
+$hasEnrolmentClassColumn = bbcc_export_has_column($pdo, 'pcm_enrolments', 'class_id');
+$classCampusSelect = $hasClassCampusColumn
+    ? ($hasEnrolmentClassColumn ? "COALESCE(c.campus_key, ec.campus_key)" : "c.campus_key")
     : "''";
 $enrolCampusSelect = bbcc_export_has_column($pdo, 'pcm_enrolments', 'campus_preference')
     ? "e.campus_preference"
@@ -45,6 +47,13 @@ $enrolCampusSelect = bbcc_export_has_column($pdo, 'pcm_enrolments', 'campus_pref
 $startTermSelect = bbcc_export_has_column($pdo, 'pcm_enrolments', 'start_term')
     ? "e.start_term"
     : "''";
+$latestClassJoin = pcm_latest_class_assignment_join('s.id', 'ca', 'c');
+$enrolmentClassJoin = $hasEnrolmentClassColumn
+    ? "LEFT JOIN classes ec ON ec.id = e.class_id AND ec.active = 1"
+    : "";
+$classNameSelect = $hasEnrolmentClassColumn
+    ? "COALESCE(c.class_name, ec.class_name)"
+    : "c.class_name";
 
 $sql = "
     SELECT
@@ -62,7 +71,7 @@ $sql = "
         s.payment_amount,
         s.payment_reference,
         s.created_at AS student_created_at,
-        c.class_name,
+        {$classNameSelect} AS class_name,
         {$classCampusSelect} AS class_campus,
         p.full_name AS parent_name,
         p.gender AS parent_gender,
@@ -78,20 +87,19 @@ $sql = "
         {$startTermSelect} AS start_term,
         e.submitted_at AS enrolment_submitted_at
     FROM students s
-    LEFT JOIN pcm_enrolments e ON e.student_id = s.id
     LEFT JOIN (
-        SELECT ca1.student_id, ca1.class_id
-        FROM class_assignments ca1
+        SELECT e1.*
+        FROM pcm_enrolments e1
         INNER JOIN (
-            SELECT ca2.student_id, MAX(ca2.id) AS assignment_id
-            FROM class_assignments ca2
-            INNER JOIN classes c2 ON c2.id = ca2.class_id AND c2.active = 1
-            GROUP BY ca2.student_id
-        ) latest_ca ON latest_ca.assignment_id = ca1.id
-    ) ca ON ca.student_id = s.id
-    LEFT JOIN classes c ON c.id = ca.class_id
+            SELECT student_id, MAX(id) AS enrolment_id
+            FROM pcm_enrolments
+            GROUP BY student_id
+        ) latest_e ON latest_e.enrolment_id = e1.id
+    ) e ON e.student_id = s.id
+    {$latestClassJoin}
+    {$enrolmentClassJoin}
     LEFT JOIN parents p ON p.id = COALESCE(NULLIF(e.parent_id, 0), {$studentParentExpr})
-    ORDER BY c.class_name ASC, s.student_name ASC, s.student_id ASC
+    ORDER BY class_name ASC, s.student_name ASC, s.student_id ASC
 ";
 
 $stmt = $pdo->query($sql);

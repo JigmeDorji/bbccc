@@ -3,6 +3,7 @@ require_once "include/config.php";
 require_once "include/auth.php";
 require_once "access_control.php";
 require_once "include/parent_helpers.php";
+require_once "include/pcm_helpers.php";
 require_login();
 allowRoles(['parent']);
 
@@ -22,6 +23,7 @@ if (!$parent) {
     die("Parent account not found. Please contact admin.");
 }
 $parentId = (int)$parent['id'];
+$latestClassJoin = pcm_latest_class_assignment_join('s.id', 'ca', 'c');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'sign') {
     try {
@@ -33,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'sign'
         $stmt = $pdo->prepare(
             "SELECT s.id, ca.class_id
              FROM students s
-             LEFT JOIN class_assignments ca ON ca.student_id = s.id
+             {$latestClassJoin}
              WHERE s.id = :student_id AND s.parent_id = :parent_id"
         );
         $stmt->execute([':student_id' => $studentId, ':parent_id' => $parentId]);

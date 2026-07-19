@@ -126,6 +126,7 @@ try {
 
         if ($parentProfile) {
             $parentDbId = (int)$parentProfile['id'];
+            $latestClassJoin = pcm_latest_class_assignment_join('s.id', 'ca', 'c');
             $stmtKids = $pdo->prepare("
                 SELECT s.id, s.student_id, s.student_name, s.dob, s.gender, s.registration_date, s.approval_status,
                        e.status AS enrolment_status,
@@ -136,8 +137,7 @@ try {
                        COALESCE(e.proof_path, s.payment_proof) AS payment_proof
                 FROM students s
                 LEFT JOIN pcm_enrolments e ON e.student_id = s.id
-                LEFT JOIN class_assignments ca ON ca.student_id = s.id
-                LEFT JOIN classes c ON c.id = ca.class_id
+                {$latestClassJoin}
                 WHERE s.parentId = :pid ORDER BY s.id DESC
             ");
             $stmtKids->execute([':pid' => $parentDbId]);

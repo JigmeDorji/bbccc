@@ -106,13 +106,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 }
 
 // ── Fetch approved enrolments with fee rows ──
+$latestClassJoin = pcm_latest_class_assignment_join('e.student_id', 'ca', 'c');
 $enrolments = $pdo->prepare("
     SELECT e.id AS eid, e.fee_plan, e.campus_preference, s.student_name, s.student_id AS stu_code,
-           c.class_name AS campus_name
+           COALESCE(c.class_name, ec.class_name) AS campus_name
     FROM pcm_enrolments e
     JOIN students s ON s.id = e.student_id
-    LEFT JOIN class_assignments ca ON ca.student_id = e.student_id
-    LEFT JOIN classes c ON c.id = ca.class_id
+    {$latestClassJoin}
+    LEFT JOIN classes ec ON ec.id = e.class_id AND ec.active = 1
     WHERE e.parent_id = :pid AND e.status = 'Approved'
     ORDER BY s.student_name
 ");

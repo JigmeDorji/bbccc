@@ -13,6 +13,7 @@ if (!is_admin_role()) {
 
 $pdo = pcm_pdo();
 $studentParentExpr = pcm_students_parent_expr($pdo, 's');
+$latestClassJoin = pcm_latest_class_assignment_join('s.id', 'ca', 'c');
 
 $parents = $pdo->query("
     SELECT
@@ -38,8 +39,7 @@ $students = $pdo->query("
         c.class_name
     FROM students s
     LEFT JOIN pcm_enrolments e ON e.student_id = s.id
-    LEFT JOIN class_assignments ca ON ca.student_id = s.id
-    LEFT JOIN classes c ON c.id = ca.class_id
+    {$latestClassJoin}
     WHERE {$studentParentExpr} IS NOT NULL
       AND {$studentParentExpr} > 0
     ORDER BY s.student_name ASC
