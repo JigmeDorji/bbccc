@@ -432,7 +432,7 @@ if (empty($termColumns) || (count($termColumns) > 0 && array_sum(array_map(fn($t
             <p class="blcs-metrics-heading"><?= htmlspecialchars((string)$schoolStats['heading']) ?></p>
             <div class="blcs-metrics-grid">
                 <div class="blcs-metric-item">
-                    <span class="blcs-metric-value"><?= htmlspecialchars((string)$schoolStats['students']) ?></span>
+                    <span class="blcs-metric-value"><?= htmlspecialchars((string)c$schoolStats['students']) ?></span>
                     <span class="blcs-metric-label">Students Enrolled</span>
                 </div>
                 <div class="blcs-metric-item">

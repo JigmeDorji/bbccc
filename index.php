@@ -88,14 +88,6 @@ try {
         $schoolStats['year_levels'] = trim((string)($schoolContent['year_levels'] ?? '')) !== '' ? (string)$schoolContent['year_levels'] : $schoolStats['year_levels'];
     }
 
-    // Keep enrolled count live from students table so add/delete actions are reflected automatically.
-    try {
-        $liveStudentCount = (int)$pdo->query("SELECT COUNT(*) FROM students")->fetchColumn();
-        $schoolStats['students'] = (string)$liveStudentCount;
-    } catch (Throwable $e) {
-        // Keep existing fallback value.
-    }
-
     // Fetch all menu/event data first, then filter upcoming in PHP.
     // This avoids SQL DATE parsing edge cases across mixed datetime formats.
     $stmt = $pdo->prepare("SELECT * FROM menu ORDER BY id DESC");
