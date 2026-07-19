@@ -120,6 +120,7 @@ $sql = "
         s.gender,
         s.medical_issue,
         s.registration_date,
+        COALESCE(NULLIF(CAST(s.registration_date AS CHAR), '0000-00-00'), DATE(e.submitted_at), DATE(s.created_at)) AS enrollment_start_date,
         s.class_option,
         s.approval_status,
         s.status AS student_status,
@@ -189,6 +190,7 @@ $headers = [
     'Gender',
     'Medical Issue',
     'Registration Date',
+    'Enrollment Start Date',
     'Class Option',
     'Approval Status',
     'Student Status',
@@ -235,30 +237,31 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         spx_text_cell('F' . $rowNumber, $row['gender']),
         spx_text_cell('G' . $rowNumber, $row['medical_issue']),
         spx_date_cell('H' . $rowNumber, $row['registration_date'], 3),
-        spx_text_cell('I' . $rowNumber, $row['class_option']),
-        spx_text_cell('J' . $rowNumber, $row['approval_status']),
-        spx_text_cell('K' . $rowNumber, $row['student_status']),
-        spx_text_cell('L' . $rowNumber, $row['student_payment_plan']),
+        spx_date_cell('I' . $rowNumber, $row['enrollment_start_date'], 3),
+        spx_text_cell('J' . $rowNumber, $row['class_option']),
+        spx_text_cell('K' . $rowNumber, $row['approval_status']),
+        spx_text_cell('L' . $rowNumber, $row['student_status']),
+        spx_text_cell('M' . $rowNumber, $row['student_payment_plan']),
         $row['student_payment_amount'] !== null && $row['student_payment_amount'] !== ''
-            ? spx_number_cell('M' . $rowNumber, (float)$row['student_payment_amount'], 2)
-            : spx_text_cell('M' . $rowNumber, ''),
-        spx_text_cell('N' . $rowNumber, $row['student_payment_reference']),
-        spx_text_cell('O' . $rowNumber, $row['parent_name']),
-        spx_text_cell('P' . $rowNumber, $row['parent_email']),
-        spx_text_cell('Q' . $rowNumber, $row['parent_phone']),
-        spx_text_cell('R' . $rowNumber, $row['parent_address']),
-        spx_text_cell('S' . $rowNumber, $row['parent_status']),
-        spx_text_cell('T' . $rowNumber, $row['enrolment_status']),
-        spx_text_cell('U' . $rowNumber, $row['enrolment_payment_ref']),
-        spx_text_cell('V' . $rowNumber, $row['fee_plan']),
-        $hasFeeRows ? spx_number_cell('W' . $rowNumber, $due, 2) : spx_text_cell('W' . $rowNumber, ''),
-        $hasFeeRows ? spx_number_cell('X' . $rowNumber, $paid, 2) : spx_text_cell('X' . $rowNumber, ''),
-        $hasFeeRows ? spx_number_cell('Y' . $rowNumber, max(0, $due - $paid), 2) : spx_text_cell('Y' . $rowNumber, ''),
-        spx_text_cell('Z' . $rowNumber, spx_payment_status($row)),
-        spx_text_cell('AA' . $rowNumber, $row['instalments']),
-        spx_text_cell('AB' . $rowNumber, $row['payment_refs']),
-        spx_date_cell('AC' . $rowNumber, $row['last_submitted_at'], 4),
-        spx_date_cell('AD' . $rowNumber, $row['last_verified_at'], 4),
+            ? spx_number_cell('N' . $rowNumber, (float)$row['student_payment_amount'], 2)
+            : spx_text_cell('N' . $rowNumber, ''),
+        spx_text_cell('O' . $rowNumber, $row['student_payment_reference']),
+        spx_text_cell('P' . $rowNumber, $row['parent_name']),
+        spx_text_cell('Q' . $rowNumber, $row['parent_email']),
+        spx_text_cell('R' . $rowNumber, $row['parent_phone']),
+        spx_text_cell('S' . $rowNumber, $row['parent_address']),
+        spx_text_cell('T' . $rowNumber, $row['parent_status']),
+        spx_text_cell('U' . $rowNumber, $row['enrolment_status']),
+        spx_text_cell('V' . $rowNumber, $row['enrolment_payment_ref']),
+        spx_text_cell('W' . $rowNumber, $row['fee_plan']),
+        $hasFeeRows ? spx_number_cell('X' . $rowNumber, $due, 2) : spx_text_cell('X' . $rowNumber, ''),
+        $hasFeeRows ? spx_number_cell('Y' . $rowNumber, $paid, 2) : spx_text_cell('Y' . $rowNumber, ''),
+        $hasFeeRows ? spx_number_cell('Z' . $rowNumber, max(0, $due - $paid), 2) : spx_text_cell('Z' . $rowNumber, ''),
+        spx_text_cell('AA' . $rowNumber, spx_payment_status($row)),
+        spx_text_cell('AB' . $rowNumber, $row['instalments']),
+        spx_text_cell('AC' . $rowNumber, $row['payment_refs']),
+        spx_date_cell('AD' . $rowNumber, $row['last_submitted_at'], 4),
+        spx_date_cell('AE' . $rowNumber, $row['last_verified_at'], 4),
     ];
     $sheetRows[] = '<row r="' . $rowNumber . '">' . implode('', $cells) . '</row>';
     $rowNumber++;
@@ -271,14 +274,14 @@ $sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     . '<cols>'
     . '<col min="1" max="1" width="22" customWidth="1"/><col min="2" max="3" width="14" customWidth="1"/>'
     . '<col min="4" max="4" width="26" customWidth="1"/><col min="5" max="6" width="16" customWidth="1"/>'
-    . '<col min="7" max="7" width="28" customWidth="1"/><col min="8" max="14" width="18" customWidth="1"/>'
-    . '<col min="15" max="15" width="26" customWidth="1"/><col min="16" max="16" width="32" customWidth="1"/>'
-    . '<col min="17" max="17" width="18" customWidth="1"/><col min="18" max="18" width="36" customWidth="1"/>'
-    . '<col min="19" max="22" width="18" customWidth="1"/><col min="23" max="25" width="14" customWidth="1"/>'
-    . '<col min="26" max="26" width="18" customWidth="1"/><col min="27" max="28" width="30" customWidth="1"/>'
-    . '<col min="29" max="30" width="20" customWidth="1"/>'
+    . '<col min="7" max="7" width="28" customWidth="1"/><col min="8" max="15" width="18" customWidth="1"/>'
+    . '<col min="16" max="16" width="26" customWidth="1"/><col min="17" max="17" width="32" customWidth="1"/>'
+    . '<col min="18" max="18" width="18" customWidth="1"/><col min="19" max="19" width="36" customWidth="1"/>'
+    . '<col min="20" max="23" width="18" customWidth="1"/><col min="24" max="26" width="14" customWidth="1"/>'
+    . '<col min="27" max="27" width="18" customWidth="1"/><col min="28" max="29" width="30" customWidth="1"/>'
+    . '<col min="30" max="31" width="20" customWidth="1"/>'
     . '</cols><sheetData>' . implode('', $sheetRows) . '</sheetData>'
-    . '<autoFilter ref="A1:AD' . $lastRow . '"/>'
+    . '<autoFilter ref="A1:AE' . $lastRow . '"/>'
     . '</worksheet>';
 
 $stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
