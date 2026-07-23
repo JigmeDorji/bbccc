@@ -28,3 +28,7 @@
 2026-05-17T04:04:51+00:00 ADMIN MAIL FAIL: student registration notify to tsheringkoney@gmail.com for child Kayden Yeetsho Wangchuk
 2026-05-17T04:04:55+00:00 MAIL ERROR: SMTP Error: Could not connect to SMTP host. Failed to connect to server SMTP server error: Failed to connect to server SMTP code: 60 Additional SMTP info: Operation timed out | EX: SMTP Error: Could not connect to SMTP host. Failed to connect to server
 2026-06-21T22:20:52+10:00 MAIL QUEUE DB ERROR: SQLSTATE[HY000] [2002] Operation not permitted
+2026-07-23T15:29:58+10:00 MAIL ERROR: SMTP Error: Could not connect to SMTP host. Failed to connect to server SMTP server error: Failed to connect to server SMTP code: 60 Additional SMTP info: Operation timed out | EX: SMTP Error: Could not connect to SMTP host. Failed to connect to server
+2026-07-23T15:29:58+10:00 ForgotPassword send failed for tsheringkoney@gmail.com
+2026-07-23T15:33:51+10:00 MAIL ERROR: SMTP Error: Could not connect to SMTP host. Failed to connect to server SMTP server error: Failed to connect to server SMTP code: 60 Additional SMTP info: Operation timed out | EX: SMTP Error: Could not connect to SMTP host. Failed to connect to server
+2026-07-23T15:33:51+10:00 ForgotPassword send failed for tsheringkoney@gmail.com

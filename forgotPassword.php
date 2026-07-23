@@ -39,7 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $identifier = trim($_POST['identifier'] ?? '');
 
     if ($identifier === '') {
-        $errors[] = "Please enter your email address or phone number.";
+        $errors[] = "Please enter your email address.";
+    } elseif (!is_email($identifier)) {
+        $errors[] = "Please enter a valid email address.";
     }
 
     if (empty($errors)) {
@@ -50,26 +52,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $emailToReset = null;
         $parentName = "Parent";
 
-        if (is_email($identifier)) {
-            $emailToReset = strtolower($identifier);
+        $emailToReset = strtolower($identifier);
 
-            // Optional: fetch name for nicer email
-            $stmt = $pdo->prepare("SELECT full_name FROM parents WHERE LOWER(email)=LOWER(:e) LIMIT 1");
-            $stmt->execute([':e' => $emailToReset]);
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            if ($row && !empty($row['full_name'])) $parentName = $row['full_name'];
-
-        } else {
-            // treat as phone, find parent email
-            $stmt = $pdo->prepare("SELECT email, full_name FROM parents WHERE phone = :p LIMIT 1");
-            $stmt->execute([':p' => $identifier]);
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-            if ($row && !empty($row['email'])) {
-                $emailToReset = strtolower(trim($row['email']));
-                if (!empty($row['full_name'])) $parentName = $row['full_name'];
-            }
-        }
+        // Optional: fetch name for a friendlier email.
+        $stmt = $pdo->prepare("SELECT full_name FROM parents WHERE LOWER(email)=LOWER(:e) LIMIT 1");
+        $stmt->execute([':e' => $emailToReset]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row && !empty($row['full_name'])) $parentName = $row['full_name'];
 
         if ($emailToReset) {
             // create secure token
@@ -201,16 +190,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <div class="info-box">
             <i class="fas fa-info-circle"></i>
-            Enter the <strong>email</strong> or <strong>phone number</strong> linked to your parent account.
+            Enter the <strong>email address</strong> linked to your parent account.
         </div>
 
         <form method="post" id="forgotForm">
             <?= csrf_field() ?>
             <div class="form-floating mb-3">
-                <input type="text" class="form-control" id="identifier" name="identifier"
-                       placeholder="Email or Phone" required
+                <input type="email" class="form-control" id="identifier" name="identifier"
+                       placeholder="Email Address" required
                        value="<?= htmlspecialchars($_POST['identifier'] ?? '') ?>" autocomplete="email">
-                <label for="identifier"><i class="fas fa-envelope me-1"></i> Email or Phone Number</label>
+                <label for="identifier"><i class="fas fa-envelope me-1"></i> Email Address</label>
             </div>
 
             <button type="submit" class="btn btn-brand w-100" id="sendBtn">
