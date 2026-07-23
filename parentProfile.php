@@ -40,9 +40,17 @@ if ($loginEmail === '') {
 $isEditMode = (isset($_GET['edit']) && $_GET['edit'] == '1');
 $postAction = $_POST['action'] ?? 'update_profile';
 
-// Fetch parent profile by email (case-insensitive)
-$stmt = $pdo->prepare("SELECT * FROM parents WHERE LOWER(email) = LOWER(:e) LIMIT 1");
-$stmt->execute([':e' => $loginEmail]);
+// Prefer the stable account link; retain email matching for older unmigrated rows.
+$sessionUserId = trim((string)($_SESSION['userid'] ?? ''));
+$stmt = $pdo->prepare("
+    SELECT *
+    FROM parents
+    WHERE (user_id = :user_id AND :user_id <> '')
+       OR LOWER(email) = LOWER(:email)
+    ORDER BY (user_id = :user_id) DESC, id ASC
+    LIMIT 1
+");
+$stmt->execute([':user_id' => $sessionUserId, ':email' => $loginEmail]);
 $parent = $stmt->fetch();
 
 if (!$parent) {
@@ -61,9 +69,16 @@ $address   = $parent['address'] ?? '';
 /**
  * Get the parent's password hash from user table (email-as-username) if present.
  */
-function get_user_hash(PDO $pdo, string $username): string {
-    $stmtU = $pdo->prepare("SELECT password FROM user WHERE LOWER(username)=LOWER(:u) AND role='parent' LIMIT 1");
-    $stmtU->execute([':u' => $username]);
+function get_user_hash(PDO $pdo, string $userId, string $username): string {
+    $stmtU = $pdo->prepare("
+        SELECT password
+        FROM user
+        WHERE (userid = :user_id AND :user_id <> '')
+           OR (LOWER(username) = LOWER(:username) AND role = 'parent')
+        ORDER BY (userid = :user_id) DESC
+        LIMIT 1
+    ");
+    $stmtU->execute([':user_id' => $userId, ':username' => $username]);
     $row = $stmtU->fetch(PDO::FETCH_ASSOC);
     return $row['password'] ?? '';
 }
@@ -109,11 +124,8 @@ if ($isEditMode && $_SERVER['REQUEST_METHOD'] === 'POST' && $postAction === 'res
     if ($kioskPin !== $kioskPinConfirm) $pinErrors[] = "Kiosk PIN and confirm PIN do not match.";
 
     if (empty($pinErrors)) {
-        $parentsHash = (string)($parent['password'] ?? '');
-        $userHash = get_user_hash($pdo, $loginEmail);
-        $okPassword =
-            bbcc_verify_password_value($accountPassword, $parentsHash) ||
-            bbcc_verify_password_value($accountPassword, $userHash);
+        $userHash = get_user_hash($pdo, $sessionUserId, $loginEmail);
+        $okPassword = bbcc_verify_password_value($accountPassword, $userHash);
 
         if (!$okPassword) {
             $pinErrors[] = "Account password is incorrect.";
@@ -173,14 +185,10 @@ if ($isEditMode && $_SERVER['REQUEST_METHOD'] === 'POST' && $postAction === 'upd
         if ($password !== '' && strlen($password) < 8) $errors[] = "New password must be at least 8 characters.";
         if ($password !== '' && $confirm !== '' && $password !== $confirm) $errors[] = "New password and Confirm Password do not match.";
 
-        // Verify old password using parents table OR user table
+        // The user table is the single source of truth for login credentials.
         if (empty($errors)) {
-            $parentsHash = $parent['password'] ?? '';
-            $userHash = get_user_hash($pdo, $loginEmail);
-
-            $okOld =
-                ($parentsHash && bbcc_verify_password_value($old_password, $parentsHash)) ||
-                ($userHash && bbcc_verify_password_value($old_password, $userHash));
+            $userHash = get_user_hash($pdo, $sessionUserId, $loginEmail);
+            $okOld = $userHash && bbcc_verify_password_value($old_password, $userHash);
 
             if (!$okOld) {
                 $errors[] = "Old password is incorrect.";
@@ -211,7 +219,7 @@ if ($isEditMode && $_SERVER['REQUEST_METHOD'] === 'POST' && $postAction === 'upd
                 'address'   => $parent['address'] ?? null,
             ];
 
-            // Generate one hash for both tables
+            // Login credentials are stored only in the user table.
             $newHash = null;
             if ($updatePassword) {
                 $newHash = password_hash($password, PASSWORD_DEFAULT);
@@ -233,19 +241,15 @@ if ($isEditMode && $_SERVER['REQUEST_METHOD'] === 'POST' && $postAction === 'upd
                 ':id'        => $parentId
             ];
 
-            if ($updatePassword) {
-                $sql .= ", password = :password";
-                $params[':password'] = $newHash;
-            }
-
             $sql .= " WHERE id = :id";
             $pdo->prepare($sql)->execute($params);
 
-            // Sync `user` table: email = username (and password optionally)
+            // Sync the linked user account: email = username (and password optionally).
             $sqlUser = "UPDATE user SET username = :u";
             $userParams = [
                 ':u'   => $email,
-                ':old' => $loginEmail,
+                ':user_id' => $sessionUserId,
+                ':old' => $loginEmail
             ];
 
             if ($updatePassword) {
@@ -253,7 +257,8 @@ if ($isEditMode && $_SERVER['REQUEST_METHOD'] === 'POST' && $postAction === 'upd
                 $userParams[':p'] = $newHash;
             }
 
-            $sqlUser .= " WHERE LOWER(username)=LOWER(:old) AND role='parent'";
+            $sqlUser .= " WHERE (userid = :user_id AND :user_id <> '')
+                           OR (LOWER(username)=LOWER(:old) AND role='parent')";
             $pdo->prepare($sqlUser)->execute($userParams);
 
             $newData = [

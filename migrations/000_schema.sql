@@ -51,18 +51,19 @@ CREATE TABLE IF NOT EXISTS `user` (
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `parents` (
     `id`         INT          NOT NULL AUTO_INCREMENT,
+    `user_id`    VARCHAR(50)  DEFAULT NULL,
     `full_name`  VARCHAR(150) NOT NULL,
     `gender`     VARCHAR(20)  DEFAULT NULL,
     `email`      VARCHAR(150) DEFAULT NULL,
     `phone`      VARCHAR(50)  DEFAULT NULL,
     `address`    TEXT         DEFAULT NULL,
     `username`   VARCHAR(150) DEFAULT NULL,
-    `password`   VARCHAR(255) DEFAULT NULL,
     `pin_hash`   VARCHAR(255) DEFAULT NULL,
     `status`     ENUM('Active','Inactive') NOT NULL DEFAULT 'Active',
     `created_at` TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_parent_email` (`email`)
+    UNIQUE KEY `uq_parent_email` (`email`),
+    KEY `idx_parents_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- parent_profile_update_log

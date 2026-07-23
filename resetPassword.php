@@ -74,15 +74,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ");
             $stmtU->execute([':p' => $hashed, ':e' => $email]);
 
-            // Update `parents` table too (if you store password there)
-            $stmtP = $pdo->prepare("
-                UPDATE parents
-                SET password = :p
-                WHERE LOWER(email) = LOWER(:e)
-                LIMIT 1
-            ");
-            $stmtP->execute([':p' => $hashed, ':e' => $email]);
-
             // Mark token used
             $stmtUsed = $pdo->prepare("UPDATE password_resets SET used_at = :t WHERE id = :id");
             $stmtUsed->execute([':t' => date('Y-m-d H:i:s'), ':id' => (int)$resetRow['id']]);

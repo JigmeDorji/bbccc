@@ -52,13 +52,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $emailToReset = null;
         $parentName = "Parent";
 
-        $emailToReset = strtolower($identifier);
+        $requestedEmail = strtolower($identifier);
 
-        // Optional: fetch name for a friendlier email.
-        $stmt = $pdo->prepare("SELECT full_name FROM parents WHERE LOWER(email)=LOWER(:e) LIMIT 1");
-        $stmt->execute([':e' => $emailToReset]);
+        // Issue reset tokens only for real parent login accounts. The generic
+        // response below avoids revealing whether an email is registered.
+        $stmt = $pdo->prepare("
+            SELECT u.username AS account_email, p.full_name
+            FROM `user` u
+            LEFT JOIN parents p
+              ON p.user_id = u.userid
+              OR LOWER(p.email) = LOWER(u.username)
+            WHERE LOWER(u.username) = LOWER(:email)
+              AND LOWER(u.role) = 'parent'
+            ORDER BY (p.user_id = u.userid) DESC
+            LIMIT 1
+        ");
+        $stmt->execute([':email' => $requestedEmail]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($row && !empty($row['full_name'])) $parentName = $row['full_name'];
+        if ($row) {
+            $emailToReset = strtolower(trim((string)$row['account_email']));
+            if (!empty($row['full_name'])) $parentName = $row['full_name'];
+        }
 
         if ($emailToReset) {
             // create secure token

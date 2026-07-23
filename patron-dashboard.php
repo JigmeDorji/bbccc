@@ -52,6 +52,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'upgra
 
         if ($existingParentId > 0) {
             $parentId = $existingParentId;
+            $pdo->prepare("
+                UPDATE parents
+                SET user_id = :user_id, username = :username
+                WHERE id = :parent_id
+                LIMIT 1
+            ")->execute([
+                ':user_id' => $sessionUserId,
+                ':username' => $sessionEmail,
+                ':parent_id' => $parentId
+            ]);
         } else {
             $fullName = trim((string)($patron['full_name'] ?? ''));
             if ($fullName === '') {
@@ -61,17 +71,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'upgra
             $address = trim((string)($patron['address'] ?? ''));
 
             $insertParent = $pdo->prepare("
-                INSERT INTO parents (full_name, gender, email, phone, address, username, password, status)
-                VALUES (:full_name, :gender, :email, :phone, :address, :username, :password, :status)
+                INSERT INTO parents (user_id, full_name, gender, email, phone, address, username, status)
+                VALUES (:user_id, :full_name, :gender, :email, :phone, :address, :username, :status)
             ");
             $insertParent->execute([
+                ':user_id'   => $sessionUserId,
                 ':full_name' => $fullName,
                 ':gender'    => 'Other',
                 ':email'     => $sessionEmail,
                 ':phone'     => $phone,
                 ':address'   => $address,
                 ':username'  => $sessionEmail,
-                ':password'  => (string)$user['password'],
                 ':status'    => 'Active'
             ]);
             $parentId = (int)$pdo->lastInsertId();

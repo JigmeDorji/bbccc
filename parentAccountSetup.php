@@ -81,12 +81,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $pdo->beginTransaction();
         $userid = bbcc_generate_userid($pdo, 'P');
 
-        $pdo->prepare("INSERT INTO parents (full_name, gender, email, phone, address, username, password) VALUES (:full_name, :gender, :email, :phone, :address, :username, :password)")
-            ->execute([':full_name'=>$full_name, ':gender'=>$gender, ':email'=>$email, ':phone'=>$phone, ':address'=>$address, ':username'=>$username, ':password'=>$password]);
-        $parentId = (int)$pdo->lastInsertId();
-
         $pdo->prepare("INSERT INTO `user` (userid, username, password, role, is_active, createdDate) VALUES (:userid, :username, :password, :role, :is_active, :createdDate)")
             ->execute([':userid'=>$userid, ':username'=>$username, ':password'=>$password, ':role'=>'parent', ':is_active'=>1, ':createdDate'=>date('Y-m-d H:i:s')]);
+
+        $pdo->prepare("INSERT INTO parents (user_id, full_name, gender, email, phone, address, username) VALUES (:user_id, :full_name, :gender, :email, :phone, :address, :username)")
+            ->execute([':user_id'=>$userid, ':full_name'=>$full_name, ':gender'=>$gender, ':email'=>$email, ':phone'=>$phone, ':address'=>$address, ':username'=>$username]);
+        $parentId = (int)$pdo->lastInsertId();
 
         if ($registerAsPatron) {
             $pdo->prepare("
