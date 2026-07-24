@@ -13,7 +13,7 @@
 -- receives an unusable value and must use Forgot Password to establish one.
 INSERT INTO `user` (userid, username, password, role, createdDate)
 SELECT
-    CONCAT('PM', LPAD(p.id, 12, '0')),
+    CONCAT('MP', LPAD(p.id, 8, '0')),
     LOWER(TRIM(p.email)),
     COALESCE(
         NULLIF(p.password, ''),
@@ -25,7 +25,7 @@ FROM `parents` p
 LEFT JOIN `user` u_email
     ON LOWER(u_email.username) = LOWER(TRIM(p.email))
 LEFT JOIN `user` u_id
-    ON u_id.userid = CONCAT('PM', LPAD(p.id, 12, '0'))
+    ON u_id.userid = CONCAT('MP', LPAD(p.id, 8, '0'))
 WHERE p.email IS NOT NULL
   AND TRIM(p.email) <> ''
   AND u_email.userid IS NULL
@@ -38,8 +38,14 @@ LEFT JOIN `user` u_email
     ON LOWER(u_email.username) = LOWER(p.email)
 LEFT JOIN `user` u_username
     ON LOWER(u_username.username) = LOWER(p.username)
-SET p.user_id = COALESCE(NULLIF(p.user_id, ''), u_email.userid, u_username.userid)
-WHERE p.user_id IS NULL OR p.user_id = '';
+SET p.user_id = COALESCE(u_email.userid, u_username.userid, NULLIF(p.user_id, ''))
+WHERE p.user_id IS NULL
+   OR p.user_id = ''
+   OR NOT EXISTS (
+       SELECT 1
+       FROM `user` u_linked
+       WHERE u_linked.userid = p.user_id
+   );
 
 -- Credentials now live only in `user`.
 ALTER TABLE `parents` DROP COLUMN `password`;
