@@ -548,6 +548,7 @@ try {
                                                     id="p<?= $pid ?>"
                                                     name="parent_ids[]"
                                                     value="<?= $pid ?>"
+                                                    data-parent-name="<?= pe_h((string)($p['full_name'] ?? 'Parent')) ?>"
                                                     <?= in_array($pid, $selectedIds, true) ? 'checked' : '' ?>
                                                 >
                                                 <label class="custom-control-label" for="p<?= $pid ?>">
@@ -578,10 +579,10 @@ try {
                                     <input type="file" name="attachment" id="attachmentInput" class="custom-file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.txt">
                                     <label class="custom-file-label" for="attachmentInput">Choose file</label>
                                 </div>
-                                <small class="text-muted">Maximum 10 MB. PDF, Office documents, JPG, PNG, or TXT. Re-select the file after using Preview.</small>
+                                <small class="text-muted">Maximum 10 MB. PDF, Office documents, JPG, PNG, or TXT. Preview does not upload or clear the selected file.</small>
                             </div>
 
-                            <button type="submit" name="email_action" value="preview" class="btn btn-outline-primary" <?= empty($parents) ? 'disabled' : '' ?>>
+                            <button type="button" id="previewEmailButton" class="btn btn-outline-primary" <?= empty($parents) ? 'disabled' : '' ?>>
                                 <i class="fas fa-eye mr-1"></i> Preview Email
                             </button>
                             <button type="submit" name="email_action" value="send" class="btn btn-primary" <?= empty($parents) ? 'disabled' : '' ?>>
@@ -591,20 +592,18 @@ try {
                     </div>
                 </div>
 
-                <?php if ($previewHtml !== ''): ?>
-                    <div class="card shadow">
+                    <div class="card shadow" id="emailPreviewCard" style="<?= $previewHtml === '' ? 'display:none;' : '' ?>">
                         <div class="card-header py-3 d-flex justify-content-between align-items-center">
                             <h6 class="m-0 font-weight-bold text-primary">Email Preview</h6>
-                            <span class="badge badge-info">Recipients in scope: <?= (int)$previewCount ?></span>
+                            <span class="badge badge-info" id="previewRecipientCount">Recipients in scope: <?= (int)$previewCount ?></span>
                         </div>
                         <div class="card-body">
-                            <div class="mb-2"><strong>Subject:</strong> <?= pe_h($previewSubject) ?></div>
-                            <div class="border rounded" style="background:#fff;overflow:hidden;">
+                            <div class="mb-2"><strong>Subject:</strong> <span id="previewSubjectText"><?= pe_h($previewSubject) ?></span></div>
+                            <div class="border rounded" id="previewEmailContent" style="background:#fff;overflow:hidden;">
                                 <?= $previewHtml ?>
                             </div>
                         </div>
                     </div>
-                <?php endif; ?>
 
                 <div class="card shadow mt-3">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center">
@@ -661,6 +660,58 @@ try {
 <script>
 $(function () {
     var presets = <?= json_encode($presets, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    var allParents = <?= json_encode(array_map(static function (array $parent): array {
+        return [
+            'id' => (int)($parent['id'] ?? 0),
+            'name' => (string)($parent['full_name'] ?? 'Parent'),
+        ];
+    }, $parents), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+
+    function escapeHtml(value) {
+        return $('<div>').text(value == null ? '' : String(value)).html();
+    }
+
+    function applyPreviewTokens(value, parentName) {
+        return String(value || '')
+            .split('{PARENT_NAME}').join(parentName || 'Parent')
+            .split('{SCHOOL_NAME}').join('Bhutanese Language and Culture School');
+    }
+
+    function previewRecipients() {
+        if ($('#modeSelect').val() !== 'selected') {
+            return allParents;
+        }
+        var selected = [];
+        $('input[name="parent_ids[]"]:checked').each(function () {
+            selected.push({
+                id: Number(this.value || 0),
+                name: $(this).data('parent-name') || 'Parent'
+            });
+        });
+        return selected;
+    }
+
+    function buildPreviewHtml(subject, body) {
+        var safeSubject = escapeHtml(subject);
+        var safeBody = escapeHtml(body).replace(/\r?\n/g, '<br>');
+        return '<div style="margin:0;padding:24px 0;background:#f3f4f6;font-family:Arial,sans-serif;color:#1f2937;">' +
+            '<div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">' +
+                '<div style="background:#881b12;padding:18px 24px;color:#fff;">' +
+                    '<div style="font-size:13px;opacity:.9;letter-spacing:.04em;text-transform:uppercase;">Bhutanese Language and Culture School</div>' +
+                    '<div style="font-size:22px;font-weight:bold;line-height:1.2;margin-top:6px;">Parent Communication</div>' +
+                '</div>' +
+                '<div style="padding:22px 24px 10px;">' +
+                    '<div style="font-size:13px;color:#6b7280;margin-bottom:8px;">Subject</div>' +
+                    '<div style="font-size:20px;font-weight:bold;color:#111827;line-height:1.3;">' + safeSubject + '</div>' +
+                '</div>' +
+                '<div style="padding:8px 24px 10px;font-size:15px;line-height:1.7;color:#1f2937;">' + safeBody + '</div>' +
+                '<div style="padding:16px 24px 22px;">' +
+                    '<div style="height:1px;background:#e5e7eb;margin-bottom:10px;"></div>' +
+                    '<div style="font-size:12px;color:#6b7280;line-height:1.5;">This is an official communication from Bhutanese Language and Culture School. Please do not reply to this email if sent from a no-reply address.</div>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
+    }
 
     $('#modeSelect').on('change', function () {
         $('#parentPickerWrap').toggle($(this).val() === 'selected');
@@ -676,6 +727,31 @@ $(function () {
     $('#attachmentInput').on('change', function () {
         var name = this.files && this.files.length ? this.files[0].name : 'Choose file';
         $(this).next('.custom-file-label').text(name);
+    });
+
+    $('#previewEmailButton').on('click', function () {
+        var recipients = previewRecipients();
+        if (!recipients.length) {
+            window.alert('Please select at least one parent.');
+            return;
+        }
+
+        var sampleName = recipients[0].name || 'Parent';
+        var subject = applyPreviewTokens($('#subjectInput').val() || 'Sample Subject', sampleName);
+        var body = applyPreviewTokens(
+            $('#bodyInput').val() || 'This is a sample message preview.\nPlease update the message before sending.',
+            sampleName
+        );
+
+        $('#previewSubjectText').text(subject);
+        $('#previewRecipientCount').text('Recipients in scope: ' + recipients.length);
+        $('#previewEmailContent').html(buildPreviewHtml(subject, body));
+        $('#emailPreviewCard').show();
+
+        var previewTop = $('#emailPreviewCard').offset();
+        if (previewTop) {
+            $('html, body').animate({scrollTop: Math.max(0, previewTop.top - 20)}, 200);
+        }
     });
 });
 </script>
