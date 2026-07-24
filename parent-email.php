@@ -52,6 +52,84 @@ function pe_apply_tokens(string $text, string $recipientName): string {
     ]);
 }
 
+function pe_sanitize_email_html(string $html): string {
+    $html = trim($html);
+    if ($html === '') return '';
+
+    // Legacy/plain-text submissions remain supported.
+    if ($html === strip_tags($html)) {
+        return nl2br(pe_h($html));
+    }
+
+    $allowedTags = [
+        'p', 'div', 'br', 'strong', 'b', 'em', 'i', 'u', 's',
+        'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'blockquote',
+        'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'a', 'span',
+    ];
+    if (!class_exists('DOMDocument')) {
+        // Preserve safety on minimal PHP installations even if formatting
+        // must be reduced to plain text.
+        return nl2br(pe_h(trim(strip_tags($html))));
+    }
+
+    $doc = new DOMDocument('1.0', 'UTF-8');
+    $previous = libxml_use_internal_errors(true);
+    $doc->loadHTML(
+        '<?xml encoding="utf-8"?><div id="pe-root">' . $html . '</div>',
+        LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
+    );
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+
+    $root = $doc->getElementById('pe-root');
+    if (!$root) return '';
+
+    $walk = function (DOMNode $node) use (&$walk, $allowedTags): void {
+        for ($child = $node->firstChild; $child !== null;) {
+            $next = $child->nextSibling;
+            if ($child instanceof DOMElement) {
+                $tag = strtolower($child->tagName);
+                if (!in_array($tag, $allowedTags, true)) {
+                    while ($child->firstChild) {
+                        $node->insertBefore($child->firstChild, $child);
+                    }
+                    $node->removeChild($child);
+                    $child = $next;
+                    continue;
+                }
+
+                $allowedAttributes = match ($tag) {
+                    'a' => ['href', 'target'],
+                    'td', 'th' => ['colspan', 'rowspan'],
+                    default => [],
+                };
+                foreach (iterator_to_array($child->attributes) as $attribute) {
+                    if (!in_array(strtolower($attribute->name), $allowedAttributes, true)) {
+                        $child->removeAttribute($attribute->name);
+                    }
+                }
+                if ($tag === 'a') {
+                    $href = trim((string)$child->getAttribute('href'));
+                    if (!preg_match('~^(https?://|mailto:)~i', $href)) {
+                        $child->removeAttribute('href');
+                    } else {
+                        $child->setAttribute('target', '_blank');
+                    }
+                }
+                $walk($child);
+            }
+            $child = $next;
+        }
+    };
+    $walk($root);
+
+    $safe = '';
+    foreach ($root->childNodes as $child) {
+        $safe .= $doc->saveHTML($child);
+    }
+    return $safe;
+}
+
 function pe_store_attachment(array $file): ?array {
     $error = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
     if ($error === UPLOAD_ERR_NO_FILE) return null;
@@ -98,7 +176,7 @@ function pe_store_attachment(array $file): ?array {
 
 function pe_build_email_html(string $recipientName, string $subject, string $body, string $senderName): string {
     $safeSubject = pe_h($subject);
-    $safeBody = nl2br(pe_h($body));
+    $safeBody = pe_sanitize_email_html($body);
 
     return '
 <!doctype html>
@@ -127,6 +205,12 @@ function pe_build_email_html(string $recipientName, string $subject, string $bod
           <tr>
             <td style="padding:8px 24px 10px 24px;font-size:15px;line-height:1.7;color:#1f2937;">
               <div style="margin:0 0 14px 0;">' . $safeBody . '</div>
+              <style>
+                table{border-collapse:collapse;width:100%;margin:12px 0}
+                th,td{border:1px solid #d1d5db;padding:8px;text-align:left;vertical-align:top}
+                th{background:#f3f4f6;font-weight:bold}
+                blockquote{border-left:4px solid #881b12;margin:12px 0;padding:8px 14px;color:#4b5563}
+              </style>
             </td>
           </tr>
           <tr>
@@ -476,6 +560,50 @@ try {
     <title>Parent Email</title>
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
+    <style>
+        .email-editor-toolbar {
+            display:flex;
+            flex-wrap:wrap;
+            gap:5px;
+            padding:8px;
+            border:1px solid #d1d3e2;
+            border-bottom:0;
+            border-radius:.35rem .35rem 0 0;
+            background:#f8f9fc;
+        }
+        .email-editor-toolbar .btn { min-width:36px; }
+        .email-rich-editor {
+            min-height:220px;
+            max-height:520px;
+            overflow:auto;
+            padding:12px;
+            border:1px solid #d1d3e2;
+            border-radius:0 0 .35rem .35rem;
+            background:#fff;
+            color:#333;
+            line-height:1.55;
+        }
+        .email-rich-editor:focus {
+            border-color:#bac8f3;
+            outline:0;
+            box-shadow:0 0 0 .2rem rgba(78,115,223,.25);
+        }
+        .email-rich-editor table {
+            width:100%;
+            border-collapse:collapse;
+            margin:10px 0;
+        }
+        .email-rich-editor th, .email-rich-editor td {
+            border:1px solid #b7bcc5;
+            padding:7px;
+            min-width:60px;
+        }
+        .email-rich-editor th { background:#f1f3f5; }
+        #previewEmailContent table { width:100%;border-collapse:collapse;margin:12px 0; }
+        #previewEmailContent th, #previewEmailContent td { border:1px solid #d1d5db;padding:8px;text-align:left;vertical-align:top; }
+        #previewEmailContent th { background:#f3f4f6;font-weight:bold; }
+        #previewEmailContent blockquote { border-left:4px solid #881b12;margin:12px 0;padding:8px 14px;color:#4b5563; }
+    </style>
 </head>
 <body id="page-top">
 <div id="wrapper">
@@ -596,8 +724,25 @@ try {
                             </div>
                             <div class="form-group">
                                 <label>Message</label>
-                                <textarea name="body" id="bodyInput" rows="8" class="form-control"><?= pe_h($body) ?></textarea>
-                                <small class="text-muted">Use Preview to review the exact email design before sending.</small>
+                                <div class="email-editor-toolbar" role="toolbar" aria-label="Email formatting">
+                                    <button type="button" class="btn btn-sm btn-light editor-command" data-command="bold" title="Bold"><i class="fas fa-bold"></i></button>
+                                    <button type="button" class="btn btn-sm btn-light editor-command" data-command="italic" title="Italic"><i class="fas fa-italic"></i></button>
+                                    <button type="button" class="btn btn-sm btn-light editor-command" data-command="underline" title="Underline"><i class="fas fa-underline"></i></button>
+                                    <button type="button" class="btn btn-sm btn-light editor-command" data-command="insertUnorderedList" title="Bulleted list"><i class="fas fa-list-ul"></i></button>
+                                    <button type="button" class="btn btn-sm btn-light editor-command" data-command="insertOrderedList" title="Numbered list"><i class="fas fa-list-ol"></i></button>
+                                    <select id="editorFormatBlock" class="form-control form-control-sm" style="width:auto;" title="Text style">
+                                        <option value="p">Paragraph</option>
+                                        <option value="h2">Heading 1</option>
+                                        <option value="h3">Heading 2</option>
+                                        <option value="blockquote">Quote</option>
+                                    </select>
+                                    <button type="button" class="btn btn-sm btn-light" id="editorLinkButton" title="Insert link"><i class="fas fa-link"></i></button>
+                                    <button type="button" class="btn btn-sm btn-light" id="editorTableButton" title="Insert table"><i class="fas fa-table"></i></button>
+                                    <button type="button" class="btn btn-sm btn-light editor-command" data-command="removeFormat" title="Clear formatting"><i class="fas fa-eraser"></i></button>
+                                </div>
+                                <div id="bodyEditor" class="email-rich-editor" contenteditable="true" role="textbox" aria-multiline="true"><?= pe_sanitize_email_html($body) ?></div>
+                                <textarea name="body" id="bodyInput" class="d-none" aria-hidden="true"><?= pe_h($body) ?></textarea>
+                                <small class="text-muted">Formatting is preserved in Preview and in the delivered email.</small>
                             </div>
                             <div class="form-group">
                                 <label for="attachmentInput">Attachment <span class="text-muted">(optional)</span></label>
@@ -703,6 +848,39 @@ $(function () {
             .split('{SCHOOL_NAME}').join('Bhutanese Language and Culture School');
     }
 
+    function syncEditorBody() {
+        var editor = document.getElementById('bodyEditor');
+        var text = (editor.innerText || '').replace(/\u00a0/g, ' ').trim();
+        $('#bodyInput').val(text === '' ? '' : editor.innerHTML);
+    }
+
+    function plainTextToEditorHtml(value) {
+        return escapeHtml(value || '').replace(/\r?\n/g, '<br>');
+    }
+
+    function cleanPreviewHtml(html) {
+        var template = document.createElement('template');
+        template.innerHTML = String(html || '');
+        var allowed = ['P','DIV','BR','STRONG','B','EM','I','U','S','H1','H2','H3','H4','UL','OL','LI','BLOCKQUOTE','TABLE','THEAD','TBODY','TFOOT','TR','TH','TD','A','SPAN'];
+        Array.from(template.content.querySelectorAll('*')).forEach(function (node) {
+            if (allowed.indexOf(node.tagName) === -1) {
+                node.replaceWith.apply(node, Array.from(node.childNodes));
+                return;
+            }
+            Array.from(node.attributes).forEach(function (attribute) {
+                var permitted = (node.tagName === 'A' && ['href','target'].indexOf(attribute.name.toLowerCase()) !== -1) ||
+                    (['TD','TH'].indexOf(node.tagName) !== -1 && ['colspan','rowspan'].indexOf(attribute.name.toLowerCase()) !== -1);
+                if (!permitted) node.removeAttribute(attribute.name);
+            });
+            if (node.tagName === 'A') {
+                var href = node.getAttribute('href') || '';
+                if (!/^(https?:\/\/|mailto:)/i.test(href)) node.removeAttribute('href');
+                else node.setAttribute('target', '_blank');
+            }
+        });
+        return template.innerHTML;
+    }
+
     function previewRecipients() {
         if ($('#modeSelect').val() !== 'selected') {
             return allParents;
@@ -717,9 +895,9 @@ $(function () {
         return selected;
     }
 
-    function buildPreviewHtml(subject, body) {
+    function buildPreviewHtml(subject, bodyHtml) {
         var safeSubject = escapeHtml(subject);
-        var safeBody = escapeHtml(body).replace(/\r?\n/g, '<br>');
+        var safeBody = cleanPreviewHtml(bodyHtml);
         return '<div style="margin:0;padding:24px 0;background:#f3f4f6;font-family:Arial,sans-serif;color:#1f2937;">' +
             '<div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">' +
                 '<div style="background:#881b12;padding:18px 24px;color:#fff;">' +
@@ -747,12 +925,65 @@ $(function () {
         var key = $(this).val();
         if (!key || !presets[key]) return;
         $('#subjectInput').val(presets[key].subject || '');
-        $('#bodyInput').val(presets[key].body || '');
+        $('#bodyEditor').html(plainTextToEditorHtml(presets[key].body || ''));
+        syncEditorBody();
     });
 
     $('#attachmentInput').on('change', function () {
         var name = this.files && this.files.length ? this.files[0].name : 'Choose file';
         $(this).next('.custom-file-label').text(name);
+    });
+
+    $('.editor-command').on('click', function () {
+        document.getElementById('bodyEditor').focus();
+        document.execCommand($(this).data('command'), false, null);
+        syncEditorBody();
+    });
+
+    $('#editorFormatBlock').on('change', function () {
+        document.getElementById('bodyEditor').focus();
+        document.execCommand('formatBlock', false, '<' + this.value + '>');
+        syncEditorBody();
+    });
+
+    $('#editorLinkButton').on('click', function () {
+        var url = window.prompt('Enter a web address (https://...) or email link (mailto:...)');
+        if (!url) return;
+        url = url.trim();
+        if (!/^(https?:\/\/|mailto:)/i.test(url)) {
+            url = 'https://' + url;
+        }
+        document.getElementById('bodyEditor').focus();
+        document.execCommand('createLink', false, url);
+        syncEditorBody();
+    });
+
+    $('#editorTableButton').on('click', function () {
+        var rowsInput = window.prompt('Number of rows', '3');
+        if (rowsInput === null) return;
+        var rows = Math.max(1, Math.min(20, parseInt(rowsInput, 10) || 1));
+        var columnsInput = window.prompt('Number of columns', '3');
+        if (columnsInput === null) return;
+        var columns = Math.max(1, Math.min(10, parseInt(columnsInput, 10) || 1));
+
+        var table = '<table><tbody>';
+        for (var row = 0; row < rows; row++) {
+            table += '<tr>';
+            for (var column = 0; column < columns; column++) {
+                var tag = row === 0 ? 'th' : 'td';
+                table += '<' + tag + '>' + (row === 0 ? 'Heading' : 'Text') + '</' + tag + '>';
+            }
+            table += '</tr>';
+        }
+        table += '</tbody></table><p><br></p>';
+        document.getElementById('bodyEditor').focus();
+        document.execCommand('insertHTML', false, table);
+        syncEditorBody();
+    });
+
+    $('#bodyEditor').on('input blur', syncEditorBody);
+    $('form[method="POST"]').on('submit', function () {
+        if ($(this).find('#bodyEditor').length) syncEditorBody();
     });
 
     $('#previewEmailButton').on('click', function () {
@@ -764,14 +995,15 @@ $(function () {
 
         var sampleName = recipients[0].name || 'Parent';
         var subject = applyPreviewTokens($('#subjectInput').val() || 'Sample Subject', sampleName);
-        var body = applyPreviewTokens(
-            $('#bodyInput').val() || 'This is a sample message preview.\nPlease update the message before sending.',
+        syncEditorBody();
+        var bodyHtml = applyPreviewTokens(
+            $('#bodyInput').val() || plainTextToEditorHtml('This is a sample message preview.\nPlease update the message before sending.'),
             sampleName
         );
 
         $('#previewSubjectText').text(subject);
         $('#previewRecipientCount').text('Recipients in scope: ' + recipients.length);
-        $('#previewEmailContent').html(buildPreviewHtml(subject, body));
+        $('#previewEmailContent').html(buildPreviewHtml(subject, bodyHtml));
         $('#emailPreviewCard').show();
 
         var previewTop = $('#emailPreviewCard').offset();
