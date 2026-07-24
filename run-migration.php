@@ -32,9 +32,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     $action = (string)($_POST['action'] ?? '');
     if ($action === 'run_pending') {
-        bbcc_run_migrations();
-        $message = 'Pending migrations executed. Refresh status below.';
-        $messageType = 'success';
+        $migrationResult = bbcc_run_migrations();
+        if (!empty($migrationResult['ok'])) {
+            $appliedCount = count((array)($migrationResult['applied'] ?? []));
+            $message = $appliedCount > 0
+                ? "{$appliedCount} pending migration(s) applied successfully."
+                : 'No pending migrations needed to be applied.';
+            $messageType = 'success';
+        } else {
+            $message = (string)($migrationResult['error'] ?? 'Migration failed. Check the server error log.');
+            $messageType = 'danger';
+        }
     }
 }
 

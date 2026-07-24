@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS `parents` (
     `phone`      VARCHAR(50)  DEFAULT NULL,
     `address`    TEXT         DEFAULT NULL,
     `username`   VARCHAR(150) DEFAULT NULL,
+    -- Transitional only; migration 015 moves credentials to `user` and drops it.
+    `password`   VARCHAR(255) DEFAULT NULL,
     `pin_hash`   VARCHAR(255) DEFAULT NULL,
     `status`     ENUM('Active','Inactive') NOT NULL DEFAULT 'Active',
     `created_at` TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,

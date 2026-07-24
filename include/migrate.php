@@ -18,11 +18,12 @@
 
 function bbcc_run_migrations() {
     global $DB_HOST, $DB_USER, $DB_PASSWORD, $DB_NAME;
+    $result = ['ok' => true, 'applied' => [], 'error' => ''];
 
     // ── Resolve paths ──────────────────────────────────────
     $migrationsDir = dirname(__DIR__) . '/migrations';
     if (!is_dir($migrationsDir)) {
-        return; // No migrations folder — nothing to do
+        return $result; // No migrations folder — nothing to do
     }
 
     // ── Connect via PDO (needed for multi-statement & tracking) ──
@@ -35,7 +36,7 @@ function bbcc_run_migrations() {
         ]);
     } catch (PDOException $e) {
         error_log("[BBCC Migrate] DB connection failed: " . $e->getMessage());
-        return; // Don't break the site — just skip migrations
+        return ['ok' => false, 'applied' => [], 'error' => 'Database connection failed: ' . $e->getMessage()];
     }
 
     // ── Ensure the tracking table exists ────────────────────
@@ -63,7 +64,7 @@ function bbcc_run_migrations() {
     // ── Discover migration files (sorted by numeric prefix) ─
     $files = glob($migrationsDir . '/*.sql');
     if (!$files) {
-        return;
+        return $result;
     }
     sort($files); // Ensures 001 runs before 002, etc.
 
@@ -109,15 +110,20 @@ function bbcc_run_migrations() {
             // Record successful migration
             $ins = $pdo->prepare("INSERT INTO `db_migrations` (`migration`) VALUES (?)");
             $ins->execute([$filename]);
+            $result['applied'][] = $filename;
 
             error_log("[BBCC Migrate] Applied: {$filename}");
 
         } catch (Exception $e) {
             error_log("[BBCC Migrate] FAILED on {$filename}: " . $e->getMessage());
+            $result['ok'] = false;
+            $result['error'] = "Failed on {$filename}: " . $e->getMessage();
             // Stop processing further migrations to keep order intact
             break;
         }
     }
+
+    return $result;
 }
 
 /**
