@@ -7,6 +7,13 @@ require_once "include/csrf.php";
 $message = "";
 $errors = [];
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && isset($_SESSION['forgot_password_flash'])) {
+    $flash = (array)$_SESSION['forgot_password_flash'];
+    unset($_SESSION['forgot_password_flash']);
+    $message = (string)($flash['message'] ?? '');
+    $errors = array_values(array_map('strval', (array)($flash['errors'] ?? [])));
+}
+
 try {
     $pdo = new PDO(
         "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
@@ -123,6 +130,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+
+    $_SESSION['forgot_password_flash'] = [
+        'message' => $message,
+        'errors' => $errors,
+    ];
+    header('Location: forgotPassword');
+    exit;
 }
 ?>
 <!DOCTYPE html>

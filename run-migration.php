@@ -14,6 +14,13 @@ if (!is_admin_role()) {
 $message = '';
 $messageType = 'info';
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && isset($_SESSION['migration_flash'])) {
+    $flash = (array)$_SESSION['migration_flash'];
+    unset($_SESSION['migration_flash']);
+    $message = (string)($flash['message'] ?? '');
+    $messageType = (string)($flash['type'] ?? 'info');
+}
+
 try {
     $pdo = new PDO(
         "mysql:host={$DB_HOST};dbname={$DB_NAME};charset=utf8mb4",
@@ -43,6 +50,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = (string)($migrationResult['error'] ?? 'Migration failed. Check the server error log.');
             $messageType = 'danger';
         }
+
+        $_SESSION['migration_flash'] = [
+            'message' => $message,
+            'type' => $messageType,
+        ];
+        header('Location: run-migration');
+        exit;
     }
 }
 

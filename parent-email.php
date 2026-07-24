@@ -271,6 +271,16 @@ $previewSubject = '';
 $previewCount = 0;
 $deliveryReport = null;
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && isset($_SESSION['parent_email_flash'])) {
+    $flash = (array)$_SESSION['parent_email_flash'];
+    unset($_SESSION['parent_email_flash']);
+    $result = isset($flash['result']) ? (string)$flash['result'] : null;
+    $message = (string)($flash['message'] ?? '');
+    $deliveryReport = isset($flash['delivery_report']) && is_array($flash['delivery_report'])
+        ? $flash['delivery_report']
+        : null;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
     $emailAction = (string)($_POST['email_action'] ?? 'send');
@@ -422,6 +432,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
+    }
+
+    // Sending is a state-changing action. Redirect after processing so a
+    // browser refresh cannot submit the same email batch again.
+    if ($emailAction !== 'preview') {
+        $_SESSION['parent_email_flash'] = [
+            'result' => $result,
+            'message' => $message,
+            'delivery_report' => $deliveryReport,
+        ];
+        $redirect = 'parent-email';
+        if (!$isAdmin && $classId > 0) {
+            $redirect .= '?class_id=' . $classId;
+        }
+        header('Location: ' . $redirect);
+        exit;
     }
 }
 
