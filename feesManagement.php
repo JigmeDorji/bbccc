@@ -3,6 +3,8 @@ require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/mailer.php";
 require_once "include/pcm_helpers.php";
+require_once "include/csrf.php";
+require_once "include/fee_audit.php";
 require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
@@ -15,6 +17,13 @@ $message = "";
 $success = false;
 $reload  = false;
 $updateOnlyMode = false; // Fees Overview page only
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && isset($_SESSION['fees_management_flash'])) {
+    $saved = (array)$_SESSION['fees_management_flash'];
+    unset($_SESSION['fees_management_flash']);
+    $message = (string)($saved['message'] ?? '');
+    $success = !empty($saved['success']);
+}
 
 // ---------------- DB CONNECTION ----------------
 try {
@@ -301,6 +310,7 @@ pcm_ensure_enrolment_start_term($pdo);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'adjust_enrolment_start_term') {
     try {
+        verify_csrf();
         $enrolmentId = (int)($_POST['adjust_enrolment_id'] ?? 0);
         $startTerm = pcm_normalize_start_term($_POST['adjust_start_term'] ?? 1);
 
@@ -322,12 +332,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'adjus
         if (empty($keepLabels)) throw new Exception("No fee rows available for this plan/start term.");
         $newAmount = pcm_plan_total_for_start_term($plan, $startTerm);
 
+        $protectedSql = "
+            SELECT COUNT(*)
+            FROM pcm_fee_payments
+            WHERE enrolment_id = ?
+              AND plan_type IN ('Term-wise','Half-yearly','Yearly')
+              AND status = 'Verified'
+              AND instalment_label NOT IN (" . implode(',', array_fill(0, count($keepLabels), '?')) . ")
+        ";
+        $protected = $pdo->prepare($protectedSql);
+        $protected->execute(array_merge([$enrolmentId], $keepLabels));
+        if ((int)$protected->fetchColumn() > 0) {
+            throw new Exception('This adjustment would remove a verified payment. Verified payment history cannot be deleted.');
+        }
+
         $pdo->beginTransaction();
 
         $delSql = "
             DELETE FROM pcm_fee_payments
             WHERE enrolment_id = ?
               AND plan_type IN ('Term-wise','Half-yearly','Yearly')
+              AND status <> 'Verified'
               AND instalment_label NOT IN (" . implode(',', array_fill(0, count($keepLabels), '?')) . ")
         ";
         $del = $pdo->prepare($delSql);
@@ -381,6 +406,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'adjus
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['class_charge_action'])) {
     try {
+        verify_csrf();
         $act = trim((string)($_POST['class_charge_action'] ?? ''));
         if ($act === 'add') {
             $classId = (int)($_POST['charge_class_id'] ?? 0);
@@ -525,48 +551,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['class_charge_action']
     }
 }
 
-// ---------------- ACTIONS: VERIFY / REJECT / UPDATE ----------------
-// NOTE: "Update" here will open an inline modal to change status (Unpaid/Pending/Verified/Rejected) + reset verify meta.
-// If you want update to edit due_amount, remarks, etc, tell me and I will add those fields too.
-
-if (isset($_GET['fee_action'], $_GET['fee_id'])) {
-    try {
-        $feeId = (int)$_GET['fee_id'];
-        $act   = strtolower(trim($_GET['fee_action']));
-
-        if ($feeId <= 0) throw new Exception("Invalid fee ID.");
-
-        // verify / reject quick actions
-        if (in_array($act, ['approve','reject'], true)) {
-            $newStatus = ($act === 'approve') ? 'Verified' : 'Rejected';
-            $verifiedBy = $_SESSION['username'] ?? 'admin';
-
-            $stmt = $pdo->prepare("
-                UPDATE pcm_fee_payments
-                SET status = :st,
-                    paid_amount = CASE WHEN :st_paid = 'Verified' AND paid_amount <= 0 THEN due_amount ELSE paid_amount END,
-                    verified_by = :vb,
-                    verified_at = NOW()
-                WHERE id = :id
-            ");
-            $stmt->execute([':st'=>$newStatus, ':st_paid'=>$newStatus, ':vb'=>$verifiedBy, ':id'=>$feeId]);
-
-            $message = "Installment {$newStatus} successfully.";
-            $success = true;
-            $reload  = true;
-        }
-
-        // update: handled via POST (safer), but keep GET to open modal only (UI)
-    } catch (Exception $e) {
-        $message = "Error: " . $e->getMessage();
-        $success = false;
-        $reload  = false;
-    }
-}
-
 // ---------------- UPDATE (POST) ----------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
     try {
+        verify_csrf();
         $feeId = (int)($_POST['update_fee_id'] ?? 0);
         $newStatus = trim((string)($_POST['new_status'] ?? ''));
 
@@ -578,6 +566,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
         $verifiedBy = $_SESSION['username'] ?? 'admin';
         $pcmStatus = ($newStatus === 'Approved') ? 'Verified' : $newStatus;
 
+        $before = bbcc_fee_payment_snapshot($pdo, $feeId);
         // If Verified/Rejected => set verified_*; if Unpaid/Pending => clear verified_*
         if (in_array($pcmStatus, ['Unpaid', 'Pending'], true)) {
             $stmt = $pdo->prepare("
@@ -599,6 +588,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
             ");
             $stmt->execute([':st'=>$pcmStatus, ':st_paid'=>$pcmStatus, ':vb'=>$verifiedBy, ':id'=>$feeId]);
         }
+        $after = bbcc_fee_payment_snapshot($pdo, $feeId);
+        bbcc_audit_fee_payment_change($pdo, $feeId, 'status_update', $before, $after);
 
         $message = "Installment updated successfully.";
         $success = true;
@@ -614,6 +605,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
 // ---------------- UPDATE PAYMENTS (DEDICATED MODE) ----------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_payment_row') {
     try {
+        verify_csrf();
         $pid = (int)($_POST['payment_id'] ?? 0);
         $due = (float)($_POST['due_amount'] ?? 0);
         $paid = (float)($_POST['paid_amount'] ?? 0);
@@ -626,6 +618,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
         if (!in_array($st, $allowed, true)) throw new Exception("Invalid status.");
 
         $reviewer = (string)($_SESSION['username'] ?? 'admin');
+        $before = bbcc_fee_payment_snapshot($pdo, $pid);
         if (in_array($st, ['Verified', 'Rejected'], true)) {
             $stmt = $pdo->prepare("
                 UPDATE pcm_fee_payments
@@ -664,6 +657,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
                 ':id' => $pid
             ]);
         }
+        $after = bbcc_fee_payment_snapshot($pdo, $pid);
+        bbcc_audit_fee_payment_change($pdo, $pid, 'manual_update', $before, $after);
 
         $message = "Payment updated successfully.";
         $success = true;
@@ -678,6 +673,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
 // ---------------- BULK EMAIL: UNPAID FEES ----------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_unpaid_fee_email') {
     try {
+        verify_csrf();
         $ids = array_values(array_unique(array_map('intval', (array)($_POST['payment_ids'] ?? []))));
         $subjectTpl = trim((string)($_POST['email_subject'] ?? 'Unpaid Fee Reminder for {child_name}'));
         $bodyTpl = trim((string)($_POST['email_body'] ?? "Dear {parent_name},\n\nThis is a reminder that {child_name} has unpaid fee for {instalment_label} ({plan_type}).\nAmount due: \${due_amount}\n\nPlease complete the payment in parent portal.\n\nThank you."));
@@ -725,6 +721,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_
         $success = false;
         $reload = false;
     }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $_SESSION['fees_management_flash'] = [
+        'message' => $message,
+        'success' => $success,
+    ];
+    header('Location: feesManagement');
+    exit;
 }
 
 // ---------------- LOAD ALL FEE DATA ----------------
@@ -1321,6 +1326,7 @@ if ($updateOnlyMode) {
                     </div>
                     <div class="card-body">
                         <form method="POST">
+                            <?= csrf_field() ?>
                             <input type="hidden" name="action" value="adjust_enrolment_start_term">
                             <div class="row align-items-end">
                                 <div class="col-lg-6 mb-3">
@@ -1366,6 +1372,7 @@ if ($updateOnlyMode) {
                     </div>
                     <div class="card-body">
                         <form method="POST">
+                            <?= csrf_field() ?>
                             <input type="hidden" name="action" value="send_unpaid_fee_email">
                             <div class="mb-3">
                                 <button type="button" class="btn btn-sm btn-primary unpaid-plan-filter-btn active" data-plan="all">All</button>
@@ -1466,6 +1473,7 @@ Thank you.</textarea>
                                     <?php else: foreach ($updatePayments as $i => $up): ?>
                                         <tr>
                                             <form method="POST">
+                                                <?= csrf_field() ?>
                                                 <td><?= $i + 1 ?></td>
                                                 <td><?= h($up['student_name']) ?> <small class="text-muted">(<?= h($up['stu_code']) ?>)</small></td>
                                                 <td><?= h($up['parent_name'] ?? '-') ?></td>
@@ -1699,6 +1707,7 @@ Thank you.</textarea>
 
 <!-- Hidden Update Form (submitted via JS) -->
 <form id="updateFeeForm" method="POST" style="display:none;">
+    <?= csrf_field() ?>
     <input type="hidden" name="update_fee_id" id="update_fee_id" value="">
     <input type="hidden" name="new_status" id="new_status" value="">
 </form>

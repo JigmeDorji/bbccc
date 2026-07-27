@@ -488,7 +488,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $message = "No parent emails were sent. {$failedDirect} failed and {$skipped} skipped. Check mail_error.log.";
                 }
             } else {
-                $processed = bbcc_process_mail_queue(50);
                 $batchStatus = $pdo->prepare("
                     SELECT status, COUNT(*) AS total
                     FROM mail_queue
@@ -511,8 +510,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $result = 'success';
                     $message = "Confirmed sent to {$deliveryReport['sent']} parent(s). Skipped {$skipped}.";
                 } else {
-                    $result = 'warning';
-                    $message = "Delivery is not fully confirmed: {$deliveryReport['sent']} sent, {$waiting} waiting/retrying, {$deliveryReport['failed']} failed. Check Recent Delivery Status below.";
+                    $result = 'success';
+                    $message = "Queued {$queued} email(s) for background delivery. {$deliveryReport['sent']} already sent, {$waiting} waiting/retrying, {$deliveryReport['failed']} failed. Skipped {$skipped}.";
                 }
             }
         }

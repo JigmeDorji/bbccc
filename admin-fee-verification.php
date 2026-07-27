@@ -7,6 +7,7 @@ require_once "include/csrf.php";
 require_once "include/pcm_helpers.php";
 require_once "include/notifications.php";
 require_once "include/mailer.php";
+require_once "include/fee_audit.php";
 require_login();
 
 if (!is_admin_role()) { header("Location: unauthorized"); exit; }
@@ -14,6 +15,13 @@ if (!is_admin_role()) { header("Location: unauthorized"); exit; }
 $pdo   = pcm_pdo();
 $flash = '';
 $ok    = false;
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && isset($_SESSION['fee_verification_flash'])) {
+    $saved = (array)$_SESSION['fee_verification_flash'];
+    unset($_SESSION['fee_verification_flash']);
+    $flash = (string)($saved['message'] ?? '');
+    $ok = !empty($saved['ok']);
+}
 
 // ── POST: verify or reject ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['verify','reject'])) {
@@ -36,10 +44,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
         $flash = 'Record not found.';
     } elseif ($fee['status'] !== 'Pending') {
         $flash = 'This payment is not awaiting review.';
+    } elseif ($action === 'reject' && $reason === '') {
+        $flash = 'A rejection reason is required.';
     } else {
         $newStatus = ($action === 'verify') ? 'Verified' : 'Rejected';
         $reviewer  = $_SESSION['username'] ?? 'admin';
 
+        $before = bbcc_fee_payment_snapshot($pdo, $fid);
         $upd = $pdo->prepare("
             UPDATE pcm_fee_payments
             SET status=:st, verified_by=:vb, verified_at=NOW(),
@@ -48,6 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
             WHERE id=:id
         ");
         $upd->execute([':st'=>$newStatus, ':vb'=>$reviewer, ':st2'=>$newStatus, ':rr'=>$reason?:null, ':st3'=>$newStatus, ':id'=>$fid]);
+        $after = bbcc_fee_payment_snapshot($pdo, $fid);
+        bbcc_audit_fee_payment_change($pdo, $fid, strtolower($newStatus), $before, $after, $reason);
 
         pcm_notify_parent_fee($fee['parent_email'], $fee['parent_name'], $fee['student_name'], $fee['instalment_label'], $newStatus);
         bbcc_notify_username(
@@ -105,6 +118,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_
         $flash = 'Error: ' . $e->getMessage();
         $ok = false;
     }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $_SESSION['fee_verification_flash'] = ['message' => $flash, 'ok' => $ok];
+    header('Location: admin-fee-verification');
+    exit;
 }
 
 // ── Fetch payments awaiting verification + recent history ──

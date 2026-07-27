@@ -4,6 +4,7 @@ require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/role_helpers.php";
 require_once "include/csrf.php";
+require_once "include/fee_audit.php";
 require_once "include/pcm_helpers.php";
 require_login();
 
@@ -89,6 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
                     ':pid' => $parentId
                 ]);
 
+                $before = bbcc_fee_payment_snapshot($pdo, $feeId);
                 $upd = $pdo->prepare("
                     UPDATE pcm_fee_payments
                     SET proof_path=:p, payment_ref=:ref, paid_amount=due_amount,
@@ -96,6 +98,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
                     WHERE id=:id
                 ");
                 $upd->execute([':p'=>$path, ':ref'=>$ref?:null, ':id'=>$feeId]);
+                $after = bbcc_fee_payment_snapshot($pdo, $feeId);
+                bbcc_audit_fee_payment_change($pdo, $feeId, 'proof_submitted', $before, $after);
                 $flash = 'Payment proof uploaded. Awaiting admin verification.';
                 $ok = true;
             } else {

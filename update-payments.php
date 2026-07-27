@@ -1,12 +1,17 @@
 <?php
 require_once "include/config.php";
 require_once "include/auth.php";
+require_once "include/csrf.php";
+require_once "include/fee_audit.php";
 require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
 if ($role === 'parent') {
     header("Location: index-admin");
     exit;
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
 }
 
 $message = "";
@@ -318,45 +323,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['class_charge_action']
     }
 }
 
-// ---------------- ACTIONS: APPROVE / REJECT / UPDATE ----------------
-// NOTE: "Update" here will open an inline modal to change status (Approved/Rejected/Pending) + reset verify meta.
-// If you want update to edit due_amount, remarks, etc, tell me and I will add those fields too.
-
-if (isset($_GET['fee_action'], $_GET['fee_id'])) {
-    try {
-        $feeId = (int)$_GET['fee_id'];
-        $act   = strtolower(trim($_GET['fee_action']));
-
-        if ($feeId <= 0) throw new Exception("Invalid fee ID.");
-
-        // approve / reject current PCM fee rows
-        if (in_array($act, ['approve','reject'], true)) {
-            $newStatus = ($act === 'approve') ? 'Verified' : 'Rejected';
-            $verifiedBy = $_SESSION['username'] ?? 'admin';
-
-            $stmt = $pdo->prepare("
-                UPDATE pcm_fee_payments
-                SET status = :st,
-                    paid_amount = CASE WHEN :st_paid = 'Verified' AND paid_amount <= 0 THEN due_amount ELSE paid_amount END,
-                    verified_by = :vb,
-                    verified_at = NOW()
-                WHERE id = :id
-            ");
-            $stmt->execute([':st'=>$newStatus, ':st_paid'=>$newStatus, ':vb'=>$verifiedBy, ':id'=>$feeId]);
-
-            $message = "Installment {$newStatus} successfully.";
-            $success = true;
-            $reload  = true;
-        }
-
-        // update: handled via POST (safer), but keep GET to open modal only (UI)
-    } catch (Exception $e) {
-        $message = "Error: " . $e->getMessage();
-        $success = false;
-        $reload  = false;
-    }
-}
-
 // ---------------- UPDATE (POST) ----------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
     try {
@@ -370,6 +336,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
 
         $verifiedBy = $_SESSION['username'] ?? 'admin';
         $pcmStatus = ($newStatus === 'Approved') ? 'Verified' : $newStatus;
+        $before = bbcc_fee_payment_snapshot($pdo, $feeId);
 
         // If Verified/Rejected => set verified_*; if Unpaid/Pending => clear verified_*
         if (in_array($pcmStatus, ['Unpaid','Pending'], true)) {
@@ -392,6 +359,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
             ");
             $stmt->execute([':st'=>$pcmStatus, ':st_paid'=>$pcmStatus, ':vb'=>$verifiedBy, ':id'=>$feeId]);
         }
+        $after = bbcc_fee_payment_snapshot($pdo, $feeId);
+        bbcc_audit_fee_payment_change($pdo, $feeId, 'status_update', $before, $after);
 
         $message = "Installment updated successfully.";
         $success = true;
@@ -419,6 +388,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
         if (!in_array($st, $allowed, true)) throw new Exception("Invalid status.");
 
         $reviewer = (string)($_SESSION['username'] ?? 'admin');
+        $before = bbcc_fee_payment_snapshot($pdo, $pid);
         if (in_array($st, ['Verified', 'Rejected'], true)) {
             $stmt = $pdo->prepare("
                 UPDATE pcm_fee_payments
@@ -457,6 +427,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
                 ':id' => $pid
             ]);
         }
+        $after = bbcc_fee_payment_snapshot($pdo, $pid);
+        bbcc_audit_fee_payment_change($pdo, $pid, 'manual_update', $before, $after);
 
         $message = "Payment updated successfully.";
         $success = true;
@@ -483,6 +455,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'bulk_
 
         $reviewer = (string)($_SESSION['username'] ?? 'admin');
         $in = implode(',', array_fill(0, count($ids), '?'));
+        $beforeRows = [];
+        foreach ($ids as $id) {
+            $beforeRows[$id] = bbcc_fee_payment_snapshot($pdo, $id);
+        }
 
         if (in_array($st, ['Verified', 'Rejected'], true)) {
             $sql = "
@@ -508,6 +484,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'bulk_
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
+        foreach ($ids as $id) {
+            bbcc_audit_fee_payment_change(
+                $pdo,
+                $id,
+                'bulk_status_update',
+                $beforeRows[$id] ?? null,
+                bbcc_fee_payment_snapshot($pdo, $id)
+            );
+        }
 
         $message = count($ids) . " payment row(s) updated successfully.";
         $success = true;
@@ -1023,6 +1008,56 @@ if ($updateOnlyMode) {
         }
         .update-payments-toolbar .form-control,
         .update-payments-toolbar .btn { min-height:38px; }
+        .payment-summary-grid {
+            display:grid;
+            grid-template-columns:repeat(4, minmax(120px, 1fr));
+            gap:10px;
+            margin-bottom:16px;
+        }
+        .payment-summary-item {
+            display:flex;
+            align-items:center;
+            gap:10px;
+            padding:12px 14px;
+            border:1px solid #e3e6f0;
+            border-radius:10px;
+            background:#fff;
+        }
+        .payment-summary-icon {
+            width:34px;
+            height:34px;
+            border-radius:9px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            flex:0 0 34px;
+        }
+        .summary-pending .payment-summary-icon { background:#fff4cf; color:#b77900; }
+        .summary-verified .payment-summary-icon { background:#def7ec; color:#087f5b; }
+        .summary-rejected .payment-summary-icon { background:#fde8e7; color:#c53030; }
+        .summary-unpaid .payment-summary-icon { background:#edf0f5; color:#5a5c69; }
+        .payment-summary-value { font-size:1.15rem; font-weight:800; line-height:1; color:#2e3440; }
+        .payment-summary-label { margin-top:4px; font-size:.69rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#858796; }
+        .payment-filter-panel {
+            background:#f8f9fc;
+            border:1px solid #e3e6f0;
+            border-radius:10px;
+            padding:14px;
+            margin-bottom:14px;
+        }
+        .payment-filter-panel .form-control { min-height:40px; border-color:#d9deea; }
+        .payment-filter-panel .input-group .btn { min-height:40px; }
+        .payment-result-meta { font-size:.8rem; color:#6c757d; }
+        .payment-no-results {
+            display:none;
+            padding:24px;
+            margin-bottom:16px;
+            text-align:center;
+            border:1px dashed #cdd3df;
+            border-radius:10px;
+            color:#6c757d;
+            background:#fbfcfe;
+        }
         .status-filter-btn.active { color:#fff !important; }
         .status-filter-btn[data-status="Pending"].active { background:#f6c23e; border-color:#f6c23e; color:#1f2933 !important; }
         .status-filter-btn[data-status="Verified"].active { background:#1cc88a; border-color:#1cc88a; }
@@ -1055,6 +1090,7 @@ if ($updateOnlyMode) {
             font-size:.84rem;
         }
         @media (max-width: 768px) {
+            .payment-summary-grid { grid-template-columns:repeat(2, minmax(120px, 1fr)); }
             .update-payments-table {
                 min-width: 1200px;
             }
@@ -1069,6 +1105,12 @@ if ($updateOnlyMode) {
             }
         }
         @media (max-width: 480px) {
+            .payment-summary-grid { grid-template-columns:1fr 1fr; gap:8px; }
+            .payment-summary-item { padding:10px; }
+            .payment-filter-panel .input-group { display:block; }
+            .payment-filter-panel .input-group > .form-control { width:100%; border-radius:.25rem; margin-bottom:8px; }
+            .payment-filter-panel .input-group-append { display:flex; margin-left:0; }
+            .payment-filter-panel .input-group-append .btn { flex:1; }
             .update-payments-table {
                 min-width: 1320px;
             }
@@ -1123,6 +1165,7 @@ if ($updateOnlyMode) {
                     </div>
                     <div class="card-body">
                         <form method="POST" class="mb-3">
+                            <?= csrf_field() ?>
                             <input type="hidden" name="class_charge_action" value="add">
                             <div class="form-row">
                                 <div class="form-group col-lg-3">
@@ -1189,11 +1232,13 @@ if ($updateOnlyMode) {
                                             </td>
                                             <td class="nowrap">
                                                 <form method="POST" class="d-inline">
+                                                    <?= csrf_field() ?>
                                                     <input type="hidden" name="class_charge_action" value="apply">
                                                     <input type="hidden" name="charge_id" value="<?php echo (int)$cc['id']; ?>">
                                                     <button type="submit" class="btn btn-sm btn-outline-primary">Apply Missing</button>
                                                 </form>
                                                 <form method="POST" class="d-inline">
+                                                    <?= csrf_field() ?>
                                                     <input type="hidden" name="class_charge_action" value="toggle">
                                                     <input type="hidden" name="charge_id" value="<?php echo (int)$cc['id']; ?>">
                                                     <button type="submit" class="btn btn-sm btn-outline-secondary">
@@ -1325,13 +1370,14 @@ if ($updateOnlyMode) {
                             <a href="feesManagement" class="btn btn-sm btn-outline-secondary">Back to Full Fees</a>
                         </div>
                         <div class="card-body">
-                            <div class="mb-3" style="display:flex;gap:14px;flex-wrap:wrap;font-size:.84rem;">
-                                <span><strong>Pending:</strong> <?= (int)$updateCounts['Pending'] ?></span>
-                                <span><strong>Verified:</strong> <?= (int)$updateCounts['Verified'] ?></span>
-                                <span><strong>Rejected:</strong> <?= (int)$updateCounts['Rejected'] ?></span>
-                                <span><strong>Unpaid:</strong> <?= (int)$updateCounts['Unpaid'] ?></span>
+                            <div class="payment-summary-grid">
+                                <div class="payment-summary-item summary-pending"><span class="payment-summary-icon"><i class="fas fa-clock"></i></span><div><div class="payment-summary-value"><?= (int)$updateCounts['Pending'] ?></div><div class="payment-summary-label">Pending</div></div></div>
+                                <div class="payment-summary-item summary-verified"><span class="payment-summary-icon"><i class="fas fa-check"></i></span><div><div class="payment-summary-value"><?= (int)$updateCounts['Verified'] ?></div><div class="payment-summary-label">Verified</div></div></div>
+                                <div class="payment-summary-item summary-rejected"><span class="payment-summary-icon"><i class="fas fa-times"></i></span><div><div class="payment-summary-value"><?= (int)$updateCounts['Rejected'] ?></div><div class="payment-summary-label">Rejected</div></div></div>
+                                <div class="payment-summary-item summary-unpaid"><span class="payment-summary-icon"><i class="fas fa-wallet"></i></span><div><div class="payment-summary-value"><?= (int)$updateCounts['Unpaid'] ?></div><div class="payment-summary-label">Unpaid</div></div></div>
                             </div>
                             <form method="POST" id="bulkPaymentForm" class="update-payments-toolbar">
+                                <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="bulk_update_payments">
                                 <div class="row align-items-end">
                                     <div class="col-lg-3 col-md-6 mb-2">
@@ -1362,8 +1408,9 @@ if ($updateOnlyMode) {
                                 </div>
                             </form>
 
-                            <div class="form-row mb-3">
-                                <div class="col-lg-4 col-md-6">
+                            <div class="payment-filter-panel">
+                            <div class="form-row align-items-end">
+                                <div class="col-lg-4 col-md-5">
                                     <label for="updateClassFilter" class="mini font-weight-bold text-uppercase mb-1">Filter by class</label>
                                     <select id="updateClassFilter" class="form-control form-control-sm">
                                         <option value="all">All classes</option>
@@ -1373,6 +1420,20 @@ if ($updateOnlyMode) {
                                         <option value="unassigned">Not assigned</option>
                                     </select>
                                 </div>
+                                <div class="col-lg-8 col-md-7 mt-2 mt-md-0">
+                                    <label for="updatePaymentSearch" class="mini font-weight-bold text-uppercase mb-1">Search payments</label>
+                                    <div class="input-group input-group-sm">
+                                        <input type="search" id="updatePaymentSearch" class="form-control" placeholder="Child, student ID, parent, email, phone or reference">
+                                        <div class="input-group-append">
+                                            <button type="button" class="btn btn-primary" id="updatePaymentSearchBtn">
+                                                <i class="fas fa-search mr-1"></i>Search
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary" id="clearUpdatePaymentSearch">Clear</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="payment-result-meta mt-2"><i class="fas fa-list mr-1"></i><strong id="visiblePaymentCount">0</strong> students shown</div>
                             </div>
 
                             <div class="method-tabs-wrap">
@@ -1381,6 +1442,12 @@ if ($updateOnlyMode) {
                                 <button type="button" class="btn btn-outline-primary method-pill js-method-pill" data-plan="term-wise">Term-wise</button>
                                 <button type="button" class="btn btn-outline-info method-pill js-method-pill" data-plan="half-yearly">Half-yearly</button>
                                 <button type="button" class="btn btn-outline-success method-pill js-method-pill" data-plan="yearly">Yearly</button>
+                            </div>
+
+                            <div class="payment-no-results" id="paymentNoResults">
+                                <i class="fas fa-search fa-2x mb-2"></i>
+                                <div class="font-weight-bold">No matching payments found</div>
+                                <div class="small">Try another name, student ID, parent, class, or reference.</div>
                             </div>
 
                             <?php foreach ($plans as $planName => $codes): ?>
@@ -1496,7 +1563,7 @@ if ($updateOnlyMode) {
                                                                             </label>
                                                                             <span class="badge badge-<?php echo badge_class($status); ?>"><?php echo h($status); ?></span>
                                                                         </div>
-                                                                        <form method="POST" id="<?php echo h($rowFormId); ?>"></form>
+                                                                        <form method="POST" id="<?php echo h($rowFormId); ?>"><?= csrf_field() ?></form>
                                                                         <input type="hidden" name="payment_id" form="<?php echo h($rowFormId); ?>" value="<?php echo (int)$feeId; ?>">
                                                                         <div class="form-row">
                                                                             <div class="col-6 mb-2">
@@ -1706,22 +1773,7 @@ if ($updateOnlyMode) {
                                                                     <i class="fas fa-edit"></i> Update
                                                                 </button>
                                                             <?php else: ?>
-                                                                <div class="btn-group btn-group-sm" role="group">
-                                                                    <a class="btn btn-success"
-                                                                       href="feesManagement?fee_action=approve&fee_id=<?php echo (int)$feeId; ?>"
-                                                                       data-confirm="Approve this installment?">
-                                                                        Approve
-                                                                    </a>
-                                                                    <a class="btn btn-warning"
-                                                                       href="feesManagement?fee_action=reject&fee_id=<?php echo (int)$feeId; ?>"
-                                                                       data-confirm="Reject this installment?">
-                                                                        Reject
-                                                                    </a>
-                                                                </div>
-
-                                                                <!-- Also allow update even if not approved (optional).
-                                                                     If you want update only when approved, delete this: -->
-                                                                <div class="mt-2">
+                                                                <div>
                                                                     <button type="button"
                                                                             class="btn btn-sm btn-outline-primary update-btn"
                                                                             data-fee-id="<?php echo (int)$feeId; ?>"
@@ -1755,6 +1807,7 @@ if ($updateOnlyMode) {
 
 <!-- Hidden Update Form (submitted via JS) -->
 <form id="updateFeeForm" method="POST" style="display:none;">
+    <?= csrf_field() ?>
     <input type="hidden" name="update_fee_id" id="update_fee_id" value="">
     <input type="hidden" name="new_status" id="new_status" value="">
 </form>
@@ -1811,23 +1864,65 @@ document.addEventListener('DOMContentLoaded', function () {
     const selectAll = document.getElementById('selectAllPayments');
     const selectVisible = document.getElementById('selectVisiblePayments');
     const classFilter = document.getElementById('updateClassFilter');
+    const paymentSearch = document.getElementById('updatePaymentSearch');
+    const paymentSearchBtn = document.getElementById('updatePaymentSearchBtn');
+    const clearPaymentSearch = document.getElementById('clearUpdatePaymentSearch');
+    const visiblePaymentCount = document.getElementById('visiblePaymentCount');
+    const paymentNoResults = document.getElementById('paymentNoResults');
 
-    function applyClassFilter() {
+    function refreshPaymentResultSummary() {
+        let visibleRows = 0;
+        document.querySelectorAll('.update-student-row').forEach(row => {
+            const section = row.closest('.fee-plan-section');
+            const rowVisible = row.style.display !== 'none';
+            const sectionVisible = !section || section.style.display !== 'none';
+            if (rowVisible && sectionVisible) visibleRows++;
+        });
+        if (visiblePaymentCount) visiblePaymentCount.textContent = String(visibleRows);
+        if (paymentNoResults) paymentNoResults.style.display = visibleRows === 0 ? 'block' : 'none';
+    }
+
+    function applyPaymentRowFilters() {
         const selectedClass = classFilter ? classFilter.value : 'all';
+        const query = paymentSearch ? paymentSearch.value.trim().toLowerCase() : '';
         document.querySelectorAll('.update-student-row').forEach(row => {
             const rowClass = row.getAttribute('data-class-id') || '0';
-            const show = selectedClass === 'all'
+            const classMatches = selectedClass === 'all'
                 || (selectedClass === 'unassigned' && rowClass === '0')
                 || rowClass === selectedClass;
-            row.style.display = show ? '' : 'none';
+            const inputValues = Array.from(row.querySelectorAll('input, select'))
+                .map(field => field.value || '')
+                .join(' ');
+            const searchableText = ((row.textContent || '') + ' ' + inputValues).toLowerCase();
+            const searchMatches = query === '' || searchableText.includes(query);
+            row.style.display = classMatches && searchMatches ? '' : 'none';
         });
         updateSelectedCount();
+        refreshPaymentResultSummary();
     }
 
     if (classFilter) {
-        classFilter.addEventListener('change', applyClassFilter);
-        applyClassFilter();
+        classFilter.addEventListener('change', applyPaymentRowFilters);
     }
+    if (paymentSearchBtn) {
+        paymentSearchBtn.addEventListener('click', applyPaymentRowFilters);
+    }
+    if (paymentSearch) {
+        paymentSearch.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                applyPaymentRowFilters();
+            }
+        });
+    }
+    if (clearPaymentSearch) {
+        clearPaymentSearch.addEventListener('click', function () {
+            if (paymentSearch) paymentSearch.value = '';
+            applyPaymentRowFilters();
+            if (paymentSearch) paymentSearch.focus();
+        });
+    }
+    applyPaymentRowFilters();
 
     function paymentCheckboxes(scopeVisibleOnly) {
         if (updateTable && scopeVisibleOnly) {
@@ -1917,6 +2012,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 btn.classList.add(slugToActiveClass(thisSlug));
             }
         });
+        refreshPaymentResultSummary();
     }
 
     methodPills.forEach(btn => {

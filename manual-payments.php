@@ -3,6 +3,7 @@ require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/role_helpers.php";
 require_once "include/csrf.php";
+require_once "include/fee_audit.php";
 require_login();
 
 if (!is_admin_role()) {
@@ -13,6 +14,13 @@ if (!is_admin_role()) {
 $message = "";
 $success = false;
 $reload = false;
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && isset($_SESSION['manual_payment_flash'])) {
+    $saved = (array)$_SESSION['manual_payment_flash'];
+    unset($_SESSION['manual_payment_flash']);
+    $message = (string)($saved['message'] ?? '');
+    $success = !empty($saved['success']);
+}
 
 try {
     $pdo = new PDO(
@@ -51,7 +59,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'manua
             throw new Exception('Paid amount cannot be negative.');
         }
 
-        $rowStmt = $pdo->prepare("SELECT due_amount FROM pcm_fee_payments WHERE id=:id LIMIT 1");
+        $rowStmt = $pdo->prepare("
+            SELECT due_amount
+            FROM pcm_fee_payments
+            WHERE id = :id
+              AND (
+                    (plan_type = 'Term-wise' AND instalment_label IN ('Term 1','Term 2','Term 3','Term 4'))
+                 OR (plan_type = 'Half-yearly' AND instalment_label IN ('Half 1','Half 2'))
+                 OR (plan_type = 'Yearly' AND instalment_label = 'Yearly')
+                 OR plan_type = 'Additional'
+              )
+            LIMIT 1
+        ");
         $rowStmt->execute([':id' => $paymentId]);
         $row = $rowStmt->fetch();
         if (!$row) {
@@ -64,6 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'manua
         }
 
         $reviewer = (string)($_SESSION['username'] ?? 'admin');
+        $before = bbcc_fee_payment_snapshot($pdo, $paymentId);
         $upd = $pdo->prepare("\n            UPDATE pcm_fee_payments\n            SET paid_amount = :paid,\n                payment_ref = :ref,\n                status = 'Verified',\n                submitted_at = COALESCE(submitted_at, NOW()),\n                verified_by = :by,\n                verified_at = NOW(),\n                reject_reason = NULL\n            WHERE id = :id\n        ");
         $upd->execute([
             ':paid' => $paidAmount,
@@ -71,6 +91,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'manua
             ':by' => $reviewer,
             ':id' => $paymentId,
         ]);
+        $after = bbcc_fee_payment_snapshot($pdo, $paymentId);
+        bbcc_audit_fee_payment_change($pdo, $paymentId, 'manual_mark_paid', $before, $after);
 
         $message = 'Manual payment saved successfully.';
         $success = true;
@@ -80,9 +102,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'manua
         $success = false;
         $reload = false;
     }
+
+    $_SESSION['manual_payment_flash'] = ['message' => $message, 'success' => $success];
+    header('Location: manual-payments');
+    exit;
 }
 
-$rowsStmt = $pdo->query("\n    SELECT f.id, f.plan_type, f.instalment_label, f.due_amount, f.paid_amount, f.payment_ref, f.status, f.submitted_at,\n           s.id AS student_db_id, s.student_name, s.student_id AS stu_code,\n           p.full_name AS parent_name\n    FROM pcm_fee_payments f\n    INNER JOIN students s ON s.id = f.student_id\n    LEFT JOIN parents p ON p.id = f.parent_id\n    ORDER BY s.student_name ASC, f.id ASC\n");
+$rowsStmt = $pdo->query("\n    SELECT f.id, f.plan_type, f.instalment_label, f.due_amount, f.paid_amount, f.payment_ref, f.status, f.submitted_at,\n           s.id AS student_db_id, s.student_name, s.student_id AS stu_code,\n           p.full_name AS parent_name\n    FROM pcm_fee_payments f\n    INNER JOIN students s ON s.id = f.student_id\n    LEFT JOIN parents p ON p.id = f.parent_id\n    WHERE (f.plan_type = 'Term-wise' AND f.instalment_label IN ('Term 1','Term 2','Term 3','Term 4'))\n       OR (f.plan_type = 'Half-yearly' AND f.instalment_label IN ('Half 1','Half 2'))\n       OR (f.plan_type = 'Yearly' AND f.instalment_label = 'Yearly')\n       OR f.plan_type = 'Additional'\n    ORDER BY s.student_name ASC, f.id ASC\n");
 $payments = $rowsStmt->fetchAll();
 
 $grouped = [];

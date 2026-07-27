@@ -627,6 +627,12 @@ function main(array $argv): void {
             if (!in_array($planType, ['Term-wise', 'Half-yearly', 'Yearly', 'Additional'], true)) {
                 $planType = 'Term-wise';
             }
+            // Older exports used the plan name as the first instalment label.
+            if ($planType === 'Term-wise' && $label === 'Term-wise') {
+                $label = 'Term 1';
+            } elseif ($planType === 'Half-yearly' && $label === 'Half-yearly') {
+                $label = 'Half 1';
+            }
             $due = to_float(v($row, 'due_amount'));
             $paid = to_float(v($row, 'paid_amount'));
             $status = norm_payment_status(v($row, 'status'));
@@ -686,4 +692,3 @@ function main(array $argv): void {
 }
 
 main($argv);
-
