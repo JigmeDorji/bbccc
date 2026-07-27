@@ -219,10 +219,11 @@ function pretty_date(?string $d): string {
  * Half-yearly -> HALF1
  * Yearly -> YEARLY
  */
-function first_installment_code(string $planType): string {
+function first_installment_code(string $planType, int $startTerm = 1): string {
+    $startTerm = max(1, min(4, $startTerm));
     return match ($planType) {
-        'Term-wise' => 'TERM1',
-        'Half-yearly' => 'HALF1',
+        'Term-wise' => 'TERM' . $startTerm,
+        'Half-yearly' => $startTerm <= 2 ? 'HALF1' : 'HALF2',
         'Yearly' => 'YEARLY',
         default => 'TERM1'
     };
@@ -1487,6 +1488,9 @@ if ($updateOnlyMode) {
                                                             $hasInstallmentRows = false;
                                                             $isFullyPaid = true;
                                                             foreach ($codes as $codeForPlan) {
+                                                                if (!installment_applies_to_start_term($planName, $codeForPlan, (int)($info['start_term'] ?? 1))) {
+                                                                    continue;
+                                                                }
                                                                 $instRow = $info['installments'][$codeForPlan] ?? null;
                                                                 if (!$instRow) {
                                                                     $isFullyPaid = false;
@@ -1502,7 +1506,7 @@ if ($updateOnlyMode) {
                                                                 $totalPlanAmount = (float)($info['enrollment_amount'] ?? 0);
                                                             }
                                                             $planPaymentStatus = ($hasInstallmentRows && $isFullyPaid) ? 'Paid' : 'Unpaid';
-                                                            $firstCode = first_installment_code($planName);
+                                                            $firstCode = first_installment_code($planName, (int)($info['start_term'] ?? 1));
                                                             $ref = (string)($info['installments'][$firstCode]['payment_reference'] ?? '');
                                                             if ($ref === '') $ref = (string)($info['enrollment_reference'] ?? '');
                                                         ?>
@@ -1511,10 +1515,13 @@ if ($updateOnlyMode) {
                                                                 <strong><?php echo h($info['student_name']); ?></strong><br>
                                                                 <span class="mini">Student ID: <?php echo h($info['public_student_id']); ?></span><br>
                                                                 <span class="mini">Enrollment:
-                                                                    <span class="badge badge-<?php echo badge_class($info['enrollment_status'] ?? 'Pending'); ?>">
-                                                                        <?php echo h($info['enrollment_status'] ?? 'Pending'); ?>
-                                                                    </span>
+                                                                <span class="badge badge-<?php echo badge_class($info['enrollment_status'] ?? 'Pending'); ?>">
+                                                                    <?php echo h($info['enrollment_status'] ?? 'Pending'); ?>
                                                                 </span>
+                                                                </span>
+                                                                <?php if ((int)($info['start_term'] ?? 1) > 1): ?>
+                                                                    <br><span class="badge badge-light border mt-1">Started Term <?php echo (int)$info['start_term']; ?></span>
+                                                                <?php endif; ?>
                                                             </td>
                                                             <td class="nowrap">
                                                                 <?php if (!empty($info['class_name'])): ?>
@@ -1666,6 +1673,9 @@ if ($updateOnlyMode) {
                                                 $hasInstallmentRows = false;
                                                 $isFullyPaid = true;
                                                 foreach ($codes as $codeForPlan) {
+                                                    if (!installment_applies_to_start_term($planName, $codeForPlan, (int)($info['start_term'] ?? 1))) {
+                                                        continue;
+                                                    }
                                                     $instRow = $info['installments'][$codeForPlan] ?? null;
                                                     if (!$instRow) {
                                                         $isFullyPaid = false;
@@ -1673,7 +1683,7 @@ if ($updateOnlyMode) {
                                                     }
                                                     $hasInstallmentRows = true;
                                                     $totalPlanAmount += (float)($instRow['due_amount'] ?? 0);
-                                                    if (normalize_status($instRow['status'] ?? '') !== 'approved') {
+                                                    if (!in_array(normalize_status($instRow['status'] ?? ''), ['approved','verified'], true)) {
                                                         $isFullyPaid = false;
                                                     }
                                                 }
@@ -1691,6 +1701,9 @@ if ($updateOnlyMode) {
                                                             <?php echo htmlspecialchars($info['enrollment_status'] ?? 'Pending'); ?>
                                                         </span>
                                                     </span>
+                                                    <?php if ((int)($info['start_term'] ?? 1) > 1): ?>
+                                                        <br><span class="badge badge-light border mt-1">Started Term <?php echo (int)$info['start_term']; ?></span>
+                                                    <?php endif; ?>
                                                 </td>
 
                                                 <td class="wrap"><?php echo htmlspecialchars($info['parent_name'] ?: '-'); ?></td>
@@ -1708,7 +1721,7 @@ if ($updateOnlyMode) {
                                                 <td class="wrap">
                                                     <?php
                                                         // For each plan, display the reference of the FIRST installment row (best), else fallback to enrollment_reference.
-                                                        $firstCode = first_installment_code($planName);
+                                                        $firstCode = first_installment_code($planName, (int)($info['start_term'] ?? 1));
                                                         $ref = '';
                                                         if (isset($info['installments'][$firstCode]['payment_reference'])) {
                                                             $ref = (string)$info['installments'][$firstCode]['payment_reference'];
