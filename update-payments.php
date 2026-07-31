@@ -1411,7 +1411,7 @@ if ($updateOnlyMode) {
 
                             <div class="payment-filter-panel">
                             <div class="form-row align-items-end">
-                                <div class="col-lg-4 col-md-5">
+                                <div class="col-lg-3 col-md-4">
                                     <label for="updateClassFilter" class="mini font-weight-bold text-uppercase mb-1">Filter by class</label>
                                     <select id="updateClassFilter" class="form-control form-control-sm">
                                         <option value="all">All classes</option>
@@ -1421,7 +1421,21 @@ if ($updateOnlyMode) {
                                         <option value="unassigned">Not assigned</option>
                                     </select>
                                 </div>
-                                <div class="col-lg-8 col-md-7 mt-2 mt-md-0">
+                                <div class="col-lg-3 col-md-4 mt-2 mt-md-0">
+                                    <label for="updatePaymentSort" class="mini font-weight-bold text-uppercase mb-1">Sort by</label>
+                                    <select id="updatePaymentSort" class="form-control form-control-sm">
+                                        <option value="student-asc">Student: A to Z</option>
+                                        <option value="student-desc">Student: Z to A</option>
+                                        <option value="class-asc">Class: A to Z</option>
+                                        <option value="attendance-desc">Attendance: High to Low</option>
+                                        <option value="attendance-asc">Attendance: Low to High</option>
+                                        <option value="amount-desc">Amount: High to Low</option>
+                                        <option value="amount-asc">Amount: Low to High</option>
+                                        <option value="status-asc">Status: Paid first</option>
+                                        <option value="status-desc">Status: Unpaid first</option>
+                                    </select>
+                                </div>
+                                <div class="col-lg-6 col-md-4 mt-2 mt-md-0">
                                     <label for="updatePaymentSearch" class="mini font-weight-bold text-uppercase mb-1">Search payments</label>
                                     <div class="input-group input-group-sm">
                                         <input type="search" id="updatePaymentSearch" class="form-control" placeholder="Child, student ID, parent, email, phone or reference">
@@ -1510,7 +1524,13 @@ if ($updateOnlyMode) {
                                                             $ref = (string)($info['installments'][$firstCode]['payment_reference'] ?? '');
                                                             if ($ref === '') $ref = (string)($info['enrollment_reference'] ?? '');
                                                         ?>
-                                                        <tr class="update-student-row" data-class-id="<?php echo (int)($info['class_id'] ?? 0); ?>">
+                                                        <tr class="update-student-row"
+                                                            data-class-id="<?php echo (int)($info['class_id'] ?? 0); ?>"
+                                                            data-student="<?php echo h((string)($info['student_name'] ?? '')); ?>"
+                                                            data-class-name="<?php echo h((string)($info['class_name'] ?? '')); ?>"
+                                                            data-attendance="<?php echo (int)($info['total_attendance'] ?? 0); ?>"
+                                                            data-amount="<?php echo h((string)$totalPlanAmount); ?>"
+                                                            data-status="<?php echo h(strtolower($planPaymentStatus)); ?>">
                                                             <td class="wrap">
                                                                 <strong><?php echo h($info['student_name']); ?></strong><br>
                                                                 <span class="mini">Student ID: <?php echo h($info['public_student_id']); ?></span><br>
@@ -1877,11 +1897,45 @@ document.addEventListener('DOMContentLoaded', function () {
     const selectAll = document.getElementById('selectAllPayments');
     const selectVisible = document.getElementById('selectVisiblePayments');
     const classFilter = document.getElementById('updateClassFilter');
+    const paymentSort = document.getElementById('updatePaymentSort');
     const paymentSearch = document.getElementById('updatePaymentSearch');
     const paymentSearchBtn = document.getElementById('updatePaymentSearchBtn');
     const clearPaymentSearch = document.getElementById('clearUpdatePaymentSearch');
     const visiblePaymentCount = document.getElementById('visiblePaymentCount');
     const paymentNoResults = document.getElementById('paymentNoResults');
+
+    document.querySelectorAll('.update-overview-table tbody').forEach(tbody => {
+        Array.from(tbody.querySelectorAll('.update-student-row')).forEach((row, index) => {
+            row.dataset.originalIndex = String(index);
+        });
+    });
+
+    function sortPaymentRows() {
+        const sortValue = paymentSort ? paymentSort.value : 'student-asc';
+        const separator = sortValue.lastIndexOf('-');
+        const field = separator > -1 ? sortValue.slice(0, separator) : 'student';
+        const dataField = field === 'class' ? 'className' : field;
+        const direction = sortValue.endsWith('-desc') ? -1 : 1;
+
+        document.querySelectorAll('.update-overview-table tbody').forEach(tbody => {
+            const rows = Array.from(tbody.querySelectorAll('.update-student-row'));
+            rows.sort((a, b) => {
+                let comparison = 0;
+                if (field === 'attendance' || field === 'amount') {
+                    comparison = (parseFloat(a.dataset[dataField] || '0') - parseFloat(b.dataset[dataField] || '0'));
+                } else {
+                    const aValue = (a.dataset[dataField] || '').trim();
+                    const bValue = (b.dataset[dataField] || '').trim();
+                    comparison = aValue.localeCompare(bValue, undefined, { numeric: true, sensitivity: 'base' });
+                }
+                if (comparison === 0) {
+                    comparison = Number(a.dataset.originalIndex || 0) - Number(b.dataset.originalIndex || 0);
+                }
+                return comparison * direction;
+            });
+            rows.forEach(row => tbody.appendChild(row));
+        });
+    }
 
     function refreshPaymentResultSummary() {
         let visibleRows = 0;
@@ -1917,6 +1971,12 @@ document.addEventListener('DOMContentLoaded', function () {
     if (classFilter) {
         classFilter.addEventListener('change', applyPaymentRowFilters);
     }
+    if (paymentSort) {
+        paymentSort.addEventListener('change', function () {
+            sortPaymentRows();
+            refreshPaymentResultSummary();
+        });
+    }
     if (paymentSearchBtn) {
         paymentSearchBtn.addEventListener('click', applyPaymentRowFilters);
     }
@@ -1935,6 +1995,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (paymentSearch) paymentSearch.focus();
         });
     }
+    sortPaymentRows();
     applyPaymentRowFilters();
 
     function paymentCheckboxes(scopeVisibleOnly) {
