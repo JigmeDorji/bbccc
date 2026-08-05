@@ -187,7 +187,6 @@ function bbcc_acl_page_rules(): array {
         'feessetting' => ['admin'],
         'admin-fee-verification' => ['admin'],
         'admin-parent-pins' => ['admin'],
-        'admin-bank-settings' => ['admin'],
         'mail-test' => ['admin'],
         'run-migration' => ['admin'],
         'bannersetup' => ['admin', 'website_admin'],
@@ -287,7 +286,6 @@ function bbcc_acl_route_module_rules(): array {
 
         // Fees and payments
         'feessetting' => ['fees_payments', 'manage'],
-        'admin-bank-settings' => ['fees_payments', 'manage'],
         'admin-fee-verification' => ['fees_payments', 'verify'],
         'feesmanagement' => ['fees_payments', 'view'],
         'exportclassfeestatus' => ['fees_payments', 'view'],
