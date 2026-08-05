@@ -904,8 +904,23 @@ document.addEventListener('DOMContentLoaded', function() {
         return true;
     }
 
-    function loadImageFromFile(file) {
+    function withTimeout(promise, ms, message) {
         return new Promise(function(resolve, reject) {
+            const timer = setTimeout(function() {
+                reject(new Error(message || 'Operation timed out'));
+            }, ms);
+            promise.then(function(value) {
+                clearTimeout(timer);
+                resolve(value);
+            }, function(err) {
+                clearTimeout(timer);
+                reject(err);
+            });
+        });
+    }
+
+    function loadImageFromFile(file) {
+        const loaded = new Promise(function(resolve, reject) {
             const img = new Image();
             const url = URL.createObjectURL(file);
             img.onload = function() {
@@ -918,6 +933,7 @@ document.addEventListener('DOMContentLoaded', function() {
             };
             img.src = url;
         });
+        return withTimeout(loaded, 15000, 'Image took too long to load');
     }
 
     async function compressProofImage(file) {
@@ -933,9 +949,9 @@ document.addEventListener('DOMContentLoaded', function() {
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
         async function canvasToFile(quality) {
-            const blob = await new Promise(function(resolve) {
+            const blob = await withTimeout(new Promise(function(resolve) {
                 canvas.toBlob(resolve, 'image/jpeg', quality);
-            });
+            }), 15000, 'Image compression took too long');
             if (!blob) {
                 throw new Error('Image could not be compressed');
             }
