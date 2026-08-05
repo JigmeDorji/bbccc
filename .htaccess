@@ -1,4 +1,18 @@
 Options -Indexes
+
+# Raise upload limits above the app's own 5MB proof-upload cap.
+# Guarded with IfModule so this is a no-op (not a fatal error) on hosts
+# where PHP runs via FPM/CGI rather than as an Apache module -- see
+# .user.ini for the FPM/CGI-compatible equivalent of this setting.
+<IfModule mod_php.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 12M
+</IfModule>
+<IfModule mod_php7.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 12M
+</IfModule>
+
 RewriteEngine On
 
 # Serve existing static files and directories directly
