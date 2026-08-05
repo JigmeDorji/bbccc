@@ -325,7 +325,7 @@ if ($isAdmin) {
         INNER JOIN classes c ON c.id = ca.class_id
         INNER JOIN class_teacher_assignments cta ON cta.class_id = c.id
         INNER JOIN students s ON s.id = ca.student_id
-        INNER JOIN parents p ON p.id = s.parentId
+        INNER JOIN parents p ON p.id = s.parent_id
         WHERE cta.teacher_id = :tid
           AND p.email IS NOT NULL
           AND p.email <> ''

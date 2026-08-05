@@ -29,10 +29,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $flash = 'Child and date are required.';
         } else {
             // Get parent ID from student
-            $stu = $pdo->prepare("SELECT parentId FROM students WHERE id=:id LIMIT 1");
+            $stu = $pdo->prepare("SELECT parent_id FROM students WHERE id=:id LIMIT 1");
             $stu->execute([':id'=>$childId]);
             $s = $stu->fetch();
-            $pid = $s ? (int)$s['parentId'] : 0;
+            $pid = $s ? (int)$s['parent_id'] : 0;
 
             $stmt = $pdo->prepare("
                 INSERT INTO pcm_kiosk_log (child_id, parent_id, log_date, time_in, time_out, method)

@@ -114,7 +114,7 @@ if ($viewMode === 'parent') {
     $stmtChildren = $pdo->prepare("
         SELECT id, student_name, student_id
         FROM students
-        WHERE parentId = :pid
+        WHERE parent_id = :pid
         ORDER BY student_name
     ");
     $stmtChildren->execute([':pid' => $parentId]);
@@ -132,7 +132,7 @@ if ($viewMode === 'admin') {
         FROM attendance a
         INNER JOIN students s ON s.id = a.student_id
         LEFT JOIN classes c ON c.id = a.class_id
-        WHERE s.parentId = :pid
+        WHERE s.parent_id = :pid
         ORDER BY c.class_name
     ");
     $stmtClasses->execute([':pid' => $parentId]);
@@ -252,7 +252,7 @@ if ($viewMode === 'admin') {
     )";
     $params[':teacher_id'] = $teacherId;
 } else {
-    $where[] = "s.parentId = :parent_id";
+    $where[] = "s.parent_id = :parent_id";
     $params[':parent_id'] = $parentId;
 }
 

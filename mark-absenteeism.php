@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'absen
     $reason  = trim($_POST['reason'] ?? '');
 
     // Verify child belongs to parent
-    $own = $pdo->prepare("SELECT student_name FROM students WHERE id=:id AND parentId=:pid LIMIT 1");
+    $own = $pdo->prepare("SELECT student_name FROM students WHERE id=:id AND parent_id=:pid LIMIT 1");
     $own->execute([':id'=>$childId, ':pid'=>$parentId]);
     $child = $own->fetch();
 
@@ -74,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'absen
 }
 
 // ── My children ──
-$kids = $pdo->prepare("SELECT id, student_id, student_name FROM students WHERE parentId=:pid ORDER BY student_name");
+$kids = $pdo->prepare("SELECT id, student_id, student_name FROM students WHERE parent_id=:pid ORDER BY student_name");
 $kids->execute([':pid'=>$parentId]);
 $kids = $kids->fetchAll();
 $kidIds = array_column($kids, 'id');

@@ -82,7 +82,7 @@ function dc_collect_parent_usernames_by_class_ids(PDO $pdo, array $classIds): ar
         SELECT DISTINCT p.username
         FROM class_assignments ca
         INNER JOIN students s ON s.id = ca.student_id
-        INNER JOIN parents p ON p.id = s.parentId
+        INNER JOIN parents p ON p.id = s.parent_id
         WHERE ca.class_id IN (" . implode(',', $classIds) . ")
           AND p.username IS NOT NULL
           AND TRIM(p.username) <> ''
@@ -119,7 +119,7 @@ function dc_parent_username_for_student(PDO $pdo, int $studentId): string {
     $stmt = $pdo->prepare("
         SELECT p.username
         FROM students s
-        INNER JOIN parents p ON p.id = s.parentId
+        INNER JOIN parents p ON p.id = s.parent_id
         WHERE s.id = :sid
         LIMIT 1
     ");
@@ -204,7 +204,7 @@ $teacherClassIds = array_map('intval', array_column($teacherClasses, 'id'));
 
 $parentClassIds = [];
 if ($parentId > 0) {
-    $stmtPc = $pdo->prepare("\n        SELECT DISTINCT ca.class_id\n        FROM class_assignments ca\n        INNER JOIN students s ON s.id = ca.student_id\n        WHERE s.parentId = :pid\n    ");
+    $stmtPc = $pdo->prepare("\n        SELECT DISTINCT ca.class_id\n        FROM class_assignments ca\n        INNER JOIN students s ON s.id = ca.student_id\n        WHERE s.parent_id = :pid\n    ");
     $stmtPc->execute([':pid' => $parentId]);
     $parentClassIds = array_map('intval', array_column($stmtPc->fetchAll(), 'class_id'));
 }
@@ -529,7 +529,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($reportId <= 0) throw new Exception('Invalid report.');
             if ($commentText === '') throw new Exception('Comment is required.');
 
-            $stmtOwn = $pdo->prepare("\n                SELECT r.id\n                FROM classroom_reports r\n                INNER JOIN students s ON s.id = r.student_id\n                WHERE r.id = :rid\n                  AND s.parentId = :pid\n                LIMIT 1\n            ");
+            $stmtOwn = $pdo->prepare("\n                SELECT r.id\n                FROM classroom_reports r\n                INNER JOIN students s ON s.id = r.student_id\n                WHERE r.id = :rid\n                  AND s.parent_id = :pid\n                LIMIT 1\n            ");
             $stmtOwn->execute([':rid' => $reportId, ':pid' => $parentId]);
             if (!$stmtOwn->fetch()) {
                 throw new Exception('You can only comment on reports for your child.');
@@ -761,7 +761,7 @@ $stmtA = $pdo->prepare($sqlA);
 $stmtA->execute();
 $announcements = $stmtA->fetchAll();
 
-$sqlR = "\n    SELECT\n        r.id, r.class_id, r.student_id, r.report_title, r.report_type, r.feedback_text, r.created_by_name, r.created_at,\n        s.student_name, s.student_id AS student_code, s.parentId,\n        c.class_name\n    FROM classroom_reports r\n    INNER JOIN students s ON s.id = r.student_id\n    LEFT JOIN classes c ON c.id = r.class_id\n";
+$sqlR = "\n    SELECT\n        r.id, r.class_id, r.student_id, r.report_title, r.report_type, r.feedback_text, r.created_by_name, r.created_at,\n        s.student_name, s.student_id AS student_code, s.parent_id,\n        c.class_name\n    FROM classroom_reports r\n    INNER JOIN students s ON s.id = r.student_id\n    LEFT JOIN classes c ON c.id = r.class_id\n";
 $paramsR = [];
 $whereR = [];
 
@@ -770,7 +770,7 @@ if ($viewMode === 'admin') {
 } elseif ($viewMode === 'teacher') {
     $whereR[] = 'r.class_id IN (' . ($teacherClassIds ? implode(',', $teacherClassIds) : '0') . ')';
 } else {
-    $whereR[] = 's.parentId = :pid';
+    $whereR[] = 's.parent_id = :pid';
     $paramsR[':pid'] = $parentId;
 }
 

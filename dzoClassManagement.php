@@ -15,19 +15,12 @@ if (!is_admin_role()) {
 
 $pdo   = pcm_pdo();
 pcm_ensure_enrolment_start_term($pdo);
-$studentParentColumn = pcm_students_parent_column($pdo);
 $campusChoices = pcm_campus_choice_labels();
 $flash = '';
 $ok    = false;
 
-$hasParentIdNew = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parent_id'")->fetch(PDO::FETCH_ASSOC);
-$hasParentIdLegacy = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parentId'")->fetch(PDO::FETCH_ASSOC);
-$studentParentExpr = $hasParentIdNew && $hasParentIdLegacy
-    ? "COALESCE(NULLIF(parent_id,0), NULLIF(parentId,0))"
-    : ($hasParentIdNew ? "parent_id" : "parentId");
-$studentParentJoinExpr = $hasParentIdNew && $hasParentIdLegacy
-    ? "COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0))"
-    : ($hasParentIdNew ? "s.parent_id" : "s.parentId");
+$studentParentExpr = "parent_id";
+$studentParentJoinExpr = "s.parent_id";
 
 // ── POST: approve / reject / delete ─────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -68,16 +61,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $pdo->beginTransaction();
-                if ($hasParentIdNew && $hasParentIdLegacy) {
-                    $pdo->prepare("UPDATE students SET parent_id = :pid, parentId = :pid WHERE id = :sid")
-                        ->execute([':pid' => $targetParentId, ':sid' => $studentDbId]);
-                } elseif ($hasParentIdNew) {
-                    $pdo->prepare("UPDATE students SET parent_id = :pid WHERE id = :sid")
-                        ->execute([':pid' => $targetParentId, ':sid' => $studentDbId]);
-                } else {
-                    $pdo->prepare("UPDATE students SET parentId = :pid WHERE id = :sid")
-                        ->execute([':pid' => $targetParentId, ':sid' => $studentDbId]);
-                }
+                $pdo->prepare("UPDATE students SET parent_id = :pid WHERE id = :sid")
+                    ->execute([':pid' => $targetParentId, ':sid' => $studentDbId]);
 
                 $pdo->prepare("UPDATE pcm_enrolments SET parent_id = :pid WHERE student_id = :sid")
                     ->execute([':pid' => $targetParentId, ':sid' => $studentDbId]);

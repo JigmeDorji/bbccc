@@ -434,12 +434,12 @@ function main(array $argv): void {
 
         // 3) Students
         $selStudentByPublicId = $pdo->prepare("SELECT id FROM students WHERE student_id = :sid LIMIT 1");
-        $selStudentByNameParent = $pdo->prepare("SELECT id FROM students WHERE student_name = :name AND (parent_id = :pid OR parentId = :pid) LIMIT 1");
+        $selStudentByNameParent = $pdo->prepare("SELECT id FROM students WHERE student_name = :name AND parent_id = :pid LIMIT 1");
         $insStudent = $pdo->prepare("
             INSERT INTO students
-                (student_id, student_name, dob, gender, medical_issue, approval_status, parentId, parent_id, status, payment_plan, payment_amount)
+                (student_id, student_name, dob, gender, medical_issue, approval_status, parent_id, status, payment_plan, payment_amount)
             VALUES
-                (:student_id, :student_name, :dob, :gender, :medical_issue, :approval_status, :parent_id, :parent_id, 'Active', :payment_plan, :payment_amount)
+                (:student_id, :student_name, :dob, :gender, :medical_issue, :approval_status, :parent_id, 'Active', :payment_plan, :payment_amount)
         ");
         $updStudent = $pdo->prepare("
             UPDATE students
@@ -449,7 +449,6 @@ function main(array $argv): void {
                 gender = :gender,
                 medical_issue = :medical_issue,
                 approval_status = :approval_status,
-                parentId = :parent_id,
                 parent_id = :parent_id,
                 payment_plan = :payment_plan,
                 payment_amount = :payment_amount

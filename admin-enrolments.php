@@ -71,10 +71,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
             try {
                 $stu = $pdo->prepare("
                     SELECT s.id, s.student_name, s.approval_status,
-                           COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0)) AS parent_id,
+                           s.parent_id AS parent_id,
                            p.full_name AS parent_name, p.email AS parent_email
                     FROM students s
-                    LEFT JOIN parents p ON p.id = COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0))
+                    LEFT JOIN parents p ON p.id = s.parent_id
                     WHERE s.id = :id
                     LIMIT 1
                 ");
@@ -228,18 +228,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
                 }
 
                 $studentCode = pcm_next_student_id($pdo);
-                $studentParentCol = pcm_students_parent_column($pdo);
                 $insStudent = $pdo->prepare("
-                    INSERT INTO students (student_id, student_name, dob, gender, approval_status, parentId, parent_id, status)
-                    VALUES (:scode, :sname, :dob, :gender, 'Pending', :pid1, :pid2, 'Active')
+                    INSERT INTO students (student_id, student_name, dob, gender, approval_status, parent_id, status)
+                    VALUES (:scode, :sname, :dob, :gender, 'Pending', :pid, 'Active')
                 ");
                 $insStudent->execute([
                     ':scode' => $studentCode,
                     ':sname' => $childName,
                     ':dob' => ($childDob !== '' ? $childDob : null),
                     ':gender' => ($childGender !== '' ? $childGender : null),
-                    ':pid1' => $parentId,
-                    ':pid2' => $parentId
+                    ':pid' => $parentId
                 ]);
                 $studentDbId = (int)$pdo->lastInsertId();
 
@@ -464,7 +462,7 @@ $all = $pdo->query("
            ) AS is_manual_enrolment
     FROM pcm_enrolments e
     JOIN students s ON s.id = e.student_id
-    JOIN parents  p ON p.id = COALESCE(NULLIF(e.parent_id,0), COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0)))
+    JOIN parents  p ON p.id = COALESCE(NULLIF(e.parent_id,0), NULLIF(s.parent_id,0))
     {$latestClassJoin}
     LEFT JOIN classes ec ON ec.id = e.class_id AND ec.active = 1
     WHERE LOWER(COALESCE(s.status,'active')) <> 'past'
@@ -516,7 +514,7 @@ $registeredChildren = $pdo->query("
            p.full_name AS parent_name, p.email AS parent_email, p.phone AS parent_phone,
            e.id AS enrolment_id, e.status AS enrolment_status
     FROM students s
-    LEFT JOIN parents p ON p.id = COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0))
+    LEFT JOIN parents p ON p.id = s.parent_id
     LEFT JOIN pcm_enrolments e ON e.student_id = s.id
     WHERE e.id IS NULL
       AND LOWER(COALESCE(s.status,'active')) <> 'past'

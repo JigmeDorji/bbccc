@@ -138,7 +138,7 @@ try {
                 FROM students s
                 LEFT JOIN pcm_enrolments e ON e.student_id = s.id
                 {$latestClassJoin}
-                WHERE s.parentId = :pid ORDER BY s.id DESC
+                WHERE s.parent_id = :pid ORDER BY s.id DESC
             ");
             $stmtKids->execute([':pid' => $parentDbId]);
             $myChildren = $stmtKids->fetchAll(PDO::FETCH_ASSOC);
@@ -155,7 +155,7 @@ try {
                         COALESCE(f.paid_amount, 0) AS paid_amount
                     FROM pcm_fee_payments f
                     INNER JOIN students s ON s.id = f.student_id
-                    WHERE s.parentId = :pid
+                    WHERE s.parent_id = :pid
                       AND COALESCE(f.due_amount, 0) > 0
                     ORDER BY s.student_name ASC, f.id ASC
                 ");
@@ -256,7 +256,7 @@ try {
                 SELECT COUNT(*) 
                 FROM attendance a
                 INNER JOIN students s ON s.id = a.student_id
-                WHERE s.parentId = :pid AND LOWER(COALESCE(a.status,'')) = 'present'
+                WHERE s.parent_id = :pid AND LOWER(COALESCE(a.status,'')) = 'present'
             ");
             $stmtParentAttended->execute([':pid' => $parentDbId]);
             $parentClassesAttended = (int)$stmtParentAttended->fetchColumn();
@@ -272,7 +272,7 @@ try {
                     SUM(CASE WHEN LOWER(COALESCE(a.status,''))='present' AND MONTH(a.attendance_date) BETWEEN 10 AND 12 THEN 1 ELSE 0 END) AS t4
                 FROM students s
                 LEFT JOIN attendance a ON a.student_id = s.id
-                WHERE s.parentId = :pid
+                WHERE s.parent_id = :pid
                 GROUP BY s.id, s.student_name, s.student_id
                 ORDER BY s.student_name ASC
             ");
@@ -463,7 +463,7 @@ try {
                         INNER JOIN class_assignments ca ON ca.class_id = ac.class_id
                         INNER JOIN students s ON s.id = ca.student_id
                         WHERE ac.announcement_id = a.id
-                          AND s.parentId = :pid
+                          AND s.parent_id = :pid
                    )
                 ORDER BY a.created_at DESC
                 LIMIT 6
@@ -483,7 +483,7 @@ try {
                 SELECT r.created_at, r.report_title, s.student_name
                 FROM classroom_reports r
                 INNER JOIN students s ON s.id = r.student_id
-                WHERE s.parentId = :pid
+                WHERE s.parent_id = :pid
                 ORDER BY r.created_at DESC
                 LIMIT 8
             ");

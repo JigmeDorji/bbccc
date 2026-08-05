@@ -88,7 +88,7 @@ $parents = $pdo->query("
         GROUP_CONCAT(DISTINCT s.student_name ORDER BY s.student_name SEPARATOR ', ') AS student_names
     FROM parents p
     LEFT JOIN students s
-        ON s.parentId = p.id OR s.parent_id = p.id
+        ON s.parent_id = p.id
     GROUP BY p.id, p.full_name, p.email, p.phone, p.pin_hash, p.status
     ORDER BY p.full_name
 ")->fetchAll();

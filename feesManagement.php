@@ -733,12 +733,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ---------------- LOAD ALL FEE DATA ----------------
-// Parent column can be either parentId (legacy) or parent_id (newer)
-$hasStudentParentIdNew = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parent_id'")->fetch(PDO::FETCH_ASSOC);
-$hasStudentParentIdLegacy = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parentId'")->fetch(PDO::FETCH_ASSOC);
-$studentParentExpr = $hasStudentParentIdNew && $hasStudentParentIdLegacy
-    ? "COALESCE(NULLIF(s.parent_id,0), NULLIF(s.parentId,0))"
-    : ($hasStudentParentIdNew ? "s.parent_id" : "s.parentId");
+$studentParentExpr = "s.parent_id";
 
 // 1) Enrollment base rows: ensures student details appear under each payment method
 $stmtEnroll = $pdo->prepare("

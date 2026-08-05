@@ -252,7 +252,7 @@ if ($action === 'auth') {
         SELECT s.id, s.student_id, s.student_name
         FROM students s
         JOIN pcm_enrolments e ON e.student_id = s.id AND e.status = 'Approved'
-        WHERE s.parentId = :pid
+        WHERE s.parent_id = :pid
         ORDER BY s.student_name
     ");
     $kids->execute([':pid' => $parent['id']]);
@@ -322,7 +322,7 @@ if ($action === 'sign_batch') {
         SELECT s.id, s.student_name
         FROM students s
         JOIN pcm_enrolments e ON e.student_id = s.id AND e.status = 'Approved'
-        WHERE s.id = :cid AND s.parentId = :pid
+        WHERE s.id = :cid AND s.parent_id = :pid
         LIMIT 1
     ");
     $selectLog = $pdo->prepare("SELECT id, time_in, time_out FROM pcm_kiosk_log WHERE child_id = :cid AND log_date = :d LIMIT 1");
@@ -428,7 +428,7 @@ if ($action === 'sign') {
         SELECT s.id, s.student_name
         FROM students s
         JOIN pcm_enrolments e ON e.student_id = s.id AND e.status = 'Approved'
-        WHERE s.id = :cid AND s.parentId = :pid
+        WHERE s.id = :cid AND s.parent_id = :pid
         LIMIT 1
     ");
     $verify->execute([':cid' => $childId, ':pid' => $parentId]);

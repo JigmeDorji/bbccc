@@ -104,17 +104,7 @@ if ($classId > 0) {
     $className = (string)$classNameFound;
 }
 
-$hasStudentParentId = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parent_id'")->fetch(PDO::FETCH_ASSOC);
-$hasStudentParentIdLegacy = (bool)$pdo->query("SHOW COLUMNS FROM students LIKE 'parentId'")->fetch(PDO::FETCH_ASSOC);
-if ($hasStudentParentId && $hasStudentParentIdLegacy) {
-    $studentParentExpr = 'COALESCE(NULLIF(s.parent_id, 0), NULLIF(s.parentId, 0))';
-} elseif ($hasStudentParentId) {
-    $studentParentExpr = 'NULLIF(s.parent_id, 0)';
-} elseif ($hasStudentParentIdLegacy) {
-    $studentParentExpr = 'NULLIF(s.parentId, 0)';
-} else {
-    $studentParentExpr = 'NULL';
-}
+$studentParentExpr = 'NULLIF(s.parent_id, 0)';
 
 $sql = "
     SELECT

@@ -372,56 +372,16 @@ function pcm_badge(string $status): string {
 }
 
 function pcm_students_parent_column(PDO $pdo): string {
-    static $col = null;
-    if ($col !== null) {
-        return $col;
-    }
-
-    $hasSnake = false;
-    $stmt = $pdo->query("SHOW COLUMNS FROM students LIKE 'parent_id'");
-    if ($stmt && $stmt->fetch(PDO::FETCH_ASSOC)) {
-        $hasSnake = true;
-    }
-    $col = $hasSnake ? 'parent_id' : 'parentId';
-    return $col;
-}
-
-function pcm_students_has_parent_column(PDO $pdo, string $column): bool {
-    static $cache = [];
-    if (array_key_exists($column, $cache)) {
-        return $cache[$column];
-    }
-
-    $stmt = $pdo->prepare("SHOW COLUMNS FROM students LIKE :column");
-    $stmt->execute([':column' => $column]);
-    $cache[$column] = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
-    return $cache[$column];
+    return 'parent_id';
 }
 
 function pcm_students_parent_expr(PDO $pdo, string $alias = ''): string {
     $prefix = $alias !== '' ? rtrim($alias, '.') . '.' : '';
-    $hasSnake = pcm_students_has_parent_column($pdo, 'parent_id');
-    $hasLegacy = pcm_students_has_parent_column($pdo, 'parentId');
-
-    if ($hasSnake && $hasLegacy) {
-        return "COALESCE(NULLIF({$prefix}parent_id,0), NULLIF({$prefix}parentId,0))";
-    }
-
-    return $prefix . ($hasSnake ? 'parent_id' : 'parentId');
+    return $prefix . 'parent_id';
 }
 
 function pcm_students_parent_insert_columns(PDO $pdo): array {
-    $columns = [];
-    if (pcm_students_has_parent_column($pdo, 'parent_id')) {
-        $columns[] = 'parent_id';
-    }
-    if (pcm_students_has_parent_column($pdo, 'parentId')) {
-        $columns[] = 'parentId';
-    }
-    if (empty($columns)) {
-        $columns[] = pcm_students_parent_column($pdo);
-    }
-    return array_values(array_unique($columns));
+    return ['parent_id'];
 }
 
 function pcm_latest_class_assignment_join(string $studentIdExpr, string $assignmentAlias = 'ca', string $classAlias = 'c'): string {
