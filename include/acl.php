@@ -206,7 +206,6 @@ function bbcc_acl_page_rules(): array {
         'process-mail-queue' => ['admin'],
         'parent-email' => ['admin', 'teacher'],
         'dzongkha-classroom' => ['admin', 'teacher', 'parent'],
-        'admin-student-approvals' => ['admin'],
         'exportbookings' => ['admin'],
         'acl-debug' => ['admin'],
         'audit-logs' => ['admin'],
@@ -226,8 +225,6 @@ function bbcc_acl_page_rules(): array {
         'children-enrollment' => ['parent'],
         'parent-fees' => ['parent'],
         'parent-fees-pay' => ['parent'],
-        'parentfeespayment' => ['parent'],
-        'parent-payments' => ['parent'],
         'parent-students' => ['parent'],
         'parent-signinout' => ['parent'],
         'mark-absenteeism' => ['parent'],
@@ -273,7 +270,6 @@ function bbcc_acl_route_module_rules(): array {
         'dzoclassmanagement' => ['enrollment', 'approve'],
         'admin-enrolments' => ['enrollment', 'approve'],
         'admin-parents-children' => ['enrollment', 'view'],
-        'admin-student-approvals' => ['enrollment', 'approve'],
         'children-enrollment' => ['enrollment', 'submit'],
         'parent-children' => ['enrollment', 'view'],
         'parent-students' => ['enrollment', 'view'],
@@ -298,8 +294,6 @@ function bbcc_acl_route_module_rules(): array {
         'update-payments' => ['fees_payments', 'manage'],
         'parent-fees' => ['fees_payments', 'view'],
         'parent-fees-pay' => ['fees_payments', 'submit'],
-        'parentfeespayment' => ['fees_payments', 'submit'],
-        'parent-payments' => ['fees_payments', 'view'],
 
         // Communication
         'parent-email' => ['communication', 'send'],
