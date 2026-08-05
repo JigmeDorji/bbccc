@@ -68,6 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $password = $_POST['password'] ?? '';
 
             if ($userId === '' || $role === '') throw new Exception("User ID and role are required.");
+            if (!in_array($role, ['Admin', 'teacher', 'Website Admin'], true)) throw new Exception("Invalid role.");
 
             if ($password !== '') {
                 $pdo->prepare("UPDATE user SET role=:role, password=:pw WHERE userid=:uid")
