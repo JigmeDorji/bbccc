@@ -7,13 +7,9 @@ require_once __DIR__ . '/module_access.php';
  * Log in a particular user and store extra info
  */
 
-function login($userid, $username, $companyID, $projectID, $companyName, $projectName, $role, $email = null) {
+function login($userid, $username, $role, $email = null) {
     $_SESSION['userid'] = $userid;
     $_SESSION['username'] = $username;
-    $_SESSION['companyID'] = $companyID;
-    $_SESSION['projectID'] = $projectID;
-    $_SESSION['companyName'] = $companyName;
-    $_SESSION['projectName'] = $projectName;
     $_SESSION['role'] = $role;
 
     if ($email !== null) {
@@ -65,24 +61,6 @@ function logged_in_userid() {
  */
 function logged_in_username() {
     return $_SESSION['username'] ?? null;
-}
-
-/**
- * Get the company ID of the logged-in user
- */
-function logged_in_company() {
-    return $_SESSION['companyID'] ?? null;
-}
-
-/**
- * Get the project ID of the logged-in user
- */
-function logged_in_project() {
-    return $_SESSION['projectID'] ?? null;
-}
-
-function logged_in_companyName() {
-    return $_SESSION['companyName'] ?? null;
 }
 
 function logged_in_user_role() {

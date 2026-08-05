@@ -198,9 +198,6 @@ function bbcc_acl_page_rules(): array {
         'viewfeedback' => ['admin', 'website_admin'],
         'eventmanagement' => ['admin', 'website_admin'],
         'bookingmanagement' => ['admin', 'website_admin'],
-        'generatestatement' => ['admin'],
-        'companysetup' => ['admin'],
-        'projectsetup' => ['admin'],
         'admin-teacher-setup' => ['admin'],
         'process-mail-queue' => ['admin'],
         'parent-email' => ['admin', 'teacher'],
@@ -305,13 +302,10 @@ function bbcc_acl_route_module_rules(): array {
         'parent-signinout' => ['kiosk', 'use'],
 
         // Reports & system settings
-        'generatestatement' => ['reports_settings', 'manage'],
         'exportbookings' => ['reports_settings', 'export'],
         'run-migration' => ['reports_settings', 'manage'],
         'audit-logs' => ['reports_settings', 'manage'],
         'acl-debug' => ['reports_settings', 'manage'],
-        'companysetup' => ['reports_settings', 'manage'],
-        'projectsetup' => ['reports_settings', 'manage'],
     ];
 }
 

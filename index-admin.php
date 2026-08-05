@@ -19,9 +19,6 @@ if (!function_exists('bbcc_table_exists')) {
     }
 }
 
-$filterCompanyID = $_SESSION['companyID'] ?? null;
-$filterProjectID = $_SESSION['projectID'] ?? null;
-
 $role = strtolower($_SESSION['role'] ?? '');
 $dashboardRole = $role;
 if ($dashboardRole === 'website admin') {

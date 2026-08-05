@@ -44,22 +44,15 @@ if (!empty($userName) && !empty($password)) {
 
     // ✅ Email as Username (u.username stores email)
     // ✅ Fix: WHERE userName=?  -> WHERE u.username=?
-    // ✅ Also fetch projectID/companyName/projectName to match login() function args
     $isActiveSelect = $hasIsActive ? "IFNULL(u.is_active, 1) AS is_active" : "1 AS is_active";
     $query = "
         SELECT
             u.userid,
             u.username,
             u.password,
-            u.companyID,
-            u.projectID,
             u.role,
-            {$isActiveSelect},
-            c.companyName,
-            p.projectName
+            {$isActiveSelect}
         FROM user u
-        LEFT JOIN company c ON c.companyID = u.companyID
-        LEFT JOIN project p ON p.projectID = u.projectID
         WHERE LOWER(u.username) = LOWER(?)
         LIMIT 1
     ";
@@ -109,10 +102,6 @@ if (!empty($userName) && !empty($password)) {
                     login(
                         $row['userid'],
                         $row['username'],
-                        $row['companyID'] ?? null,
-                        $row['projectID'] ?? null,
-                        $row['companyName'] ?? null,
-                        $row['projectName'] ?? null,
                         $row['role'] ?? null
                     );
 
@@ -154,27 +143,6 @@ if (!empty($userName) && !empty($password)) {
                         $_SESSION['active_portal'] = 'teacher';
                     } elseif ($hasParentProfile) {
                         $_SESSION['active_portal'] = 'parent';
-                    }
-
-                    // Optional: load projects for this company (if you use it)
-                    try {
-                        $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
-                            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-                            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
-                        ]);
-
-                        if (!empty($row['companyID'])) {
-                            $stmtP = $pdo->prepare("SELECT projectID, projectName FROM project WHERE companyID = ?");
-                            $stmtP->execute([$row['companyID']]);
-                            $_SESSION['projects'] = $stmtP->fetchAll(PDO::FETCH_ASSOC);
-
-                            // Default project if not set
-                            if (!empty($_SESSION['projects'][0]['projectID'])) {
-                                $_SESSION['projectID'] = $_SESSION['projects'][0]['projectID'];
-                            }
-                        }
-                    } catch (Exception $e) {
-                        // ignore if project table not used
                     }
 
                     // Remember me cookie
