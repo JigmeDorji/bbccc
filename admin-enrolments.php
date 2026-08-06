@@ -183,6 +183,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
             $flash = 'Please provide a valid parent email.';
         } elseif ($parentPhone === '') {
             $flash = 'Parent phone is required.';
+        } elseif ($childDob === '') {
+            $flash = "Child's date of birth is required.";
+        } elseif (!pcm_meets_minimum_enrolment_age($childDob)) {
+            $flash = 'Child must be at least ' . pcm_minimum_enrolment_age_label() . ' old to be enrolled.';
         } elseif (!in_array($plan, ['Term-wise', 'Half-yearly', 'Yearly'], true)) {
             $flash = 'Invalid fee plan selected.';
         } elseif (empty($campusSelection) || array_diff($campusSelection, $allowedCampusChoices)) {
@@ -626,7 +630,8 @@ document.addEventListener('DOMContentLoaded',()=>{
                         </div>
                         <div class="col-md-3 form-group">
                             <label>Child DOB</label>
-                            <input type="date" class="form-control" name="child_dob" max="<?= date('Y-m-d') ?>">
+                            <input type="date" class="form-control" name="child_dob" required max="<?= pcm_max_dob_for_minimum_age() ?>">
+                            <small class="form-text text-muted">Must be at least <?= h(pcm_minimum_enrolment_age_label()) ?> old.</small>
                         </div>
                         <div class="col-md-3 form-group">
                             <label>Child Gender</label>

@@ -36,6 +36,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_s
         if ($student_name === '' || empty($dob) || empty($gender)) {
             throw new Exception("Please fill in all required fields.");
         }
+        if (!pcm_meets_minimum_enrolment_age((string)$dob)) {
+            throw new Exception("Child must be at least " . pcm_minimum_enrolment_age_label() . " old to be added.");
+        }
 
         $student_id = pcm_next_student_id($pdo);
         $registration_date = date('Y-m-d');
@@ -168,7 +171,8 @@ $students = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
                             <div class="form-group">
                                 <label>Date of Birth <span class="text-danger">*</span></label>
-                                <input type="date" class="form-control" name="dob" required>
+                                <input type="date" class="form-control" name="dob" required max="<?= pcm_max_dob_for_minimum_age() ?>">
+                                <small class="form-text text-muted">Child must be at least <?= h(pcm_minimum_enrolment_age_label()) ?> old.</small>
                             </div>
 
                             <div class="form-group">

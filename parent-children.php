@@ -35,6 +35,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
         if ($name === '') {
             $flash = 'Child name is required.';
+        } elseif ($dob === '') {
+            $flash = 'Date of birth is required.';
+        } elseif (!pcm_meets_minimum_enrolment_age($dob)) {
+            $flash = 'Child must be at least ' . pcm_minimum_enrolment_age_label() . ' old to be added.';
         } else {
             $sid = pcm_next_student_id($pdo);
             $parentInsertColumns = implode(', ', $studentParentColumns);
@@ -141,8 +145,9 @@ document.addEventListener('DOMContentLoaded',()=>{
                 <input type="text" name="child_name" class="form-control" required maxlength="150" placeholder="e.g. Karma Dorji">
             </div>
             <div class="col-md-3 mb-3">
-                <label class="font-weight-bold">Date of Birth</label>
-                <input type="date" name="dob" class="form-control" max="<?= date('Y-m-d') ?>">
+                <label class="font-weight-bold">Date of Birth <span class="text-danger">*</span></label>
+                <input type="date" name="dob" class="form-control" required max="<?= pcm_max_dob_for_minimum_age() ?>">
+                <small class="form-text text-muted">Child must be at least <?= h(pcm_minimum_enrolment_age_label()) ?> old.</small>
             </div>
             <div class="col-md-2 mb-3">
                 <label class="font-weight-bold">Gender</label>

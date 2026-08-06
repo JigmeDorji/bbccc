@@ -5,6 +5,40 @@
 require_once __DIR__ . '/mailer.php';
 require_once __DIR__ . '/mail_queue.php';
 
+/**
+ * Minimum age (in whole years + months) a child must be, as of today,
+ * to be added/enrolled. Used consistently across every "add child" entry
+ * point so the rule can't be bypassed by using a different form.
+ */
+const PCM_MIN_ENROLMENT_AGE_YEARS = 5;
+const PCM_MIN_ENROLMENT_AGE_MONTHS = 6;
+
+/** Latest DOB that still satisfies the minimum age, for use as a date input's max attribute. */
+function pcm_max_dob_for_minimum_age(): string {
+    return (new DateTimeImmutable('today'))
+        ->modify('-' . PCM_MIN_ENROLMENT_AGE_YEARS . ' years -' . PCM_MIN_ENROLMENT_AGE_MONTHS . ' months')
+        ->format('Y-m-d');
+}
+
+/** Whether a given DOB meets the minimum enrolment age as of today. Invalid/empty DOB fails. */
+function pcm_meets_minimum_enrolment_age(string $dob): bool {
+    $dob = trim($dob);
+    if ($dob === '') {
+        return false;
+    }
+    try {
+        $birth = new DateTimeImmutable($dob);
+    } catch (Throwable $e) {
+        return false;
+    }
+    return $birth <= new DateTimeImmutable(pcm_max_dob_for_minimum_age());
+}
+
+/** Human-readable minimum-age string for error messages / form hints. */
+function pcm_minimum_enrolment_age_label(): string {
+    return PCM_MIN_ENROLMENT_AGE_YEARS . ' years ' . PCM_MIN_ENROLMENT_AGE_MONTHS . ' months';
+}
+
 function pcm_env(string $key, string $default = ''): string {
     $value = getenv($key);
     if ($value === false || $value === null || $value === '') {
