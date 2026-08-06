@@ -1,5 +1,23 @@
 <?php
 require_once "include/config.php";
+
+$servicePrograms = [
+    ['icon' => 'fa-chalkboard-user', 'title' => 'Bhutanese Language and Culture School', 'description' => 'Comprehensive language and culture learning program covering Dzongkha reading, writing, speaking, Bhutanese traditions, and values.', 'link_url' => 'bhutanese-language-and-culture-school'],
+    ['icon' => 'fa-om', 'title' => 'Ched Tshog Singye Tsewa', 'description' => 'A community practice of offering and blessing, open to new and experienced practitioners.', 'link_url' => 'ched-tshog-singye-tsewa'],
+    ['icon' => 'fa-om', 'title' => 'Droenchoe (Tara) Practice', 'description' => 'Weekly Saturday practice under guidance, welcoming new and experienced practitioners on a spiritual learning journey.', 'link_url' => 'droenchoe-tara-practice'],
+];
+try {
+    $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+    ]);
+    $rows = $pdo->query("SELECT icon, title, description, link_url FROM service_programs ORDER BY sort_order ASC")->fetchAll(PDO::FETCH_ASSOC);
+    if ($rows) {
+        $servicePrograms = $rows;
+    }
+} catch (Throwable $e) {
+    // keep defaults above
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -38,24 +56,14 @@ require_once "include/config.php";
         </div>
 
         <div class="bbcc-services-extended">
-            <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
-                <div class="bbcc-service-card-ext__icon"><i class="fa-solid fa-chalkboard-user"></i></div>
-                <h3><a href="bhutanese-language-and-culture-school" style="color:inherit;text-decoration:none;">Bhutanese Language and Culture School</a></h3>
-                <p>Comprehensive language and culture learning program covering Dzongkha reading, writing, speaking, Bhutanese traditions, and values.</p>
-                <a href="bhutanese-language-and-culture-school" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#881b12;text-decoration:none;">View School Details <i class="fa-solid fa-arrow-right"></i></a>
-            </div>
-            <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
-                <div class="bbcc-service-card-ext__icon"><i class="fa-solid fa-om"></i></div>
-                <h3><a href="ched-tshog-singye-tsewa" style="color:inherit;text-decoration:none;">Ched Tshog Singye Tsewa</a></h3>
-                <p>A community practice of offering and blessing, open to new and experienced practitioners.</p>
-                <a href="ched-tshog-singye-tsewa" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#881b12;text-decoration:none;">View Practice Details <i class="fa-solid fa-arrow-right"></i></a>
-            </div>
-            <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
-                <div class="bbcc-service-card-ext__icon"><i class="fa-solid fa-om"></i></div>
-                <h3><a href="droenchoe-tara-practice" style="color:inherit;text-decoration:none;">Droenchoe (Tara) Practice</a></h3>
-                <p>Weekly Saturday practice under guidance, welcoming new and experienced practitioners on a spiritual learning journey.</p>
-                <a href="droenchoe-tara-practice" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#881b12;text-decoration:none;">View Practice Details <i class="fa-solid fa-arrow-right"></i></a>
-            </div>
+            <?php foreach ($servicePrograms as $sp): ?>
+                <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
+                    <div class="bbcc-service-card-ext__icon"><i class="fa-solid <?= htmlspecialchars((string)$sp['icon']) ?>"></i></div>
+                    <h3><a href="<?= htmlspecialchars((string)$sp['link_url']) ?>" style="color:inherit;text-decoration:none;"><?= htmlspecialchars((string)$sp['title']) ?></a></h3>
+                    <p><?= htmlspecialchars((string)$sp['description']) ?></p>
+                    <a href="<?= htmlspecialchars((string)$sp['link_url']) ?>" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#881b12;text-decoration:none;">View Details <i class="fa-solid fa-arrow-right"></i></a>
+                </div>
+            <?php endforeach; ?>
         </div>
 
         <hr style="margin:42px 0;border:none;border-top:1px solid #e5e7eb;">

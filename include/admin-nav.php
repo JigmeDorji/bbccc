@@ -377,6 +377,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                 <div class="bg-white py-2 collapse-inner rounded">
                     <a class="collapse-item <?= ($currentPage == 'schoolContentSetup.php') ? 'active' : '' ?>" href="schoolContentSetup"><i class="fas fa-school fa-sm mr-1 text-muted"></i> Setup School Content</a>
                     <a class="collapse-item <?= in_array($currentPage, ['ProgramDetailsSetup.php','sponsorProgramDetailEdit.php'], true) ? 'active' : '' ?>" href="ProgramDetailsSetup"><i class="fas fa-file-alt fa-sm mr-1 text-muted"></i> Setup Program Details</a>
+                    <a class="collapse-item <?= ($currentPage == 'serviceProgramsSetup.php') ? 'active' : '' ?>" href="serviceProgramsSetup"><i class="fas fa-icons fa-sm mr-1 text-muted"></i> Setup Service Cards</a>
                     <a class="collapse-item <?= ($currentPage == 'downloadFileSetup.php') ? 'active' : '' ?>" href="downloadFileSetup"><i class="fas fa-file-download fa-sm mr-1 text-muted"></i> Setup Download Files</a>
                     <a class="collapse-item <?= ($currentPage == 'serviceSetup.php') ? 'active' : '' ?>" href="serviceSetup"><i class="fas fa-bullhorn fa-sm mr-1 text-muted"></i> Post Event</a>
                     <a class="collapse-item <?= ($currentPage == 'ourTeamSetup.php') ? 'active' : '' ?>" href="ourTeamSetup"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Executive &amp; Board Members</a>
