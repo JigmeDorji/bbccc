@@ -32,6 +32,7 @@ if (!hash_equals(csrf_token(), $submitted)) {
 
 $action = trim($_POST['action'] ?? '');
 $email  = strtolower(trim($_POST['email'] ?? ''));
+$name   = trim((string)($_POST['name'] ?? ''));
 $purpose = strtolower(trim((string)($_POST['purpose'] ?? 'signup')));
 $allowedPurposes = ['signup', 'patron_signup'];
 if (!in_array($purpose, $allowedPurposes, true)) {
@@ -90,7 +91,7 @@ if ($action === 'send') {
         exit;
     }
 
-    $result = bbcc_send_verification_code($pdo, $email, $purpose);
+    $result = bbcc_send_verification_code($pdo, $email, $purpose, $name);
     echo json_encode($result);
     exit;
 }

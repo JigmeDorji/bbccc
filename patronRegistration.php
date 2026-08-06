@@ -374,6 +374,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function requestCode() {
         const email = (emailInput.value || '').trim();
+        const nameEl = document.getElementById('full_name');
+        const name = nameEl ? (nameEl.value || '').trim() : '';
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
             Swal.fire({icon:'warning',title:'Invalid Email',text:'Please enter a valid email first.',confirmButtonColor:'#881b12'});
             emailInput.focus();
@@ -386,7 +388,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('verify-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: '_csrf=' + encodeURIComponent(csrfToken) + '&action=send&purpose=patron_signup&email=' + encodeURIComponent(email)
+            body: '_csrf=' + encodeURIComponent(csrfToken) + '&action=send&purpose=patron_signup&email=' + encodeURIComponent(email) + '&name=' + encodeURIComponent(name)
         }).then(r => r.json()).then(data => {
             if (data.ok) {
                 otpSection.style.display = '';

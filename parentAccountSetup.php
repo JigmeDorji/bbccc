@@ -632,6 +632,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // ── Send Code ───────────────────────────────────────────
     function sendCode() {
         const email = document.getElementById('email').value.trim();
+        const name = document.getElementById('fullName').value.trim();
         const btn = document.getElementById('sendCodeBtn');
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Sending...';
@@ -639,7 +640,7 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('verify-email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: '_csrf=' + encodeURIComponent(csrfToken) + '&action=send&purpose=signup&email=' + encodeURIComponent(email)
+            body: '_csrf=' + encodeURIComponent(csrfToken) + '&action=send&purpose=signup&email=' + encodeURIComponent(email) + '&name=' + encodeURIComponent(name)
         })
         .then(r => r.json())
         .then(data => {

@@ -43,8 +43,9 @@ function bbcc_evc_ensure_table(PDO $pdo): void {
 }
 
 /* ── Generate & send a 6-digit OTP ───────────────────────── */
-function bbcc_send_verification_code(PDO $pdo, string $email, string $purpose = 'signup'): array {
+function bbcc_send_verification_code(PDO $pdo, string $email, string $purpose = 'signup', string $name = ''): array {
     $email = strtolower(trim($email));
+    $name = trim($name);
 
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         return ['ok' => false, 'message' => 'Invalid email address.'];
@@ -85,12 +86,12 @@ function bbcc_send_verification_code(PDO $pdo, string $email, string $purpose = 
     ]);
 
     // ── Send the email ──────────────────────────────────────
-    $safeName = htmlspecialchars($email, ENT_QUOTES, 'UTF-8');
+    $greetingName = htmlspecialchars($name !== '' ? $name : $email, ENT_QUOTES, 'UTF-8');
     $subject  = "Your Verification Code for Parent Portal, Bhutanese Language and Culture School";
 
     if (function_exists('pcm_email_wrap')) {
         $body = pcm_email_wrap('Email Verification', "
-            <p style='margin:0 0 14px;'>Hello,</p>
+            <p style='margin:0 0 14px;'>Hello {$greetingName},</p>
             <p style='margin:0 0 14px;'>Your email verification code is:</p>
             <div style='text-align:center;margin:24px 0;'>
                 <span style='display:inline-block;background:#f5f7fa;border:2px solid #881b12;border-radius:12px;padding:16px 36px;font-size:32px;font-weight:700;letter-spacing:8px;color:#881b12;font-family:monospace;'>{$code}</span>
@@ -101,7 +102,7 @@ function bbcc_send_verification_code(PDO $pdo, string $email, string $purpose = 
         ");
     } else {
         $body = "
-            <p>Hello,</p>
+            <p>Hello {$greetingName},</p>
             <p>Your email verification code is: <strong style='font-size:24px;letter-spacing:4px;'>{$code}</strong></p>
             <p>This code expires in 10 minutes.</p>
             <p>If you did not request this, please ignore this email.</p>
