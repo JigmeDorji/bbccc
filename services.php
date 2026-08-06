@@ -30,19 +30,25 @@ require_once "include/config.php";
 <section class="bbcc-section">
     <div class="bbcc-container">
         <div class="section-header fade-up">
-            <span class="section-badge"><i class="fa-solid fa-school"></i> Language Program</span>
-            <h2>Bhutanese Language and <span>Culture School</span></h2>
+            <span class="section-badge"><i class="fa-solid fa-hands-praying"></i> Weekly Programs</span>
+            <h2>Classes and <span>Practices</span></h2>
             <p>
-                Structured weekly classes that teach Dzongkha language, Bhutanese culture, and community values for children and adults.
+                Weekly classes and spiritual practices for children, families and the wider community.
             </p>
         </div>
 
-        <div class="bbcc-services-extended" style="grid-template-columns:minmax(0,1fr);max-width:760px;margin:0 auto;">
+        <div class="bbcc-services-extended">
             <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
                 <div class="bbcc-service-card-ext__icon"><i class="fa-solid fa-chalkboard-user"></i></div>
                 <h3><a href="bhutanese-language-and-culture-school" style="color:inherit;text-decoration:none;">Bhutanese Language and Culture School</a></h3>
                 <p>Comprehensive language and culture learning program covering Dzongkha reading, writing, speaking, Bhutanese traditions, and values.</p>
                 <a href="bhutanese-language-and-culture-school" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#881b12;text-decoration:none;">View School Details <i class="fa-solid fa-arrow-right"></i></a>
+            </div>
+            <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
+                <div class="bbcc-service-card-ext__icon"><i class="fa-solid fa-om"></i></div>
+                <h3><a href="ched-tshog-singye-tsewa" style="color:inherit;text-decoration:none;">Ched Tshog Singye Tsewa</a></h3>
+                <p>A community practice of offering and blessing, open to new and experienced practitioners.</p>
+                <a href="ched-tshog-singye-tsewa" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#881b12;text-decoration:none;">View Practice Details <i class="fa-solid fa-arrow-right"></i></a>
             </div>
             <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
                 <div class="bbcc-service-card-ext__icon"><i class="fa-solid fa-om"></i></div>
