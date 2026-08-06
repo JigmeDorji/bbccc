@@ -350,7 +350,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
 
     <?php if (!isParent() && !isTeacher() && !isPatron()) { ?>
         <?php
-            $websiteActive = in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','schoolContentSetup.php','taraContentSetup.php','sponsorSetup.php','ProgramDetailsSetup.php','sponsorProgramDetailEdit.php','downloadFileSetup.php','serviceSetup.php','ourTeamSetup.php','viewFeedback.php'], true);
+            $websiteActive = in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','schoolContentSetup.php','taraContentSetup.php','chedTshogContentSetup.php','serviceProgramsSetup.php','sponsorSetup.php','ProgramDetailsSetup.php','sponsorProgramDetailEdit.php','downloadFileSetup.php','serviceSetup.php','ourTeamSetup.php','viewFeedback.php'], true);
             $dzoActive = in_array($currentPage, ['dzo-dashboard.php','dzoClassManagement.php','admin-enrolments.php','admin-parents-children.php','feesManagement.php','update-payments.php','manual-payments.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php','admin-class-students.php'], true);
             $eventsActive = in_array($currentPage, ['eventManagement.php','bookingManagement.php'], true);
             $adminSettingsActive = in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php','audit-logs.php','run-migration.php','module-access.php'], true);

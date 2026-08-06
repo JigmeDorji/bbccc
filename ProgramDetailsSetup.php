@@ -220,13 +220,13 @@ $rows = [
             <div class="card setup-grid-card h-100">
                 <div class="card-body">
                     <div class="setup-grid-card__left">
-                        <div class="setup-grid-card__icon bg-services"><i class="fas fa-icons"></i></div>
+                        <div class="setup-grid-card__icon bg-services"><i class="fas fa-om"></i></div>
                         <div>
                             <span class="setup-grid-card__meta">Quick Setup</span>
-                            <p class="setup-grid-card__title">Setup Service Cards</p>
+                            <p class="setup-grid-card__title">Setup Ched Tshog Content</p>
                         </div>
                     </div>
-                    <a href="serviceProgramsSetup" class="btn btn-services btn-sm">
+                    <a href="chedTshogContentSetup" class="btn btn-services btn-sm">
                         <i class="fas fa-edit mr-1"></i> Open
                     </a>
                 </div>
