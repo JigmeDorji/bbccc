@@ -17,6 +17,7 @@ pcm_ensure_enrolment_campus_preference($pdo);
 pcm_ensure_enrolment_start_term($pdo);
 $currentActor = (string)($_SESSION['username'] ?? 'admin');
 $campusChoices = pcm_campus_choice_labels();
+$ageSettings = pcm_enrolment_age_settings($pdo);
 $allClasses = $pdo->query("SELECT id, class_name FROM classes WHERE active=1 ORDER BY class_name")->fetchAll(PDO::FETCH_ASSOC);
 
 function bbcc_tokens(string $text): array {
@@ -46,7 +47,7 @@ function bbcc_class_matches_campus(string $className, array $campusLabels): bool
 }
 
 // ── POST actions ──
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['approve','reject','request_changes','assign_class','manual_enrol','enrol_registered_child'], true)) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['approve','reject','request_changes','assign_class','manual_enrol','enrol_registered_child','save_age_settings'], true)) {
     verify_csrf();
     $action = $_POST['action'];
 
@@ -159,6 +160,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
             } catch (Throwable $e) {
                 $flash = 'Error: ' . $e->getMessage();
             }
+        }
+    } elseif ($action === 'save_age_settings') {
+        $ageYears = (int)($_POST['min_age_years'] ?? -1);
+        $ageMonths = (int)($_POST['min_age_months'] ?? -1);
+
+        if ($ageYears < 0 || $ageYears > 18 || $ageMonths < 0 || $ageMonths > 11) {
+            $flash = 'Please enter a valid minimum age (0-18 years, 0-11 months).';
+        } else {
+            $pdo->prepare("
+                INSERT INTO enrolment_settings (id, min_age_years, min_age_months, updated_by)
+                VALUES (1, :y, :m, :u)
+                ON DUPLICATE KEY UPDATE min_age_years = VALUES(min_age_years), min_age_months = VALUES(min_age_months), updated_by = VALUES(updated_by)
+            ")->execute([':y' => $ageYears, ':m' => $ageMonths, ':u' => $currentActor]);
+
+            $flash = 'Minimum enrolment age updated to ' . $ageYears . ' years ' . $ageMonths . ' months.';
+            $ok = true;
         }
     } elseif ($action === 'manual_enrol') {
         $parentName = trim((string)($_POST['parent_name'] ?? ''));
@@ -585,12 +602,49 @@ document.addEventListener('DOMContentLoaded',()=>{
         <p class="text-muted mb-0" style="font-size:.88rem;">Review, approve, reject, or request updates on parent enrollment submissions.</p>
     </div>
     <div class="d-flex align-items-center">
+        <button type="button" class="btn btn-sm btn-outline-secondary mr-2" style="border-radius:8px;" data-toggle="modal" data-target="#ageSettingsModal">
+            <i class="fas fa-birthday-cake mr-1"></i> Age Eligibility
+        </button>
         <button type="button" class="btn btn-sm btn-primary mr-2" style="border-radius:8px;" data-toggle="modal" data-target="#manualEnrolModal">
             <i class="fas fa-plus-circle mr-1"></i> Manual Enrollment
         </button>
         <a href="dzoClassManagement" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;">
             <i class="fas fa-user-plus mr-1"></i> Child Registration
         </a>
+    </div>
+</div>
+
+<div class="modal fade" id="ageSettingsModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="POST" autocomplete="off">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="save_age_settings">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="fas fa-birthday-cake mr-1"></i> Minimum Enrolment Age</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted" style="font-size:.85rem;">
+                        A child must be at least this old, as of today, to be added by a parent or enrolled by an admin.
+                    </p>
+                    <div class="form-row">
+                        <div class="col-6 form-group">
+                            <label>Years</label>
+                            <input type="number" name="min_age_years" class="form-control" min="0" max="18" required value="<?= (int)$ageSettings['years'] ?>">
+                        </div>
+                        <div class="col-6 form-group">
+                            <label>Months</label>
+                            <input type="number" name="min_age_months" class="form-control" min="0" max="11" required value="<?= (int)$ageSettings['months'] ?>">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Save</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 

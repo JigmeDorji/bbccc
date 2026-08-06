@@ -9,19 +9,47 @@ require_once __DIR__ . '/mail_queue.php';
  * Minimum age (in whole years + months) a child must be, as of today,
  * to be added/enrolled. Used consistently across every "add child" entry
  * point so the rule can't be bypassed by using a different form.
+ *
+ * Admin-editable via enrolment_settings (see admin-enrolments.php).
+ * These constants are only the fallback used if that table/row is
+ * unavailable for any reason.
  */
-const PCM_MIN_ENROLMENT_AGE_YEARS = 5;
-const PCM_MIN_ENROLMENT_AGE_MONTHS = 6;
+const PCM_MIN_ENROLMENT_AGE_YEARS_DEFAULT = 5;
+const PCM_MIN_ENROLMENT_AGE_MONTHS_DEFAULT = 6;
+
+/** Current minimum-age settings, from the DB if available, else the built-in default. */
+function pcm_enrolment_age_settings(?PDO $pdo = null): array {
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+    $years = PCM_MIN_ENROLMENT_AGE_YEARS_DEFAULT;
+    $months = PCM_MIN_ENROLMENT_AGE_MONTHS_DEFAULT;
+    try {
+        $pdo = $pdo ?? pcm_pdo();
+        $stmt = $pdo->query("SELECT min_age_years, min_age_months FROM enrolment_settings WHERE id = 1 LIMIT 1");
+        $row = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : null;
+        if ($row) {
+            $years = (int)$row['min_age_years'];
+            $months = (int)$row['min_age_months'];
+        }
+    } catch (Throwable $e) {
+        // keep defaults
+    }
+    $cached = ['years' => $years, 'months' => $months];
+    return $cached;
+}
 
 /** Latest DOB that still satisfies the minimum age, for use as a date input's max attribute. */
-function pcm_max_dob_for_minimum_age(): string {
+function pcm_max_dob_for_minimum_age(?PDO $pdo = null): string {
+    $s = pcm_enrolment_age_settings($pdo);
     return (new DateTimeImmutable('today'))
-        ->modify('-' . PCM_MIN_ENROLMENT_AGE_YEARS . ' years -' . PCM_MIN_ENROLMENT_AGE_MONTHS . ' months')
+        ->modify('-' . $s['years'] . ' years -' . $s['months'] . ' months')
         ->format('Y-m-d');
 }
 
 /** Whether a given DOB meets the minimum enrolment age as of today. Invalid/empty DOB fails. */
-function pcm_meets_minimum_enrolment_age(string $dob): bool {
+function pcm_meets_minimum_enrolment_age(string $dob, ?PDO $pdo = null): bool {
     $dob = trim($dob);
     if ($dob === '') {
         return false;
@@ -31,12 +59,13 @@ function pcm_meets_minimum_enrolment_age(string $dob): bool {
     } catch (Throwable $e) {
         return false;
     }
-    return $birth <= new DateTimeImmutable(pcm_max_dob_for_minimum_age());
+    return $birth <= new DateTimeImmutable(pcm_max_dob_for_minimum_age($pdo));
 }
 
 /** Human-readable minimum-age string for error messages / form hints. */
-function pcm_minimum_enrolment_age_label(): string {
-    return PCM_MIN_ENROLMENT_AGE_YEARS . ' years ' . PCM_MIN_ENROLMENT_AGE_MONTHS . ' months';
+function pcm_minimum_enrolment_age_label(?PDO $pdo = null): string {
+    $s = pcm_enrolment_age_settings($pdo);
+    return $s['years'] . ' years ' . $s['months'] . ' months';
 }
 
 function pcm_env(string $key, string $default = ''): string {
