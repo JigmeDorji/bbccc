@@ -2,16 +2,16 @@
 require_once "include/config.php";
 
 $servicePrograms = [
-    ['icon' => 'fa-chalkboard-user', 'title' => 'Bhutanese Language and Culture School', 'description' => 'Comprehensive language and culture learning program covering Dzongkha reading, writing, speaking, Bhutanese traditions, and values.', 'link_url' => 'bhutanese-language-and-culture-school'],
-    ['icon' => 'fa-om', 'title' => 'Ched Tshog Singye Tsewa', 'description' => 'A community practice of offering and blessing, open to new and experienced practitioners.', 'link_url' => 'ched-tshog-singye-tsewa'],
-    ['icon' => 'fa-om', 'title' => 'Droenchoe (Tara) Practice', 'description' => 'Weekly Saturday practice under guidance, welcoming new and experienced practitioners on a spiritual learning journey.', 'link_url' => 'droenchoe-tara-practice'],
+    ['icon' => 'fa-chalkboard-user', 'image_url' => '', 'title' => 'Bhutanese Language and Culture School', 'description' => 'Comprehensive language and culture learning program covering Dzongkha reading, writing, speaking, Bhutanese traditions, and values.', 'link_url' => 'bhutanese-language-and-culture-school'],
+    ['icon' => 'fa-om', 'image_url' => '', 'title' => 'Ched Tshog Singye Tsewa', 'description' => 'A community practice of offering and blessing, open to new and experienced practitioners.', 'link_url' => 'ched-tshog-singye-tsewa'],
+    ['icon' => 'fa-om', 'image_url' => '', 'title' => 'Droenchoe (Tara) Practice', 'description' => 'Weekly Saturday practice under guidance, welcoming new and experienced practitioners on a spiritual learning journey.', 'link_url' => 'droenchoe-tara-practice'],
 ];
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
-    $rows = $pdo->query("SELECT icon, title, description, link_url FROM service_programs ORDER BY sort_order ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $rows = $pdo->query("SELECT icon, image_url, title, description, link_url FROM service_programs ORDER BY sort_order ASC")->fetchAll(PDO::FETCH_ASSOC);
     if ($rows) {
         $servicePrograms = $rows;
     }
@@ -58,7 +58,13 @@ try {
         <div class="bbcc-services-extended">
             <?php foreach ($servicePrograms as $sp): ?>
                 <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
-                    <div class="bbcc-service-card-ext__icon"><i class="fa-solid <?= htmlspecialchars((string)$sp['icon']) ?>"></i></div>
+                    <div class="bbcc-service-card-ext__icon">
+                        <?php if (!empty($sp['image_url'])): ?>
+                            <img src="<?= htmlspecialchars((string)$sp['image_url']) ?>" alt="<?= htmlspecialchars((string)$sp['title']) ?>" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
+                        <?php else: ?>
+                            <i class="fa-solid <?= htmlspecialchars((string)$sp['icon']) ?>"></i>
+                        <?php endif; ?>
+                    </div>
                     <h3><a href="<?= htmlspecialchars((string)$sp['link_url']) ?>" style="color:inherit;text-decoration:none;"><?= htmlspecialchars((string)$sp['title']) ?></a></h3>
                     <p><?= htmlspecialchars((string)$sp['description']) ?></p>
                     <a href="<?= htmlspecialchars((string)$sp['link_url']) ?>" style="display:inline-flex;align-items:center;gap:6px;font-weight:600;color:#881b12;text-decoration:none;">View Details <i class="fa-solid fa-arrow-right"></i></a>

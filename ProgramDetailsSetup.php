@@ -135,10 +135,12 @@ $rows = [
         .bg-tara { background: linear-gradient(135deg, #059669, #047857); }
         .bg-monthly { background: linear-gradient(135deg, #d97706, #b45309); }
         .bg-banner { background: linear-gradient(135deg, #0ea5e9, #0369a1); }
+        .bg-services { background: linear-gradient(135deg, #db2777, #9d174d); }
         .btn-about { background:#1d4ed8; border-color:#1d4ed8; color:#fff; }
         .btn-tara { background:#047857; border-color:#047857; color:#fff; }
         .btn-monthly { background:#b45309; border-color:#b45309; color:#fff; }
         .btn-banner { background:#0369a1; border-color:#0369a1; color:#fff; }
+        .btn-services { background:#9d174d; border-color:#9d174d; color:#fff; }
     </style>
 </head>
 <body id="page-top">
@@ -209,6 +211,22 @@ $rows = [
                         </div>
                     </div>
                     <a href="bannerSetup" class="btn btn-banner btn-sm">
+                        <i class="fas fa-edit mr-1"></i> Open
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 col-md-6 mb-3">
+            <div class="card setup-grid-card h-100">
+                <div class="card-body">
+                    <div class="setup-grid-card__left">
+                        <div class="setup-grid-card__icon bg-services"><i class="fas fa-icons"></i></div>
+                        <div>
+                            <span class="setup-grid-card__meta">Quick Setup</span>
+                            <p class="setup-grid-card__title">Setup Service Cards</p>
+                        </div>
+                    </div>
+                    <a href="serviceProgramsSetup" class="btn btn-services btn-sm">
                         <i class="fas fa-edit mr-1"></i> Open
                     </a>
                 </div>

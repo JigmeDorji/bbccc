@@ -35,6 +35,7 @@ try {
         $icon = trim((string)($_POST['icon'] ?? ''));
         $title = trim((string)($_POST['title'] ?? ''));
         $description = trim((string)($_POST['description'] ?? ''));
+        $removeImage = isset($_POST['remove_image']);
 
         if ($id <= 0) {
             throw new Exception('Invalid card.');
@@ -46,8 +47,38 @@ try {
             throw new Exception('Title is required.');
         }
 
-        $stmt = $pdo->prepare("UPDATE service_programs SET icon=:icon, title=:title, description=:description WHERE id=:id");
-        $stmt->execute([':icon' => $icon, ':title' => $title, ':description' => $description, ':id' => $id]);
+        $stmtOld = $pdo->prepare("SELECT image_url FROM service_programs WHERE id = :id");
+        $stmtOld->execute([':id' => $id]);
+        $imageUrl = (string)($stmtOld->fetchColumn() ?: '');
+
+        if ($removeImage) {
+            $imageUrl = '';
+        }
+
+        if (isset($_FILES['image']) && (int)($_FILES['image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            $name = (string)$_FILES['image']['name'];
+            $size = (int)$_FILES['image']['size'];
+            $tmp = (string)$_FILES['image']['tmp_name'];
+            if ($size > 5242880) {
+                throw new Exception('Image is too large. Max 5MB.');
+            }
+            $ext = strtolower((string)pathinfo($name, PATHINFO_EXTENSION));
+            if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+                throw new Exception('Only JPG, PNG, GIF, or WEBP images are allowed.');
+            }
+            $safe = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $name);
+            $dir = __DIR__ . '/uploads/service-programs';
+            if (!is_dir($dir) && !mkdir($dir, 0775, true)) {
+                throw new Exception('Unable to create upload folder.');
+            }
+            if (!move_uploaded_file($tmp, $dir . '/' . $safe)) {
+                throw new Exception('Failed to upload image.');
+            }
+            $imageUrl = 'uploads/service-programs/' . $safe;
+        }
+
+        $stmt = $pdo->prepare("UPDATE service_programs SET icon=:icon, image_url=:image_url, title=:title, description=:description WHERE id=:id");
+        $stmt->execute([':icon' => $icon, ':image_url' => $imageUrl, ':title' => $title, ':description' => $description, ':id' => $id]);
 
         $_SESSION['service_programs_flash'] = ['type' => 'success', 'message' => 'Card updated successfully.'];
         header('Location: serviceProgramsSetup');
@@ -80,7 +111,7 @@ try {
         <h1 class="h3 mb-0 text-gray-800">Setup Service Cards</h1>
         <a href="services" target="_blank" class="btn btn-secondary btn-sm"><i class="fas fa-external-link-alt mr-1"></i> View Services Page</a>
     </div>
-    <p class="text-muted mb-4">Edit the icon, title, and description for each "Classes and Practices" card shown on the Services page. The link each card points to is fixed.</p>
+    <p class="text-muted mb-4">Edit the image (or icon), title, and description for each "Classes and Practices" card shown on the Services page. The link each card points to is fixed.</p>
 
     <div class="row">
         <?php foreach ($cards as $c): ?>
@@ -93,9 +124,24 @@ try {
                         </h6>
                     </div>
                     <div class="card-body">
-                        <form method="POST" action="serviceProgramsSetup">
+                        <form method="POST" action="serviceProgramsSetup" enctype="multipart/form-data">
                             <?= csrf_field() ?>
                             <input type="hidden" name="id" value="<?= (int)$c['id'] ?>">
+
+                            <div class="form-group">
+                                <label class="font-weight-bold">Card Image (optional)</label>
+                                <?php if (!empty($c['image_url'])): ?>
+                                    <div class="mb-2">
+                                        <img src="<?= htmlspecialchars((string)$c['image_url']) ?>" alt="card image" style="width:80px;height:80px;border-radius:50%;object-fit:cover;">
+                                    </div>
+                                    <div class="form-check mb-2">
+                                        <input type="checkbox" class="form-check-input" id="remove-image-<?= (int)$c['id'] ?>" name="remove_image" value="1">
+                                        <label class="form-check-label" for="remove-image-<?= (int)$c['id'] ?>">Remove image (use icon instead)</label>
+                                    </div>
+                                <?php endif; ?>
+                                <input type="file" name="image" class="form-control-file" accept="image/*">
+                                <small class="form-text text-muted">If set, this photo replaces the icon on the card. Max 5MB (JPG, PNG, GIF, WEBP).</small>
+                            </div>
 
                             <div class="form-group">
                                 <label class="font-weight-bold">Icon</label>
@@ -107,7 +153,7 @@ try {
                                            value="<?= htmlspecialchars((string)$c['icon']) ?>" placeholder="fa-om" required>
                                 </div>
                                 <small class="form-text text-muted">
-                                    Font Awesome solid-icon class (e.g. <code>fa-om</code>, <code>fa-hands-praying</code>).
+                                    Used when no image is set. Font Awesome solid-icon class (e.g. <code>fa-om</code>, <code>fa-hands-praying</code>).
                                     Browse icons at <a href="https://fontawesome.com/search?o=r&s=solid" target="_blank" rel="noopener">fontawesome.com</a>.
                                 </small>
                             </div>
