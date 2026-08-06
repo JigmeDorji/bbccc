@@ -134,7 +134,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <p>Thank you for joining us.</p>
             ";
         }
-        $sent = send_mail($email, $full_name, $welcomeSubject, $welcomeBody);
+        $sent = pcm_send_notification_mail($email, $full_name, $welcomeSubject, $welcomeBody);
         if (!$sent) {
             error_log("Parent signup welcome email failed for {$email}");
         }

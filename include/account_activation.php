@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/mailer.php';
+require_once __DIR__ . '/pcm_helpers.php';
 
 function bbcc_activation_ensure_schema(PDO $pdo): void {
     static $done = false;
@@ -123,7 +124,7 @@ function bbcc_send_patron_activation_email(string $toEmail, string $toName, stri
         ";
     }
 
-    return send_mail($toEmail, $toName, 'Welcome to Bhutanese Buddhist and Culture Centre', $body);
+    return pcm_send_notification_mail($toEmail, $toName, 'Welcome to Bhutanese Buddhist and Culture Centre', $body);
 }
 
 function bbcc_activate_account_with_token(PDO $pdo, string $rawToken): array {
