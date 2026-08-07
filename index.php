@@ -555,11 +555,16 @@ try {
                 </div>
             </div>
             <div class="bbcc-cta-col bbcc-cta-col--patron">
-                <h3><i class="fa-solid fa-hands-holding-circle"></i> Become a Patron</h3>
-                <p>Support the Bhutanese Buddhist and Cultural Centre Canberra as a patron and help sustain spiritual and cultural activities for our community.</p>
-                <a href="patronRegistration" class="bbcc-btn bbcc-btn--white">
-                    <i class="fa-solid fa-heart"></i> Join as Patron
-                </a>
+                <h3><i class="fa-solid fa-hands-holding-circle"></i> Support BBCC</h3>
+                <p>Support the Bhutanese Buddhist and Cultural Centre Canberra and help sustain spiritual and cultural activities for our community.</p>
+                <div class="bbcc-cta-actions">
+                    <a href="donate" class="bbcc-btn bbcc-btn--white">
+                        <i class="fa-solid fa-heart"></i> Donate Now
+                    </a>
+                    <a href="patronRegistration" class="bbcc-btn bbcc-btn--outline" style="border-color:rgba(255,255,255,.4);color:#fff;">
+                        Become a Patron <i class="fa-solid fa-arrow-right"></i>
+                    </a>
+                </div>
             </div>
         </div>
     </div>

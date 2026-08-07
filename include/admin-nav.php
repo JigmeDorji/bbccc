@@ -387,6 +387,23 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
         </li>
         <?php endif; ?>
 
+        <?php if ($canWebsiteManage): ?>
+        <?php $donationActive = in_array($currentPage, ['donationSetting.php','admin-donation-verification.php'], true); ?>
+        <li class="nav-item">
+            <a class="nav-link <?= $donationActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseDonations"
+               aria-expanded="<?= $donationActive ? 'true' : 'false' ?>" aria-controls="collapseDonations">
+                <i class="fas fa-hand-holding-heart"></i>
+                <span>Donations</span>
+            </a>
+            <div id="collapseDonations" class="collapse <?= $donationActive ? 'show' : '' ?>" data-parent="#accordionSidebar">
+                <div class="bg-white py-2 collapse-inner rounded">
+                    <a class="collapse-item <?= ($currentPage == 'admin-donation-verification.php') ? 'active' : '' ?>" href="admin-donation-verification"><i class="fas fa-check-double fa-sm mr-1 text-muted"></i> Verify Donations</a>
+                    <a class="collapse-item <?= ($currentPage == 'donationSetting.php') ? 'active' : '' ?>" href="donationSetting"><i class="fas fa-cog fa-sm mr-1 text-muted"></i> Donation Settings</a>
+                </div>
+            </div>
+        </li>
+        <?php endif; ?>
+
         <!-- Dzo Class Management -->
         <?php if ($showDzoMgmtSection): ?>
         <li class="nav-item">

@@ -920,3 +920,29 @@ function pcm_notify_admin_absence(string $childName, string $parentName, string 
         bbcc_mail_log('ADMIN MAIL OK: absence notify to ' . $adminEmail . ' for child ' . $childName);
     }
 }
+
+function pcm_notify_admin_donation(string $donorName, float $amount): void {
+    $adminEmail = pcm_website_notify_email();
+    if ($adminEmail === '') {
+        bbcc_mail_log('ADMIN MAIL SKIP: empty WEBSITE_NOTIFY_EMAIL for donation from ' . $donorName);
+        return;
+    }
+    $portalUrl = htmlspecialchars(pcm_admin_portal_url(), ENT_QUOTES, 'UTF-8');
+    $amountLabel = number_format($amount, 2);
+    $html = pcm_email_wrap('New Donation Submitted', "
+        <p style='margin:0 0 14px;'><strong>" . htmlspecialchars($donorName) . "</strong> submitted a donation of <strong>\${$amountLabel}</strong>, awaiting verification.</p>
+        <p style='margin:16px 0 0;'>
+            <a href='{$portalUrl}' style='background:#881b12;color:#ffffff;padding:10px 16px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:600;font-size:14px;'>
+                Open Admin Portal
+            </a>
+        </p>
+    ");
+    // Always queue -- fires from a public unauthenticated form, so the
+    // donor's browser must never wait on a direct SMTP send.
+    $ok = bbcc_queue_mail($adminEmail, 'Admin', 'New Donation Submitted – ' . $donorName, $html);
+    if (!$ok) {
+        bbcc_mail_log('ADMIN MAIL FAIL: donation notify to ' . $adminEmail . ' from ' . $donorName);
+    } else {
+        bbcc_mail_log('ADMIN MAIL QUEUED: donation notify to ' . $adminEmail . ' from ' . $donorName);
+    }
+}

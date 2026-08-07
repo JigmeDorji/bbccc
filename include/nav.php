@@ -18,7 +18,7 @@ $isServicesPage = in_array($currentPage, $servicePages, true);
         <div class="bbcc-topbar__info">
             <span class="bbcc-topbar__email"><i class="fa-solid fa-envelope"></i> bhutanesecentrecanberra@gmail.com</span>
             <span class="bbcc-topbar__phone"><i class="fa-solid fa-phone"></i> 0434 522 720</span>
-            <a href="patronRegistration" class="bbcc-topbar__patron-btn" aria-label="Donate">
+            <a href="donate" class="bbcc-topbar__patron-btn" aria-label="Donate">
                 <i class="fa-solid fa-heart"></i> Donate
             </a>
         </div>
