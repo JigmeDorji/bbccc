@@ -732,11 +732,12 @@ function pcm_notify_admin_enrolment(string $childName, string $parentName): void
             </a>
         </p>
     ");
-    $ok = pcm_send_notification_mail($adminEmail, 'Admin', 'Parent Finalized Enrollment for ' . $childName, $html, 4);
+    // Always queue -- see pcm_notify_admin_student_registration() for why.
+    $ok = bbcc_queue_mail($adminEmail, 'Admin', 'Parent Finalized Enrollment for ' . $childName, $html);
     if (!$ok) {
         bbcc_mail_log('ADMIN MAIL FAIL: enrolment notify to ' . $adminEmail . ' for child ' . $childName);
     } else {
-        bbcc_mail_log('ADMIN MAIL OK: enrolment notify to ' . $adminEmail . ' for child ' . $childName);
+        bbcc_mail_log('ADMIN MAIL QUEUED: enrolment notify to ' . $adminEmail . ' for child ' . $childName);
     }
 }
 
@@ -762,11 +763,14 @@ function pcm_notify_admin_student_registration(string $childName, string $parent
             </a>
         </p>
     ");
-    $ok = pcm_send_notification_mail($adminEmail, 'Admin', 'New Student Registration for ' . $childName, $html, 4);
+    // Always queue (never a direct synchronous SMTP send here): this fires
+    // from parent-facing form submissions, and a slow/flaky SMTP connect
+    // must never make the parent's browser wait on it.
+    $ok = bbcc_queue_mail($adminEmail, 'Admin', 'New Student Registration for ' . $childName, $html);
     if (!$ok) {
         bbcc_mail_log('ADMIN MAIL FAIL: student registration notify to ' . $adminEmail . ' for child ' . $childName);
     } else {
-        bbcc_mail_log('ADMIN MAIL OK: student registration notify to ' . $adminEmail . ' for child ' . $childName);
+        bbcc_mail_log('ADMIN MAIL QUEUED: student registration notify to ' . $adminEmail . ' for child ' . $childName);
     }
 }
 

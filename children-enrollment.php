@@ -88,16 +88,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     verify_csrf();
     $act = $_POST['action'];
 
-    // --- Add Child ---
-    if ($act === 'add_child') {
-        header("Location: parent-children");
-        exit;
-    }
-
-    // --- Remove Child ---
+    // --- Remove Child (only Pending children with no enrolment on file) ---
     if ($act === 'remove_child') {
-        header("Location: parent-children");
-        exit;
+        if (!bbcc_verify_form_nonce_once('parent_remove_child')) {
+            $flash = 'Duplicate submission detected. Please refresh and try again.';
+        } else {
+            $cid = (int)($_POST['child_id'] ?? 0);
+            $chk = $pdo->prepare("SELECT id FROM pcm_enrolments WHERE student_id = :id LIMIT 1");
+            $chk->execute([':id' => $cid]);
+            if ($chk->fetch()) {
+                $flash = 'Cannot remove a child who has an enrolment. Contact admin.';
+            } else {
+                $del = $pdo->prepare("DELETE FROM students WHERE id = :id AND {$studentParentExpr} = :pid AND approval_status = 'Pending'");
+                $del->execute([':id' => $cid, ':pid' => $parentId]);
+                $flash = $del->rowCount() ? 'Child removed.' : 'Cannot remove this child.';
+                $ok = (bool)$del->rowCount();
+            }
+        }
     }
 
     // --- Submit Enrolment ---
@@ -282,7 +289,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 
                     if ($flash === '') {
                         error_log('[BBCC] parent enrollment saved: student_id=' . $childId . ', enrolment_id=' . (int)$eid);
-                        $flash = 'Enrollment submitted for <strong>' . h($child['student_name']) . '</strong>. You will be notified once reviewed.';
+                        pcm_notify_admin_enrolment((string)$child['student_name'], (string)($parent['full_name'] ?? 'Parent'));
+                        $flash = 'Enrollment submitted for <strong>' . h($child['student_name']) . '</strong> and is now waiting for admin approval. You will be notified once it is reviewed.';
                         $ok = true;
                     }
                 }
@@ -453,11 +461,9 @@ document.addEventListener('DOMContentLoaded',()=>{
 <!-- ═══ Single Column: Enrolment Form + Enrolments ═══ -->
 <div class="col-12">
 
-    <?php if (false): ?>
     <!-- SECTION: My Children -->
-    <div class="section-title"><i class="fas fa-child"></i>My Children</div>
-
     <?php if (!empty($children)): ?>
+    <div class="section-title"><i class="fas fa-child"></i>My Children</div>
     <div class="card shadow-sm mb-3">
         <div class="card-body p-0">
             <div class="table-responsive">
@@ -496,6 +502,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                                 <?php if (strtolower($c['approval_status'] ?? '') === 'pending' && !$enrolled): ?>
                                 <form method="POST" class="d-inline" data-confirm="Remove this child?">
                                     <?= csrf_field() ?>
+                                    <?= bbcc_form_nonce_field('parent_remove_child') ?>
                                     <input type="hidden" name="action" value="remove_child">
                                     <input type="hidden" name="child_id" value="<?= (int)$c['id'] ?>">
                                     <button class="btn btn-outline-danger btn-sm" title="Remove"><i class="fas fa-trash-alt"></i></button>
@@ -508,43 +515,6 @@ document.addEventListener('DOMContentLoaded',()=>{
                 </table>
             </div>
         </div>
-    </div>
-    <?php endif; ?>
-
-    <!-- Quick Add Child -->
-    <div class="quick-add-form mb-4" id="addChildSection">
-        <div class="d-flex align-items-center mb-2">
-            <i class="fas fa-plus-circle text-primary mr-2"></i>
-            <strong style="font-size:0.88rem;">Add a Child</strong>
-        </div>
-        <form method="POST" class="row g-2 align-items-end">
-            <?= csrf_field() ?>
-            <input type="hidden" name="action" value="add_child">
-            <div class="col-md-3">
-                <label class="mini-label"><i class="fas fa-user mr-1" style="color:var(--brand);font-size:0.6rem;"></i> Child's Full Name *</label>
-                <input type="text" name="child_name" class="form-control form-control-sm" required maxlength="150" placeholder="e.g. Karma Dorji">
-            </div>
-            <div class="col-md-2">
-                <label class="mini-label"><i class="fas fa-calendar mr-1" style="color:var(--brand);font-size:0.6rem;"></i> Date of Birth *</label>
-                <input type="date" name="dob" class="form-control form-control-sm" max="<?= date('Y-m-d') ?>" required>
-            </div>
-            <div class="col-md-2">
-                <label class="mini-label"><i class="fas fa-venus-mars mr-1" style="color:var(--brand);font-size:0.6rem;"></i> Gender *</label>
-                <select name="child_gender" class="form-control form-control-sm" required>
-                    <option value="">— Select —</option>
-                    <option>Male</option>
-                    <option>Female</option>
-                    <option>Other</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="mini-label"><i class="fas fa-heartbeat mr-1" style="color:var(--brand);font-size:0.6rem;"></i> Medical Issues *</label>
-                <input type="text" name="medical" class="form-control form-control-sm" required maxlength="500" placeholder="None if no issues">
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary btn-sm btn-block"><i class="fas fa-user-plus mr-1"></i>Add</button>
-            </div>
-        </form>
     </div>
     <?php endif; ?>
 

@@ -572,17 +572,10 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
             </a>
         </li>
 
-        <li class="nav-item <?= ($currentPage == 'parent-children.php') ? 'active' : '' ?>">
-            <a class="nav-link" href="parent-children">
-                <i class="fas fa-file-signature"></i>
-                <span>Children</span>
-            </a>
-        </li>
-
-        <li class="nav-item <?= in_array($currentPage, ['children-enrollment.php','parent-enrolment.php']) ? 'active' : '' ?>">
+        <li class="nav-item <?= in_array($currentPage, ['children-enrollment.php','parent-enrolment.php','parent-children.php','parent-students.php']) ? 'active' : '' ?>">
             <a class="nav-link" href="children-enrollment">
                 <i class="fas fa-clipboard-list"></i>
-                <span>Enrollment</span>
+                <span>My Children &amp; Enrollment</span>
             </a>
         </li>
 
