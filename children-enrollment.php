@@ -201,6 +201,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $flash = 'Please provide a payment reference.';
         } elseif (!in_array($plan, ['Term-wise','Half-yearly','Yearly'])) {
             $flash = 'Invalid fee plan.';
+        } elseif (!pcm_plan_allowed_for_start_term($plan, $startTerm)) {
+            $flash = 'That fee plan is not available for the selected starting term.';
         } else {
             $existingEnrol = $pdo->prepare("SELECT id, status, parent_id FROM pcm_enrolments WHERE student_id=:id LIMIT 1");
             $existingEnrol->execute([':id'=>$childId]);
@@ -599,15 +601,15 @@ document.addEventListener('DOMContentLoaded',()=>{
                     </div>
                     <div class="row" id="planCards">
                         <div class="col-md-4 mb-2">
-                            <div class="plan-card" data-plan="Term-wise" data-amount="65">
+                            <div class="plan-card" data-plan="Term-wise" data-amount="65" data-terms="1,2,3,4">
                                 <div class="check-mark"><i class="fas fa-check"></i></div>
                                 <div class="plan-name">Term-wise</div>
                                 <div class="plan-price">$65</div>
-                                <div class="plan-detail">Per term (4 terms/year)</div>
+                                <div class="plan-detail">Per term</div>
                             </div>
                         </div>
                         <div class="col-md-4 mb-2">
-                            <div class="plan-card" data-plan="Half-yearly" data-amount="125">
+                            <div class="plan-card" data-plan="Half-yearly" data-amount="125" data-terms="1,3">
                                 <div class="check-mark"><i class="fas fa-check"></i></div>
                                 <div class="plan-name">Half-yearly</div>
                                 <div class="plan-price">$125</div>
@@ -615,7 +617,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                             </div>
                         </div>
                         <div class="col-md-4 mb-2">
-                            <div class="plan-card" data-plan="Yearly" data-amount="250">
+                            <div class="plan-card" data-plan="Yearly" data-amount="250" data-terms="1,2">
                                 <div class="check-mark"><i class="fas fa-check"></i></div>
                                 <div class="plan-name">Yearly</div>
                                 <div class="plan-price">$250</div>
@@ -911,7 +913,12 @@ document.addEventListener('DOMContentLoaded', function() {
         const term = Math.min(4, Math.max(1, parseInt(startTerm || '1', 10)));
         if (plan === 'Term-wise') return 65 * (5 - term);
         if (plan === 'Half-yearly') return 125 * (term <= 2 ? 2 : 1);
-        if (plan === 'Yearly') return (250 / 4) * (5 - term);
+        if (plan === 'Yearly') {
+            // Genuine full-year discount only applies starting Term 1.
+            // Otherwise this is the "remaining terms, one lump sum" option
+            // (Term 2 only, in the UI) -- no discount, same rate as Term-wise.
+            return term <= 1 ? 250 : 65 * (5 - term);
+        }
         return 0;
     }
 
@@ -921,7 +928,61 @@ document.addEventListener('DOMContentLoaded', function() {
         amountDisplay.textContent = '$' + amount.toFixed(2);
     }
 
+    // Per-term label overrides for plans whose meaning changes depending on
+    // the start term (e.g. the "Yearly" card becomes a "remaining terms,
+    // paid at once" option once you're not starting from Term 1).
+    const planCardOverrides = {
+        'Yearly': {
+            2: { name: 'Remaining Terms', price: '$195', detail: '3 terms (Term 2, 3 & 4) -- paid at once' }
+        },
+        'Half-yearly': {
+            3: { name: '2 Terms', price: '$125', detail: 'End of year (Term 3 & 4) -- paid at once' }
+        }
+    };
+    const planCardDefaults = new Map();
+    planCards.forEach(function(card) {
+        planCardDefaults.set(card, {
+            name: card.querySelector('.plan-name').textContent,
+            price: card.querySelector('.plan-price').textContent,
+            detail: card.querySelector('.plan-detail').textContent
+        });
+    });
+
+    function applyPlanCardsForTerm(term) {
+        const t = Math.min(4, Math.max(1, parseInt(term || '1', 10)));
+        let selectedCardHidden = false;
+
+        planCards.forEach(function(card) {
+            const allowedTerms = (card.dataset.terms || '').split(',').map(function(s) { return parseInt(s, 10); });
+            const wrapper = card.closest('.col-md-4') || card;
+            const isAllowed = allowedTerms.includes(t);
+            wrapper.style.display = isAllowed ? '' : 'none';
+
+            if (!isAllowed && card.classList.contains('selected')) {
+                selectedCardHidden = true;
+            }
+
+            const plan = card.dataset.plan;
+            const override = (planCardOverrides[plan] && planCardOverrides[plan][t]) || planCardDefaults.get(card);
+            card.querySelector('.plan-name').textContent = override.name;
+            card.querySelector('.plan-price').textContent = override.price;
+            card.querySelector('.plan-detail').textContent = override.detail;
+        });
+
+        if (selectedCardHidden) {
+            resetPlanSelection();
+            paymentSection.style.display = 'none';
+            submitSection.style.display = 'none';
+        } else if (selectedPlanInput.value) {
+            updateAmountDisplay();
+        }
+    }
+
     if (startTermSelect) {
+        applyPlanCardsForTerm(startTermSelect.value);
+        startTermSelect.addEventListener('change', function() {
+            applyPlanCardsForTerm(this.value);
+        });
         startTermSelect.addEventListener('change', updateAmountDisplay);
     }
 

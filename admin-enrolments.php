@@ -66,6 +66,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
             $flash = 'Invalid child selected.';
         } elseif (!in_array($plan, ['Term-wise', 'Half-yearly', 'Yearly'], true)) {
             $flash = 'Invalid fee plan selected.';
+        } elseif (!pcm_plan_allowed_for_start_term($plan, $startTerm)) {
+            $flash = 'That fee plan is not available for the selected starting term.';
         } elseif (empty($campusSelection) || array_diff($campusSelection, $allowedCampusChoices)) {
             $flash = 'Please select at least one valid campus.';
         } else {
@@ -206,6 +208,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
             $flash = 'Child must be at least ' . pcm_minimum_enrolment_age_label() . ' old to be enrolled.';
         } elseif (!in_array($plan, ['Term-wise', 'Half-yearly', 'Yearly'], true)) {
             $flash = 'Invalid fee plan selected.';
+        } elseif (!pcm_plan_allowed_for_start_term($plan, $startTerm)) {
+            $flash = 'That fee plan is not available for the selected starting term.';
         } elseif (empty($campusSelection) || array_diff($campusSelection, $allowedCampusChoices)) {
             $flash = 'Please select at least one valid campus.';
         } else {

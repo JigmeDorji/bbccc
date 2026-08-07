@@ -319,6 +319,31 @@ function h(string $v): string {
 }
 
 // ─── Fee plan helpers ─────────────────────────────────────
+
+/**
+ * Which fee plans make sense given how many terms are actually left.
+ * Half-yearly (a 2-term unit) only lines up cleanly at Term 1 (covers the
+ * whole year) or Term 3 (covers exactly the 2 remaining terms). Yearly is
+ * the full-year discount plan at Term 1, and doubles as the "remaining
+ * terms paid as one lump sum" option at Term 2 (see
+ * pcm_plan_total_for_start_term()). At Term 4 only one term is left, so
+ * Term-wise is the only option -- any "bundle" would just equal it.
+ */
+function pcm_plan_allowed_for_start_term(string $plan, int $startTerm): bool {
+    $startTerm = pcm_normalize_start_term($startTerm);
+    $p = strtolower(trim($plan));
+    if ($p === 'term-wise') {
+        return true;
+    }
+    if ($p === 'half-yearly') {
+        return in_array($startTerm, [1, 3], true);
+    }
+    if ($p === 'yearly') {
+        return in_array($startTerm, [1, 2], true);
+    }
+    return false;
+}
+
 function pcm_plan_instalments(string $plan): array {
     $p = strtolower(trim($plan));
     if ($p === 'term-wise')    return ['Term 1','Term 2','Term 3','Term 4'];
@@ -383,7 +408,15 @@ function pcm_plan_total_for_start_term(string $plan, int $startTerm): float {
         return pcm_plan_amount($plan) * ($startTerm <= 2 ? 2 : 1);
     }
     if ($p === 'yearly') {
-        return round((pcm_plan_amount($plan) / 4) * (5 - $startTerm), 2);
+        if ($startTerm <= 1) {
+            // Genuine full-year commitment: the discounted flat rate.
+            return pcm_plan_amount($plan);
+        }
+        // Not a full year -- this is the "remaining terms paid as one lump
+        // sum" option (only ever offered at Term 2 in the UI). No bulk
+        // discount: same per-term rate as Term-wise, just consolidated
+        // into a single payment.
+        return pcm_plan_amount('Term-wise') * (5 - $startTerm);
     }
     return 0.00;
 }
