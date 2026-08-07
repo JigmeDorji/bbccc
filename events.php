@@ -93,30 +93,41 @@ try {
     }
 
     /* =========================
-       PAST EVENTS QUERY
+       PAST EVENTS QUERY (paginated -- section is collapsed by default
+       on the page, so only the current page's worth needs to load)
     ========================= */
-    $sqlPast = "SELECT * FROM events WHERE event_date < :today";
+    $pastPerPage = 15;
+    $pastPage = max(1, (int)($_GET['past_page'] ?? 1));
+
+    $pastWhere = " WHERE event_date < :today";
     $paramsPast = [
         ':today' => $today
     ];
 
     if (!empty($filterYear)) {
-        $sqlPast .= " AND YEAR(event_date) = :yr";
+        $pastWhere .= " AND YEAR(event_date) = :yr";
         $paramsPast[':yr'] = (int)$filterYear;
     }
 
     if ($filterMonth !== '') {
-        $sqlPast .= " AND MONTH(event_date) = :mo";
+        $pastWhere .= " AND MONTH(event_date) = :mo";
         $paramsPast[':mo'] = (int)$filterMonth;
     }
 
     if ($search !== '') {
-        $sqlPast .= " AND (title LIKE :s OR description LIKE :s2)";
+        $pastWhere .= " AND (title LIKE :s OR description LIKE :s2)";
         $paramsPast[':s']  = "%$search%";
         $paramsPast[':s2'] = "%$search%";
     }
 
-    $sqlPast .= " ORDER BY event_date DESC, start_time DESC";
+    $stmtPastCount = $pdo->prepare("SELECT COUNT(*) FROM events" . $pastWhere);
+    $stmtPastCount->execute($paramsPast);
+    $pastTotalCount = (int)$stmtPastCount->fetchColumn();
+    $pastTotalPages = max(1, (int)ceil($pastTotalCount / $pastPerPage));
+    $pastPage = min($pastPage, $pastTotalPages);
+    $pastOffset = ($pastPage - 1) * $pastPerPage;
+
+    $sqlPast = "SELECT * FROM events" . $pastWhere . " ORDER BY event_date DESC, start_time DESC LIMIT $pastPerPage OFFSET $pastOffset";
 
     $stmtPast = $pdo->prepare($sqlPast);
     $stmtPast->execute($paramsPast);
@@ -126,6 +137,9 @@ try {
     $upcomingEvents = [];
     $pastEvents = [];
     $calendarEvents = [];
+    $pastTotalCount = 0;
+    $pastTotalPages = 1;
+    $pastPage = 1;
 }
 
 $calYear  = (int)($filterYear ?: date('Y'));
@@ -602,6 +616,13 @@ $monthName   = $firstDayObj->format('F');
                 <?php endforeach; ?>
             <?php endif; ?>
 
+            <div style="text-align:center;margin:32px 0 8px;">
+                <button type="button" id="pastEventsToggleBtn" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" aria-expanded="false" aria-controls="pastEventsSection">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Show Past Events (<?= (int)$pastTotalCount ?>)
+                </button>
+            </div>
+
+            <div id="pastEventsSection" style="display:none;">
             <h3 class="ev-section-title">Past Events</h3>
 
             <?php if (empty($pastEvents)): ?>
@@ -656,6 +677,20 @@ $monthName   = $firstDayObj->format('F');
                     </div>
                 <?php endforeach; ?>
             <?php endif; ?>
+
+            <?php if ($pastTotalPages > 1): ?>
+            <div class="ev-past-pagination" style="display:flex;justify-content:center;align-items:center;gap:14px;margin-top:24px;">
+                <?php if ($pastPage > 1): ?>
+                    <a href="events?year=<?= urlencode((string)$filterYear) ?>&month=<?= urlencode((string)$filterMonth) ?>&search=<?= urlencode($search) ?>&past_page=<?= $pastPage - 1 ?>#pastEventsSection" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm">&laquo; Prev</a>
+                <?php endif; ?>
+                <span style="color:var(--gray-600);font-size:.9rem;">Page <?= (int)$pastPage ?> of <?= (int)$pastTotalPages ?></span>
+                <?php if ($pastPage < $pastTotalPages): ?>
+                    <a href="events?year=<?= urlencode((string)$filterYear) ?>&month=<?= urlencode((string)$filterMonth) ?>&search=<?= urlencode($search) ?>&past_page=<?= $pastPage + 1 ?>#pastEventsSection" class="bbcc-btn bbcc-btn--outline bbcc-btn--sm">Next &raquo;</a>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+
+            </div>
 
         </div>
 
@@ -778,6 +813,30 @@ document.getElementById('btnCal').addEventListener('click', function() {
 if (localStorage.getItem('eventsView') === 'calendar') {
     document.getElementById('btnCal').click();
 }
+
+(function() {
+    var toggleBtn = document.getElementById('pastEventsToggleBtn');
+    var section = document.getElementById('pastEventsSection');
+    if (!toggleBtn || !section) return;
+
+    function setExpanded(expanded) {
+        section.style.display = expanded ? '' : 'none';
+        toggleBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+        toggleBtn.innerHTML = expanded
+            ? '<i class="fa-solid fa-clock-rotate-left"></i> Hide Past Events'
+            : '<i class="fa-solid fa-clock-rotate-left"></i> Show Past Events (<?= (int)$pastTotalCount ?>)';
+    }
+
+    toggleBtn.addEventListener('click', function() {
+        setExpanded(section.style.display === 'none');
+    });
+
+    var params = new URLSearchParams(window.location.search);
+    if (params.has('past_page') || window.location.hash === '#pastEventsSection') {
+        setExpanded(true);
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+})();
 </script>
 
 </body>
