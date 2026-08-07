@@ -435,11 +435,17 @@ function main(array $argv): void {
         // 3) Students
         $selStudentByPublicId = $pdo->prepare("SELECT id FROM students WHERE student_id = :sid LIMIT 1");
         $selStudentByNameParent = $pdo->prepare("SELECT id FROM students WHERE student_name = :name AND parent_id = :pid LIMIT 1");
+        $parentInsertColumns = pcm_students_parent_insert_columns($pdo);
+        $parentInsertColumnsSql = implode(', ', $parentInsertColumns);
+        $parentInsertPlaceholderNames = [];
+        foreach ($parentInsertColumns as $i => $col) {
+            $parentInsertPlaceholderNames[] = ':pid' . $i;
+        }
         $insStudent = $pdo->prepare("
             INSERT INTO students
-                (student_id, student_name, dob, gender, medical_issue, approval_status, parent_id, status, payment_plan, payment_amount)
+                (student_id, student_name, dob, gender, medical_issue, approval_status, {$parentInsertColumnsSql}, status, payment_plan, payment_amount)
             VALUES
-                (:student_id, :student_name, :dob, :gender, :medical_issue, :approval_status, :parent_id, 'Active', :payment_plan, :payment_amount)
+                (:student_id, :student_name, :dob, :gender, :medical_issue, :approval_status, " . implode(', ', $parentInsertPlaceholderNames) . ", 'Active', :payment_plan, :payment_amount)
         ");
         $updStudent = $pdo->prepare("
             UPDATE students
@@ -493,7 +499,12 @@ function main(array $argv): void {
                 $updStudent->execute($params);
                 $studentKeyToId[$sKey] = $existingId;
             } else {
-                $insStudent->execute($params);
+                $insertParams = $params;
+                unset($insertParams[':parent_id']);
+                foreach ($parentInsertPlaceholderNames as $ph) {
+                    $insertParams[$ph] = $parentId;
+                }
+                $insStudent->execute($insertParams);
                 $studentKeyToId[$sKey] = (int)$pdo->lastInsertId();
             }
             $summary['students']++;

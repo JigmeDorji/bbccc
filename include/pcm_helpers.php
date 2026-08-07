@@ -434,6 +434,27 @@ function pcm_badge(string $status): string {
     return 'secondary';
 }
 
+/**
+ * students.parentId is fully retired on environments where migration 027
+ * (see migrations/) has been run. Environments that haven't run it yet
+ * still have parentId as a legacy NOT NULL column, so every INSERT must
+ * keep populating it too or it fails outright. These helpers detect which
+ * case applies at runtime so the same code works either way.
+ */
+function pcm_students_has_legacy_parent_id_column(PDO $pdo): bool {
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM students LIKE 'parentId'");
+        $cached = (bool)($stmt && $stmt->fetch(PDO::FETCH_ASSOC));
+    } catch (Throwable $e) {
+        $cached = false;
+    }
+    return $cached;
+}
+
 function pcm_students_parent_column(PDO $pdo): string {
     return 'parent_id';
 }
@@ -444,6 +465,9 @@ function pcm_students_parent_expr(PDO $pdo, string $alias = ''): string {
 }
 
 function pcm_students_parent_insert_columns(PDO $pdo): array {
+    if (pcm_students_has_legacy_parent_id_column($pdo)) {
+        return ['parent_id', 'parentId'];
+    }
     return ['parent_id'];
 }
 

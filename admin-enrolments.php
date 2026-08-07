@@ -249,17 +249,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
                 }
 
                 $studentCode = pcm_next_student_id($pdo);
+                $parentInsertColumns = pcm_students_parent_insert_columns($pdo);
+                $parentInsertColumnsSql = implode(', ', $parentInsertColumns);
+                $parentInsertPlaceholders = [];
+                $parentInsertParams = [];
+                foreach ($parentInsertColumns as $i => $col) {
+                    $ph = ':pid' . $i;
+                    $parentInsertPlaceholders[] = $ph;
+                    $parentInsertParams[$ph] = $parentId;
+                }
                 $insStudent = $pdo->prepare("
-                    INSERT INTO students (student_id, student_name, dob, gender, approval_status, parent_id, status)
-                    VALUES (:scode, :sname, :dob, :gender, 'Pending', :pid, 'Active')
+                    INSERT INTO students (student_id, student_name, dob, gender, approval_status, {$parentInsertColumnsSql}, status)
+                    VALUES (:scode, :sname, :dob, :gender, 'Pending', " . implode(', ', $parentInsertPlaceholders) . ", 'Active')
                 ");
-                $insStudent->execute([
+                $insStudent->execute(array_merge([
                     ':scode' => $studentCode,
                     ':sname' => $childName,
                     ':dob' => ($childDob !== '' ? $childDob : null),
                     ':gender' => ($childGender !== '' ? $childGender : null),
-                    ':pid' => $parentId
-                ]);
+                ], $parentInsertParams));
                 $studentDbId = (int)$pdo->lastInsertId();
 
                 $campusStored = implode(',', $campusSelection);
