@@ -111,7 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $_SESSION['enrol_submit_nonce'] = bin2hex(random_bytes(16));
             $enrolSubmitNonce = (string)$_SESSION['enrol_submit_nonce'];
 
-        $childId = (int)($_POST['child_id'] ?? 0);
+        $childIdRaw = trim((string)($_POST['child_id'] ?? ''));
         $campusSelection = $_POST['campus_choice'] ?? [];
         if (!is_array($campusSelection)) {
             $campusSelection = [];
@@ -122,11 +122,69 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $startTerm = pcm_normalize_start_term($_POST['start_term'] ?? 1);
         $ref     = trim($_POST['payment_ref'] ?? '');
 
-        $chk = $pdo->prepare("SELECT id, student_name FROM students WHERE id=:id AND {$studentParentExpr}=:pid LIMIT 1");
-        $chk->execute([':id'=>$childId, ':pid'=>$parentId]);
-        $child = $chk->fetch();
+        $childId = 0;
+        $child = null;
 
-        if (!$child) {
+        if ($childIdRaw === '__new__') {
+            // Register a brand-new child as part of this same enrolment submission.
+            $newChildName = trim((string)($_POST['new_child_name'] ?? ''));
+            $newChildDob = trim((string)($_POST['new_child_dob'] ?? ''));
+            $newChildGender = trim((string)($_POST['new_child_gender'] ?? ''));
+            $newChildMedical = trim((string)($_POST['new_child_medical'] ?? ''));
+
+            if ($newChildName === '') {
+                $flash = "Child's full name is required.";
+            } elseif ($newChildDob === '') {
+                $flash = 'Date of birth is required.';
+            } elseif (!pcm_meets_minimum_enrolment_age($newChildDob)) {
+                $flash = 'Child must be at least ' . pcm_minimum_enrolment_age_label() . ' old to be enrolled.';
+            } else {
+                try {
+                    $newStudentCode = pcm_next_student_id($pdo);
+                    $parentInsertColumns = pcm_students_parent_insert_columns($pdo);
+                    $parentInsertColumnsSql = implode(', ', $parentInsertColumns);
+                    $parentInsertPlaceholders = [];
+                    $parentInsertParams = [];
+                    foreach ($parentInsertColumns as $i => $col) {
+                        $ph = ':npid' . $i;
+                        $parentInsertPlaceholders[] = $ph;
+                        $parentInsertParams[$ph] = $parentId;
+                    }
+                    $insChild = $pdo->prepare("
+                        INSERT INTO students (student_id, student_name, dob, gender, medical_issue, registration_date, approval_status, {$parentInsertColumnsSql})
+                        VALUES (:sid, :name, :dob, :g, :med, CURDATE(), 'Pending', " . implode(', ', $parentInsertPlaceholders) . ")
+                    ");
+                    $insChild->execute(array_merge([
+                        ':sid' => $newStudentCode,
+                        ':name' => $newChildName,
+                        ':dob' => $newChildDob,
+                        ':g' => $newChildGender ?: null,
+                        ':med' => $newChildMedical ?: null,
+                    ], $parentInsertParams));
+                    $childId = (int)$pdo->lastInsertId();
+                    $child = ['id' => $childId, 'student_name' => $newChildName];
+
+                    pcm_notify_admin_student_registration(
+                        $newChildName,
+                        (string)($parent['full_name'] ?? 'Parent'),
+                        (string)($parent['email'] ?? ''),
+                        $newStudentCode
+                    );
+                } catch (Throwable $e) {
+                    $flash = 'Could not save child details. Please contact admin.';
+                    error_log('[BBCC] inline child creation error: ' . $e->getMessage());
+                }
+            }
+        } else {
+            $childId = (int)$childIdRaw;
+            $chk = $pdo->prepare("SELECT id, student_name FROM students WHERE id=:id AND {$studentParentExpr}=:pid LIMIT 1");
+            $chk->execute([':id'=>$childId, ':pid'=>$parentId]);
+            $child = $chk->fetch();
+        }
+
+        if ($flash !== '') {
+            // Child creation already failed above; keep that specific message.
+        } elseif (!$child) {
             $flash = 'Invalid child selected.';
         } elseif (empty($campusSelection)) {
             $flash = 'Please select at least one campus.';
@@ -491,7 +549,6 @@ document.addEventListener('DOMContentLoaded',()=>{
     <?php endif; ?>
 
     <!-- SECTION: Enrol a Child -->
-    <?php if (!empty($eligible)): ?>
     <div class="section-title"><i class="fas fa-file-signature"></i>Complete Enrollment</div>
 
     <div class="card shadow-sm mb-4">
@@ -507,11 +564,41 @@ document.addEventListener('DOMContentLoaded',()=>{
                 <div class="mb-4">
                     <label class="font-weight-bold mb-2"><i class="fas fa-child mr-1 text-primary"></i>Select Child</label>
                     <select name="child_id" class="form-control" required id="childSelect">
-                            <option value="">— Choose an approved child —</option>
+                            <option value="">— Choose a child —</option>
+                            <option value="__new__">+ Add a New Child</option>
                         <?php foreach ($eligible as $c): ?>
                             <option value="<?= $c['id'] ?>"><?= h($c['student_name']) ?> (<?= h($c['student_id']) ?>)<?= (strtolower((string)($c['enrol_status'] ?? '')) === 'needs update') ? ' — update requested' : '' ?></option>
                         <?php endforeach; ?>
                     </select>
+                </div>
+
+                <!-- Step 1b: New Child Details (shown when "+ Add a New Child" is selected) -->
+                <div class="mb-4" id="newChildSection" style="display:none;">
+                    <label class="font-weight-bold mb-2"><i class="fas fa-user-plus mr-1 text-primary"></i>New Child Details</label>
+                    <div class="form-row">
+                        <div class="col-md-6 form-group">
+                            <label class="mini-label">Full Name *</label>
+                            <input type="text" name="new_child_name" id="newChildName" class="form-control" maxlength="150" placeholder="e.g. Karma Dorji">
+                        </div>
+                        <div class="col-md-3 form-group">
+                            <label class="mini-label">Date of Birth *</label>
+                            <input type="date" name="new_child_dob" id="newChildDob" class="form-control" max="<?= pcm_max_dob_for_minimum_age() ?>">
+                            <small class="text-muted">At least <?= h(pcm_minimum_enrolment_age_label()) ?> old.</small>
+                        </div>
+                        <div class="col-md-3 form-group">
+                            <label class="mini-label">Gender *</label>
+                            <select name="new_child_gender" id="newChildGender" class="form-control">
+                                <option value="">— Select —</option>
+                                <option>Male</option>
+                                <option>Female</option>
+                                <option>Other</option>
+                            </select>
+                        </div>
+                        <div class="col-12 form-group">
+                            <label class="mini-label">Medical Issues</label>
+                            <input type="text" name="new_child_medical" id="newChildMedical" class="form-control" maxlength="500" placeholder="None if no issues">
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Step 2: Select Campus -->
@@ -647,27 +734,6 @@ document.addEventListener('DOMContentLoaded',()=>{
             </form>
         </div>
     </div>
-    <?php elseif (empty($children)): ?>
-    <div class="section-title"><i class="fas fa-file-signature"></i>Complete Enrollment</div>
-    <div class="card shadow-sm mb-4">
-        <div class="card-body">
-            <div class="text-center py-4 text-muted">
-                <i class="fas fa-child fa-3x mb-3" style="opacity:0.3;"></i>
-                <p class="mb-0">Add child records in the Children menu, then wait for admin approval before completing enrollment here.</p>
-            </div>
-        </div>
-    </div>
-    <?php elseif (empty($eligible)): ?>
-    <div class="section-title"><i class="fas fa-file-signature"></i>Complete Enrollment</div>
-    <div class="card shadow-sm mb-4">
-        <div class="card-body">
-            <div class="text-center py-4">
-                <i class="fas fa-check-circle fa-3x text-success mb-3" style="opacity:0.5;"></i>
-                <p class="text-muted mb-0">No approved children are pending enrollment completion right now.</p>
-            </div>
-        </div>
-    </div>
-    <?php endif; ?>
 
     <!-- SECTION: My Enrolments -->
     <?php if (!empty($enrolments)): ?>
@@ -772,6 +838,12 @@ document.addEventListener('DOMContentLoaded',()=>{
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const childSelect = document.getElementById('childSelect');
+    const newChildSection = document.getElementById('newChildSection');
+    const newChildFields = ['newChildName', 'newChildDob', 'newChildGender'].map(id => document.getElementById(id));
+    const newChildNameInput = document.getElementById('newChildName');
+    if (newChildNameInput) {
+        newChildNameInput.addEventListener('input', function() { updateSuggestedReference(); });
+    }
     const campusSection = document.getElementById('campusSection');
     const campusChoices = document.querySelectorAll('.campus-choice');
     const planSection = document.getElementById('planSection');
@@ -792,6 +864,21 @@ document.addEventListener('DOMContentLoaded', function() {
     // Step 1 → Step 2: Show campus section when child is selected
     if (childSelect) {
         childSelect.addEventListener('change', function() {
+            const isNewChild = this.value === '__new__';
+
+            if (newChildSection) {
+                newChildSection.style.display = isNewChild ? 'block' : 'none';
+            }
+            newChildFields.forEach(function(field) {
+                if (!field) return;
+                if (isNewChild) {
+                    field.setAttribute('required', 'required');
+                } else {
+                    field.removeAttribute('required');
+                    field.value = '';
+                }
+            });
+
             if (this.value) {
                 campusSection.style.display = 'block';
                 campusSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -886,8 +973,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!selectedOption || !selectedOption.value || !selectedPlan) {
             return;
         }
-        const label = selectedOption.text || '';
-        const childName = label.split('(')[0].trim();
+        let childName;
+        if (selectedOption.value === '__new__') {
+            const newNameField = document.getElementById('newChildName');
+            childName = newNameField ? newNameField.value.trim() : '';
+            if (!childName) return;
+        } else {
+            const label = selectedOption.text || '';
+            childName = label.split('(')[0].trim();
+        }
         const ref = slugifyRef(childName) + '_' + planCode(selectedPlan);
         paymentRefInput.value = ref;
         paymentRefInput.dataset.autofilled = '1';
@@ -986,6 +1080,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.preventDefault();
                 Swal.fire({icon:'warning', title:'Please select a child', confirmButtonColor:'#881b12'});
                 return;
+            }
+            if (childSelect.value === '__new__') {
+                const newName = document.getElementById('newChildName');
+                const newDob = document.getElementById('newChildDob');
+                const newGender = document.getElementById('newChildGender');
+                if (!newName || !newName.value.trim()) {
+                    e.preventDefault();
+                    Swal.fire({icon:'warning', title:"Please enter the child's full name", confirmButtonColor:'#881b12'});
+                    return;
+                }
+                if (!newDob || !newDob.value) {
+                    e.preventDefault();
+                    Swal.fire({icon:'warning', title:'Please enter date of birth', confirmButtonColor:'#881b12'});
+                    return;
+                }
+                if (!newGender || !newGender.value) {
+                    e.preventDefault();
+                    Swal.fire({icon:'warning', title:'Please select gender', confirmButtonColor:'#881b12'});
+                    return;
+                }
             }
             if (!Array.from(campusChoices).some(c => c.checked)) {
                 e.preventDefault();

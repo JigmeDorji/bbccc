@@ -17,62 +17,17 @@ if (!$parent) { die("Parent account not found. Please contact admin."); }
 $parentId = (int)$parent['id'];
 $flash    = '';
 $ok       = false;
-$studentParentColumns = pcm_students_parent_insert_columns($pdo);
 $studentParentExpr = pcm_students_parent_expr($pdo);
 
-// ── Handle POST: add child ──
+// ── Handle POST ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     verify_csrf();
 
+    // Registering a new child now happens together with enrolment + payment
+    // in one form. Redirect any stale bookmark/cached submission there.
     if ($_POST['action'] === 'add_child') {
-        if (!bbcc_verify_form_nonce_once('parent_add_child')) {
-            $flash = 'Duplicate submission detected. Please submit once and wait.';
-        } else {
-        $name   = trim($_POST['child_name'] ?? '');
-        $dob    = trim($_POST['dob'] ?? '');
-        $gender = trim($_POST['gender'] ?? '');
-        $med    = trim($_POST['medical'] ?? '');
-
-        if ($name === '') {
-            $flash = 'Child name is required.';
-        } elseif ($dob === '') {
-            $flash = 'Date of birth is required.';
-        } elseif (!pcm_meets_minimum_enrolment_age($dob)) {
-            $flash = 'Child must be at least ' . pcm_minimum_enrolment_age_label() . ' old to be added.';
-        } else {
-            $sid = pcm_next_student_id($pdo);
-            $parentInsertColumns = implode(', ', $studentParentColumns);
-            $parentInsertPlaceholders = [];
-            $parentParams = [];
-            foreach ($studentParentColumns as $i => $col) {
-                $ph = ':pid' . $i;
-                $parentInsertPlaceholders[] = $ph;
-                $parentParams[$ph] = $parentId;
-            }
-            $parentInsertValues = implode(', ', $parentInsertPlaceholders);
-            $stmt = $pdo->prepare("
-                INSERT INTO students (student_id, student_name, dob, gender, medical_issue, registration_date, approval_status, {$parentInsertColumns})
-                VALUES (:sid, :name, :dob, :g, :med, CURDATE(), 'Pending', {$parentInsertValues})
-            ");
-            $stmt->execute(array_merge([':sid'=>$sid, ':name'=>$name, ':dob'=>$dob?:null, ':g'=>$gender?:null, ':med'=>$med?:null], $parentParams));
-
-            pcm_notify_admin_student_registration(
-                $name,
-                (string)($parent['full_name'] ?? 'Parent'),
-                (string)($parent['email'] ?? ''),
-                $sid
-            );
-            bbcc_notify_admins(
-                $pdo,
-                'New Child Registration',
-                $name . ' was registered by ' . (string)($parent['full_name'] ?? 'Parent'),
-                'dzoClassManagement'
-            );
-
-            $flash = "Child <strong>{$name}</strong> added (ID: {$sid}).";
-            $ok = true;
-        }
-        }
+        header("Location: children-enrollment");
+        exit;
     }
 
     if ($_POST['action'] === 'remove_child') {
@@ -131,41 +86,14 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 <?php endif; ?>
 
-<!-- Add Child Card -->
+<!-- Register a Child: now part of the combined Enrollment form -->
 <div class="card shadow mb-4">
-    <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-plus-circle mr-1"></i>Register a Child</h6></div>
-    <div class="card-body">
-        <form method="POST" class="row">
-            <?= csrf_field() ?>
-            <?= bbcc_form_nonce_field('parent_add_child') ?>
-            <input type="hidden" name="action" value="add_child">
-
-            <div class="col-md-4 mb-3">
-                <label class="font-weight-bold">Child's Full Name <span class="text-danger">*</span></label>
-                <input type="text" name="child_name" class="form-control" required maxlength="150" placeholder="e.g. Karma Dorji">
-            </div>
-            <div class="col-md-3 mb-3">
-                <label class="font-weight-bold">Date of Birth <span class="text-danger">*</span></label>
-                <input type="date" name="dob" class="form-control" required max="<?= pcm_max_dob_for_minimum_age() ?>">
-                <small class="form-text text-muted">Child must be at least <?= h(pcm_minimum_enrolment_age_label()) ?> old.</small>
-            </div>
-            <div class="col-md-2 mb-3">
-                <label class="font-weight-bold">Gender</label>
-                <select name="gender" class="form-control">
-                    <option value="">--</option>
-                    <option>Male</option>
-                    <option>Female</option>
-                    <option>Other</option>
-                </select>
-            </div>
-            <div class="col-md-3 mb-3">
-                <label class="font-weight-bold">Medical Issues</label>
-                <input type="text" name="medical" class="form-control" maxlength="500" placeholder="None">
-            </div>
-            <div class="col-12">
-                <button type="submit" class="btn btn-primary" data-loading-text="<span class='spinner-border spinner-border-sm mr-1'></span>Adding..."><i class="fas fa-user-plus mr-1"></i>Add Child</button>
-            </div>
-        </form>
+    <div class="card-body d-flex align-items-center justify-content-between flex-wrap">
+        <div>
+            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-plus-circle mr-1"></i>Register a New Child</h6>
+            <p class="text-muted mb-0" style="font-size:.88rem;">Registering a child, choosing a fee plan, and submitting payment now happens together in one step.</p>
+        </div>
+        <a href="children-enrollment" class="btn btn-primary mt-2 mt-md-0"><i class="fas fa-user-plus mr-1"></i>Register &amp; Enrol a Child</a>
     </div>
 </div>
 
