@@ -84,7 +84,13 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    var forms = document.querySelectorAll('form');
+    // Forms with their own full submit-handling (validation, upload
+    // compression, etc.) opt out via data-self-managed-submit -- this
+    // generic double-submit guard runs in the capture phase and would
+    // otherwise set form.dataset.submitting before the page's own
+    // handler even runs, making it look already-submitting on the very
+    // first click.
+    var forms = document.querySelectorAll('form:not([data-self-managed-submit])');
     forms.forEach(function (form) {
         form.addEventListener('submit', function (ev) {
             var confirmMsg = form.getAttribute('data-confirm');

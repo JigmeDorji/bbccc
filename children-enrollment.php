@@ -523,7 +523,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
     <div class="card shadow-sm mb-4">
         <div class="card-body">
-            <form method="POST" enctype="multipart/form-data" id="enrolForm">
+            <form method="POST" enctype="multipart/form-data" id="enrolForm" data-self-managed-submit="1">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="enrol">
                 <input type="hidden" name="submit_nonce" value="<?= h($enrolSubmitNonce) ?>">
@@ -1120,9 +1120,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 Swal.fire({icon:'warning', title:'Payment proof is too large', text:'The screenshot could not be reduced below ' + maxProofLabel + '. Please crop it or send it as a smaller JPG.', confirmButtonColor:'#881b12'});
                 return;
             }
+            // Don't just disable the submitter and fall through to native
+            // submission -- disabling the submit button inside its own
+            // submit handler can make the browser silently cancel the
+            // submission. Prevent the native submit and re-trigger it
+            // explicitly via form.submit(), which isn't tied to the
+            // submitter's state.
+            e.preventDefault();
             enrolForm.dataset.submitting = '1';
             enrolBtn.disabled = true;
             enrolBtn.innerHTML = '<span class="spinner-border spinner-border-sm mr-2"></span>Submitting...';
+            enrolForm.submit();
         });
     }
 
