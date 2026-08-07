@@ -535,13 +535,31 @@ document.addEventListener('DOMContentLoaded',()=>{
                 <!-- Step 1: Select Child -->
                 <div class="mb-4">
                     <label class="font-weight-bold mb-2"><i class="fas fa-child mr-1 text-primary"></i>Select Child</label>
-                    <select name="child_id" class="form-control" required id="childSelect">
-                            <option value="">— Choose a child —</option>
-                            <option value="__new__">+ Add a New Child</option>
-                        <?php foreach ($eligible as $c): ?>
-                            <option value="<?= $c['id'] ?>"><?= h($c['student_name']) ?> (<?= h($c['student_id']) ?>)<?= (strtolower((string)($c['enrol_status'] ?? '')) === 'needs update') ? ' — update requested' : '' ?></option>
-                        <?php endforeach; ?>
+
+                    <button type="button" id="addNewChildBtn" class="btn btn-primary mb-2">
+                        <i class="fas fa-user-plus mr-1"></i>Add a New Child
+                    </button>
+
+                    <?php if (!empty($eligible)): ?>
+                    <div id="existingChildWrap">
+                        <div class="text-muted small mb-1">Or continue an enrolment for an existing child:</div>
+                        <select name="child_id" class="form-control" required id="childSelect">
+                                <option value="">— Choose a child —</option>
+                                <option value="__new__" hidden>+ Add a New Child</option>
+                            <?php foreach ($eligible as $c): ?>
+                                <option value="<?= $c['id'] ?>"><?= h($c['student_name']) ?> (<?= h($c['student_id']) ?>)<?= (strtolower((string)($c['enrol_status'] ?? '')) === 'needs update') ? ' — update requested' : '' ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div id="cancelNewChildWrap" style="display:none;" class="mt-1">
+                        <button type="button" id="cancelNewChildBtn" class="btn btn-link btn-sm p-0"><i class="fas fa-arrow-left mr-1"></i>Choose an existing child instead</button>
+                    </div>
+                    <?php else: ?>
+                    <select name="child_id" class="form-control" required id="childSelect" style="display:none;">
+                        <option value="">— Choose a child —</option>
+                        <option value="__new__" hidden>+ Add a New Child</option>
                     </select>
+                    <?php endif; ?>
                 </div>
 
                 <!-- Step 1b: New Child Details (shown when "+ Add a New Child" is selected) -->
@@ -865,6 +883,32 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (paymentRefInput) paymentRefInput.value = '';
                 if (paymentRefLabel) paymentRefLabel.textContent = 'Select child and fee plan first';
             }
+        });
+    }
+
+    // "Add a New Child" button drives the same __new__ option the select used to expose directly.
+    const addNewChildBtn = document.getElementById('addNewChildBtn');
+    const existingChildWrap = document.getElementById('existingChildWrap');
+    const cancelNewChildWrap = document.getElementById('cancelNewChildWrap');
+    const cancelNewChildBtn = document.getElementById('cancelNewChildBtn');
+
+    if (addNewChildBtn && childSelect) {
+        addNewChildBtn.addEventListener('click', function() {
+            childSelect.value = '__new__';
+            childSelect.dispatchEvent(new Event('change'));
+            addNewChildBtn.style.display = 'none';
+            if (existingChildWrap) existingChildWrap.style.display = 'none';
+            if (cancelNewChildWrap) cancelNewChildWrap.style.display = 'block';
+        });
+    }
+
+    if (cancelNewChildBtn && childSelect) {
+        cancelNewChildBtn.addEventListener('click', function() {
+            childSelect.value = '';
+            childSelect.dispatchEvent(new Event('change'));
+            if (addNewChildBtn) addNewChildBtn.style.display = '';
+            if (existingChildWrap) existingChildWrap.style.display = 'block';
+            if (cancelNewChildWrap) cancelNewChildWrap.style.display = 'none';
         });
     }
 
