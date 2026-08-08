@@ -124,6 +124,31 @@ if (dzo_table_exists($pdo, 'pcm_fee_payments')) {
     );
 }
 
+// ── Students by age ──
+$ageBuckets = [];
+$ageMaxCount = 0;
+$approvedMissingDob = 0;
+if (dzo_table_exists($pdo, 'students')) {
+    $ageRows = $pdo->query("
+        SELECT TIMESTAMPDIFF(YEAR, dob, CURDATE()) AS age, COUNT(*) AS total
+        FROM students
+        WHERE LOWER(COALESCE(approval_status,'')) = 'approved' AND dob IS NOT NULL
+        GROUP BY age
+        ORDER BY age ASC
+    ")->fetchAll();
+    foreach ($ageRows as $row) {
+        $age = (int)$row['age'];
+        $total = (int)$row['total'];
+        if ($age < 0 || $age > 100) continue; // skip bad/missing DOB data
+        $ageBuckets[$age] = $total;
+        $ageMaxCount = max($ageMaxCount, $total);
+    }
+    $approvedMissingDob = dzo_scalar(
+        $pdo,
+        "SELECT COUNT(*) FROM students WHERE LOWER(COALESCE(approval_status,'')) = 'approved' AND dob IS NULL"
+    );
+}
+
 $summaryDate = date('Y-m-d');
 if (isset($_GET['summary_date'])) {
     $candidateDate = trim((string)$_GET['summary_date']);
@@ -348,6 +373,12 @@ if (
         .dzo-mini-meta { font-size: 0.78rem; color: #7a7c84; }
         .dzo-summary-table thead th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.02em; color: #6c757d; border-top: 0; }
         .dzo-summary-table td { font-size: 0.84rem; vertical-align: middle; }
+        .dzo-age-bars { display: flex; flex-direction: column; gap: 8px; }
+        .dzo-age-row { display: flex; align-items: center; gap: 12px; }
+        .dzo-age-label { flex: 0 0 52px; font-size: 0.8rem; font-weight: 600; color: #4b5563; }
+        .dzo-age-bar-track { flex: 1; background: #f1f3f9; border-radius: 6px; height: 14px; overflow: hidden; }
+        .dzo-age-bar-fill { background: #881b12; height: 100%; border-radius: 6px; transition: width .3s ease; }
+        .dzo-age-count { flex: 0 0 36px; text-align: right; font-size: 0.82rem; font-weight: 700; color: #1f2937; }
         .dzo-fee-panel { border: 1px solid #e8ecf4; background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%); }
         .dzo-fee-hero { display: flex; align-items: center; gap: 16px; }
         .dzo-fee-ring {
@@ -463,6 +494,36 @@ if (
                                 <div class="dzo-stat-value"><?= dzo_h(number_format($stats['unpaid_fee_items'])) ?></div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm mt-4">
+                    <div class="card-body">
+                        <div class="dzo-section-title mb-3">
+                            <span><i class="fas fa-users mr-2" style="color:#881b12;"></i>Students by Age</span>
+                            <span class="dzo-mini-meta">Total: <strong><?= dzo_h(number_format(array_sum($ageBuckets))) ?></strong></span>
+                        </div>
+                        <?php if (empty($ageBuckets)): ?>
+                            <p class="text-muted mb-0">No approved students with a date of birth on file yet.</p>
+                        <?php else: ?>
+                            <div class="dzo-age-bars">
+                                <?php foreach ($ageBuckets as $age => $count): ?>
+                                    <div class="dzo-age-row">
+                                        <div class="dzo-age-label"><?= (int)$age ?> yrs</div>
+                                        <div class="dzo-age-bar-track">
+                                            <div class="dzo-age-bar-fill" style="width:<?= $ageMaxCount > 0 ? max(4, round($count / $ageMaxCount * 100)) : 0 ?>%;"></div>
+                                        </div>
+                                        <div class="dzo-age-count"><?= dzo_h(number_format($count)) ?></div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($approvedMissingDob > 0): ?>
+                            <div class="dzo-mini-meta mt-3">
+                                <i class="fas fa-circle-exclamation mr-1" style="color:#e0a800;"></i>
+                                <?= dzo_h(number_format($approvedMissingDob)) ?> approved student<?= $approvedMissingDob === 1 ? '' : 's' ?> have no date of birth on file and aren't included above.
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
 
