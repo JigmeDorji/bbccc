@@ -55,6 +55,68 @@ function pretty_date(?string $d): string {
     return $d ? htmlspecialchars($d) : '-';
 }
 
+function installment_label(string $code): string {
+    return match ($code) {
+        'TERM1' => 'Term 1',
+        'TERM2' => 'Term 2',
+        'TERM3' => 'Term 3',
+        'TERM4' => 'Term 4',
+        'HALF1' => 'Half 1',
+        'HALF2' => 'Half 2',
+        'YEARLY' => 'Yearly',
+        default => $code
+    };
+}
+
+function installment_code_from_label(string $label): string {
+    $l = strtolower(trim($label));
+    return match ($l) {
+        'term 1', 'term1' => 'TERM1',
+        'term 2', 'term2' => 'TERM2',
+        'term 3', 'term3' => 'TERM3',
+        'term 4', 'term4' => 'TERM4',
+        'half 1', 'half1', 'half-year 1', 'half-yearly 1' => 'HALF1',
+        'half 2', 'half2', 'half-year 2', 'half-yearly 2' => 'HALF2',
+        'yearly' => 'YEARLY',
+        default => '',
+    };
+}
+
+function first_installment_code(string $planType, int $startTerm = 1): string {
+    $startTerm = max(1, min(4, $startTerm));
+    return match ($planType) {
+        'Term-wise' => 'TERM' . $startTerm,
+        'Half-yearly' => $startTerm <= 2 ? 'HALF1' : 'HALF2',
+        'Yearly' => 'YEARLY',
+        default => 'TERM1'
+    };
+}
+
+function installment_applies_to_start_term(string $planType, string $code, int $startTerm): bool {
+    $startTerm = max(1, min(4, $startTerm));
+    $allowed = match ($planType) {
+        'Term-wise' => array_slice(['TERM1','TERM2','TERM3','TERM4'], $startTerm - 1),
+        'Half-yearly' => $startTerm <= 2 ? ['HALF1','HALF2'] : ['HALF2'],
+        'Yearly' => ['YEARLY'],
+        default => [],
+    };
+    return in_array($code, $allowed, true);
+}
+
+/**
+ * Due date rules: TERM1 = HALF1 = YEARLY -> due_term1; TERM2 -> due_term2;
+ * TERM3 = HALF2 -> due_term3; TERM4 -> due_term4.
+ */
+function installment_due_date(array $settings, string $installmentCode): ?string {
+    return match ($installmentCode) {
+        'TERM1','HALF1','YEARLY' => ($settings['due_term1'] ?? null),
+        'TERM2' => ($settings['due_term2'] ?? null),
+        'TERM3','HALF2' => ($settings['due_term3'] ?? null),
+        'TERM4' => ($settings['due_term4'] ?? null),
+        default => null
+    };
+}
+
 pcm_ensure_class_charge_schema($pdo);
 $hasStartTerm = $pdo->query("SHOW COLUMNS FROM pcm_enrolments LIKE 'start_term'")->fetch(PDO::FETCH_ASSOC);
 if (!$hasStartTerm) {
@@ -445,13 +507,16 @@ $stmtPayments = $pdo->prepare("
         f.due_amount, f.paid_amount, f.payment_ref, f.proof_path, f.status, f.reject_reason,
         f.submitted_at, f.verified_by, f.verified_at,
         s.student_name, s.student_id AS stu_code,
-        current_class.class_name,
+        current_class.id AS class_id, current_class.class_name,
         COALESCE(attendance_totals.total_attendance, 0) AS total_attendance,
+        COALESCE(e.start_term, 1) AS start_term,
+        e.status AS enrolment_status,
         p.full_name AS parent_name, p.email AS parent_email, p.phone AS parent_phone
     FROM pcm_fee_payments f
     JOIN students s ON s.id = f.student_id
     {$latestClassJoin}
     {$attendanceTotalJoin}
+    LEFT JOIN pcm_enrolments e ON e.id = f.enrolment_id
     LEFT JOIN parents p ON p.id = f.parent_id
     WHERE f.plan_type IN ('Term-wise','Half-yearly','Yearly','Additional')
     ORDER BY FIELD(f.status,'Pending','Rejected','Unpaid','Verified'), f.submitted_at DESC, f.id DESC
@@ -464,6 +529,48 @@ $updateCounts = ['Pending' => 0, 'Verified' => 0, 'Rejected' => 0, 'Unpaid' => 0
 foreach ($payments as $row) {
     $k = (string)($row['status'] ?? '');
     if (isset($updateCounts[$k])) $updateCounts[$k]++;
+}
+
+// ---------------- Group into a per-child matrix: plan -> student -> installment code ----------------
+$plans = [
+    'Term-wise' => ['TERM1','TERM2','TERM3','TERM4'],
+    'Half-yearly' => ['HALF1','HALF2'],
+    'Yearly' => ['YEARLY'],
+];
+$group = ['Term-wise' => [], 'Half-yearly' => [], 'Yearly' => []];
+$additionalByStudent = [];
+
+foreach ($payments as $r) {
+    $plan = (string)$r['plan_type'];
+    $sid = (string)$r['student_id'];
+    if ($sid === '') continue;
+
+    if ($plan === 'Additional') {
+        $additionalByStudent[$sid][] = $r;
+        continue;
+    }
+    if (!isset($group[$plan])) continue;
+
+    if (!isset($group[$plan][$sid])) {
+        $group[$plan][$sid] = [
+            'student_db_id' => $sid,
+            'public_student_id' => $r['stu_code'] ?? '',
+            'student_name' => $r['student_name'] ?? '',
+            'class_id' => (int)($r['class_id'] ?? 0),
+            'class_name' => $r['class_name'] ?? '',
+            'total_attendance' => (int)($r['total_attendance'] ?? 0),
+            'start_term' => (int)($r['start_term'] ?? 1),
+            'enrollment_status' => $r['enrolment_status'] ?? 'Pending',
+            'parent_name' => $r['parent_name'] ?? '',
+            'parent_email' => $r['parent_email'] ?? '',
+            'parent_phone' => $r['parent_phone'] ?? '',
+            'installments' => [],
+        ];
+    }
+
+    $code = installment_code_from_label((string)($r['instalment_label'] ?? ''));
+    if ($code === '') continue;
+    $group[$plan][$sid]['installments'][$code] = $r;
 }
 
 $classOptions = $pdo->query("SELECT id, class_name FROM classes WHERE active = 1 ORDER BY class_name ASC")->fetchAll(PDO::FETCH_ASSOC);
@@ -525,11 +632,6 @@ $isAdminTier = is_admin_role();
         thead .mini { font-size:11px; font-weight:700; }
         .ref-col { max-width: 220px; }
 
-        .payments-table { min-width: 1300px; }
-        .payments-table tbody tr.status-pending { background:#fff8e1; }
-        .payments-table tbody tr.status-rejected { background:#fff1f0; }
-        .payments-table tbody tr.status-verified { background:#eefaf4; }
-
         .payment-summary-grid { display:grid; grid-template-columns:repeat(4, minmax(120px, 1fr)); gap:10px; margin-bottom:16px; }
         .payment-summary-item { display:flex; align-items:center; gap:10px; padding:12px 14px; border:1px solid #e3e6f0; border-radius:10px; background:#fff; }
         .payment-summary-icon { width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex:0 0 34px; }
@@ -546,16 +648,22 @@ $isAdminTier = is_admin_role();
         .payment-filter-panel { background:#f8f9fc; border:1px solid #e3e6f0; border-radius:10px; padding:14px; margin-bottom:14px; }
         .payment-filter-panel .form-control { min-height:40px; border-color:#d9deea; }
         .payment-filter-panel .input-group .btn { min-height:40px; }
-
-        .status-filter-btn.active { color:#fff !important; }
-        .status-filter-btn[data-status="Pending"].active { background:#f6c23e; border-color:#f6c23e; color:#1f2933 !important; }
-        .status-filter-btn[data-status="Verified"].active { background:#1cc88a; border-color:#1cc88a; }
-        .status-filter-btn[data-status="Rejected"].active { background:#e74a3b; border-color:#e74a3b; }
-        .status-filter-btn[data-status="Unpaid"].active { background:#5a5c69; border-color:#5a5c69; }
+        .payment-result-meta { font-size:.8rem; color:#6c757d; }
+        .payment-no-results { display:none; padding:24px; margin-bottom:16px; text-align:center; border:1px dashed #cdd3df; border-radius:10px; color:#6c757d; background:#fbfcfe; }
 
         .method-tabs-wrap { background:#f8f9fc; border:1px solid #e3e6f0; border-radius:12px; padding:14px 16px; margin-bottom:16px; }
         .method-pill { border-radius:20px !important; font-weight:600; font-size:.82rem; padding:6px 16px; border:2px solid transparent; margin-right:6px; margin-bottom:6px; }
         .method-pill.is-active-all { background:#881b12; color:#fff; border-color:#881b12; }
+        .method-pill.is-active-term-wise { background:#4e73df; color:#fff; border-color:#4e73df; }
+        .method-pill.is-active-half-yearly { background:#36b9cc; color:#fff; border-color:#36b9cc; }
+        .method-pill.is-active-yearly { background:#1cc88a; color:#fff; border-color:#1cc88a; }
+
+        .update-overview-table { min-width: 1220px; }
+        .update-overview-table th, .update-overview-table td { vertical-align: top; }
+        .update-overview-table .update-payment-cell { min-width: 230px; background:#fff; }
+        .update-overview-table .update-payment-cell.status-pending { background:#fff8e1; }
+        .update-overview-table .update-payment-cell.status-rejected { background:#fff1f0; }
+        .update-overview-table .update-payment-cell.status-verified { background:#eefaf4; }
     </style>
 </head>
 <body id="page-top">
@@ -765,141 +873,231 @@ $isAdminTier = is_admin_role();
 
                         <div class="payment-filter-panel">
                             <div class="form-row align-items-end">
-                                <div class="col-lg-3 col-md-6 mb-2">
-                                    <label class="mini font-weight-bold text-uppercase mb-1">Status</label><br>
-                                    <button class="btn btn-sm btn-primary status-filter-btn active" data-status="all" type="button">All</button>
-                                    <button class="btn btn-sm btn-outline-secondary status-filter-btn" data-status="Pending" type="button">Pending</button>
-                                    <button class="btn btn-sm btn-outline-secondary status-filter-btn" data-status="Verified" type="button">Verified</button>
-                                    <button class="btn btn-sm btn-outline-secondary status-filter-btn" data-status="Rejected" type="button">Rejected</button>
-                                    <button class="btn btn-sm btn-outline-secondary status-filter-btn" data-status="Unpaid" type="button">Unpaid</button>
-                                </div>
-                                <div class="col-lg-2 col-md-6 mb-2">
-                                    <label for="updateClassFilter" class="mini font-weight-bold text-uppercase mb-1">Class</label>
+                                <div class="col-lg-3 col-md-4">
+                                    <label for="updateClassFilter" class="mini font-weight-bold text-uppercase mb-1">Filter by class</label>
                                     <select id="updateClassFilter" class="form-control form-control-sm">
                                         <option value="all">All classes</option>
                                         <?php foreach ($classOptions as $classOption): ?>
-                                            <option value="<?= h((string)$classOption['class_name']) ?>"><?= h((string)$classOption['class_name']) ?></option>
+                                            <option value="<?= (int)$classOption['id'] ?>"><?= h((string)$classOption['class_name']) ?></option>
                                         <?php endforeach; ?>
+                                        <option value="unassigned">Not assigned</option>
                                     </select>
                                 </div>
-                                <div class="col-lg-2 col-md-6 mb-2">
-                                    <label for="updatePlanFilter" class="mini font-weight-bold text-uppercase mb-1">Plan</label>
-                                    <select id="updatePlanFilter" class="form-control form-control-sm">
-                                        <option value="">All Plans</option>
-                                        <option value="Term-wise">Term-wise</option>
-                                        <option value="Half-yearly">Half-yearly</option>
-                                        <option value="Yearly">Yearly</option>
-                                        <option value="Additional">Additional</option>
+                                <div class="col-lg-3 col-md-4 mt-2 mt-md-0">
+                                    <label for="updatePaymentSort" class="mini font-weight-bold text-uppercase mb-1">Sort by</label>
+                                    <select id="updatePaymentSort" class="form-control form-control-sm">
+                                        <option value="student-asc">Student: A to Z</option>
+                                        <option value="student-desc">Student: Z to A</option>
+                                        <option value="class-asc">Class: A to Z</option>
+                                        <option value="attendance-desc">Attendance: High to Low</option>
+                                        <option value="attendance-asc">Attendance: Low to High</option>
                                     </select>
                                 </div>
-                                <div class="col-lg-5 col-md-6 mb-2">
+                                <div class="col-lg-6 col-md-4 mt-2 mt-md-0">
                                     <label for="updatePaymentSearch" class="mini font-weight-bold text-uppercase mb-1">Search payments</label>
-                                    <input type="search" id="updatePaymentSearch" class="form-control form-control-sm" placeholder="Child, student ID, parent, email, phone or reference">
+                                    <div class="input-group input-group-sm">
+                                        <input type="search" id="updatePaymentSearch" class="form-control" placeholder="Child, student ID, parent, email, phone or reference">
+                                        <div class="input-group-append">
+                                            <button type="button" class="btn btn-primary" id="updatePaymentSearchBtn"><i class="fas fa-search mr-1"></i>Search</button>
+                                            <button type="button" class="btn btn-outline-secondary" id="clearUpdatePaymentSearch">Clear</button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
+                            <div class="payment-result-meta mt-2"><i class="fas fa-list mr-1"></i><strong id="visiblePaymentCount">0</strong> children shown</div>
                         </div>
 
-                        <div class="table-responsive">
-                            <table id="paymentsTable" class="table table-bordered table-hover payments-table" width="100%">
-                                <thead class="thead-light">
-                                <tr>
-                                    <th></th>
-                                    <th>#</th>
-                                    <th>Child</th>
-                                    <th>Class</th>
-                                    <th>Parent</th>
-                                    <th>Plan</th>
-                                    <th>Instalment</th>
-                                    <th>Due</th>
-                                    <th>Paid</th>
-                                    <th>Ref</th>
-                                    <th>Proof</th>
-                                    <th>Status</th>
-                                    <th>Submitted</th>
-                                    <th style="min-width:220px;">Actions</th>
-                                </tr>
-                                </thead>
-                                <tbody>
-                                <?php foreach ($payments as $i => $f): ?>
-                                    <?php
-                                        $proof = trim((string)($f['proof_path'] ?? ''));
-                                        $ptype = $proof !== '' ? proof_type($proof) : '';
-                                        $rowStatus = strtolower((string)$f['status']);
-                                    ?>
-                                    <tr class="status-<?= h($rowStatus) ?>"
-                                        data-class="<?= h((string)($f['class_name'] ?? '')) ?>"
-                                        data-plan="<?= h((string)$f['plan_type']) ?>"
-                                        data-status="<?= h((string)$f['status']) ?>"
-                                        data-search="<?= h(strtolower(($f['student_name'] ?? '') . ' ' . ($f['stu_code'] ?? '') . ' ' . ($f['parent_name'] ?? '') . ' ' . ($f['parent_email'] ?? '') . ' ' . ($f['parent_phone'] ?? '') . ' ' . ($f['payment_ref'] ?? ''))) ?>">
-                                        <td><input type="checkbox" class="payment-row-check" name="payment_ids[]" value="<?= (int)$f['id'] ?>" form="bulkPaymentForm"></td>
-                                        <td><?= $i + 1 ?></td>
-                                        <td class="wrap"><?= h($f['student_name']) ?> <small class="text-muted">(<?= h($f['stu_code']) ?>)</small></td>
-                                        <td><?= $f['class_name'] ? h($f['class_name']) : '<span class="text-muted">-</span>' ?></td>
-                                        <td class="wrap"><?= h($f['parent_name'] ?: '-') ?><br><span class="mini"><?= h($f['parent_email'] ?: '-') ?></span></td>
-                                        <td><?= h($f['plan_type']) ?></td>
-                                        <td class="font-weight-bold"><?= h($f['instalment_label']) ?></td>
-                                        <td>$<?= number_format((float)$f['due_amount'], 2) ?></td>
-                                        <td>$<?= number_format((float)$f['paid_amount'], 2) ?></td>
-                                        <td><?= h($f['payment_ref'] ?? '-') ?></td>
-                                        <td>
-                                            <?php if ($proof !== ''): ?>
-                                                <a href="javascript:void(0)" class="mini proof-thumb" data-proof="<?= h($proof) ?>" data-type="<?= h($ptype) ?>" data-name="<?= h(basename($proof)) ?>"><i class="fas fa-eye"></i> View</a>
-                                            <?php else: ?>
-                                                <span class="mini text-muted">-</span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td>
-                                            <span class="badge badge-<?= pcm_badge((string)$f['status']) ?>"><?= h($f['status']) ?></span>
-                                            <?php if (!empty($f['reject_reason'])): ?><br><small class="text-danger"><?= h($f['reject_reason']) ?></small><?php endif; ?>
-                                        </td>
-                                        <td class="nowrap"><?= $f['submitted_at'] ? date('d M Y', strtotime($f['submitted_at'])) : '-' ?></td>
-                                        <td class="nowrap">
-                                            <button type="button" class="btn btn-sm btn-outline-primary js-edit-btn" title="Edit"
-                                                    data-id="<?= (int)$f['id'] ?>"
-                                                    data-due="<?= h((string)$f['due_amount']) ?>"
-                                                    data-paid="<?= h((string)$f['paid_amount']) ?>"
-                                                    data-ref="<?= h((string)($f['payment_ref'] ?? '')) ?>"
-                                                    data-status="<?= h((string)$f['status']) ?>"
-                                                    data-label="<?= h((string)$f['instalment_label']) ?>"
-                                                    data-child="<?= h((string)$f['student_name']) ?>">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <?php if ($isAdminTier && in_array($f['status'], ['Unpaid', 'Rejected'], true)): ?>
-                                                <button type="button" class="btn btn-sm btn-outline-success js-markpaid-btn" title="Mark Paid"
-                                                        data-id="<?= (int)$f['id'] ?>"
-                                                        data-due="<?= h((string)$f['due_amount']) ?>"
-                                                        data-child="<?= h((string)$f['student_name']) ?>"
-                                                        data-label="<?= h((string)$f['instalment_label']) ?>">
-                                                    <i class="fas fa-hand-holding-usd"></i>
-                                                </button>
-                                            <?php endif; ?>
-                                            <?php if ($isAdminTier && $f['status'] === 'Pending'): ?>
-                                                <button type="button" class="btn btn-sm btn-outline-success js-verify-btn" title="Verify"
-                                                        data-id="<?= (int)$f['id'] ?>"
-                                                        data-child="<?= h((string)$f['student_name']) ?>"
-                                                        data-label="<?= h((string)$f['instalment_label']) ?>">
-                                                    <i class="fas fa-check"></i>
-                                                </button>
-                                                <button type="button" class="btn btn-sm btn-outline-danger js-reject-btn" title="Reject"
-                                                        data-id="<?= (int)$f['id'] ?>"
-                                                        data-child="<?= h((string)$f['student_name']) ?>"
-                                                        data-label="<?= h((string)$f['instalment_label']) ?>">
-                                                    <i class="fas fa-times"></i>
-                                                </button>
-                                            <?php endif; ?>
-                                            <?php if ($isAdminTier): ?>
-                                                <button type="button" class="btn btn-sm btn-outline-info js-email-btn" title="Email parent"
-                                                        data-id="<?= (int)$f['id'] ?>"
-                                                        data-child="<?= h((string)$f['student_name']) ?>">
-                                                    <i class="fas fa-envelope"></i>
-                                                </button>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                                </tbody>
-                            </table>
+                        <div class="method-tabs-wrap">
+                            <div class="mini font-weight-bold text-uppercase mb-2" style="letter-spacing:.4px;">Payment Plan</div>
+                            <button type="button" class="btn method-pill is-active-all js-method-pill" data-plan="all">All</button>
+                            <button type="button" class="btn btn-outline-primary method-pill js-method-pill" data-plan="term-wise">Term-wise</button>
+                            <button type="button" class="btn btn-outline-info method-pill js-method-pill" data-plan="half-yearly">Half-yearly</button>
+                            <button type="button" class="btn btn-outline-success method-pill js-method-pill" data-plan="yearly">Yearly</button>
                         </div>
+
+                        <div class="payment-no-results" id="paymentNoResults">
+                            <i class="fas fa-search fa-2x mb-2"></i>
+                            <div class="font-weight-bold">No matching children found</div>
+                            <div class="small">Try another name, student ID, parent, class, or reference.</div>
+                        </div>
+
+                        <?php foreach ($plans as $planName => $codes): ?>
+                            <div class="card shadow-sm mb-4 fee-plan-section" data-plan="<?= strtolower($planName) ?>">
+                                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                                    <h6 class="m-0 font-weight-bold text-primary"><?= h($planName) ?> Fees</h6>
+                                    <span class="mini">Installments: <?= count($codes) ?></span>
+                                </div>
+                                <div class="card-body">
+                                    <?php if (empty($group[$planName])): ?>
+                                        <div class="alert alert-light mb-0">No records found for this plan.</div>
+                                    <?php else: ?>
+                                        <div class="table-responsive">
+                                            <table class="table table-bordered table-hover update-overview-table" width="100%">
+                                                <thead class="thead-light">
+                                                <tr>
+                                                    <th></th>
+                                                    <th>Student</th>
+                                                    <th>Class</th>
+                                                    <th class="nowrap">Attendance</th>
+                                                    <th>Parent</th>
+                                                    <?php foreach ($codes as $c): ?>
+                                                        <?php $dueHeader = installment_due_date($feesSettings, $c); ?>
+                                                        <th class="nowrap text-center">
+                                                            <div><?= h(installment_label($c)) ?></div>
+                                                            <div class="mini text-muted">Due: <?= $dueHeader ? h($dueHeader) : '-' ?></div>
+                                                        </th>
+                                                    <?php endforeach; ?>
+                                                    <th class="nowrap">Additional Charges</th>
+                                                </tr>
+                                                </thead>
+                                                <tbody>
+                                                <?php foreach ($group[$planName] as $sid => $info): ?>
+                                                    <tr class="update-student-row"
+                                                        data-class-id="<?= (int)($info['class_id'] ?? 0) ?>"
+                                                        data-student="<?= h((string)($info['student_name'] ?? '')) ?>"
+                                                        data-class-name="<?= h((string)($info['class_name'] ?? '')) ?>"
+                                                        data-attendance="<?= (int)($info['total_attendance'] ?? 0) ?>">
+                                                        <td><input type="checkbox" class="row-select-all mr-1" title="Select all instalments for this child"></td>
+                                                        <td class="wrap">
+                                                            <strong><?= h($info['student_name']) ?></strong><br>
+                                                            <span class="mini">Student ID: <?= h($info['public_student_id']) ?></span><br>
+                                                            <span class="mini">Enrollment: <span class="badge badge-<?= pcm_badge((string)($info['enrollment_status'] ?? 'Pending')) ?>"><?= h((string)($info['enrollment_status'] ?? 'Pending')) ?></span></span>
+                                                            <?php if ((int)($info['start_term'] ?? 1) > 1): ?>
+                                                                <br><span class="badge badge-light border mt-1">Started Term <?= (int)$info['start_term'] ?></span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td class="nowrap">
+                                                            <?php if (!empty($info['class_name'])): ?>
+                                                                <span class="badge badge-info"><?= h($info['class_name']) ?></span>
+                                                            <?php else: ?>
+                                                                <span class="text-muted">Not assigned</span>
+                                                            <?php endif; ?>
+                                                        </td>
+                                                        <td class="text-center nowrap"><strong><?= (int)($info['total_attendance'] ?? 0) ?></strong></td>
+                                                        <td class="wrap">
+                                                            <?= h($info['parent_name'] ?: '-') ?><br>
+                                                            <span class="mini"><?= h($info['parent_email'] ?: '-') ?></span><br>
+                                                            <span class="mini"><?= h($info['parent_phone'] ?: '-') ?></span>
+                                                        </td>
+                                                        <?php foreach ($codes as $code): ?>
+                                                            <?php
+                                                                $r = $info['installments'][$code] ?? null;
+                                                                $hasRow = is_array($r);
+                                                                $isApplicable = installment_applies_to_start_term($planName, $code, (int)($info['start_term'] ?? 1));
+                                                                $status = $hasRow ? (string)$r['status'] : '';
+                                                                $proof = $hasRow ? trim((string)($r['proof_path'] ?? '')) : '';
+                                                                $ptype = $proof !== '' ? proof_type($proof) : '';
+                                                                $feeId = $hasRow ? (int)$r['id'] : 0;
+                                                            ?>
+                                                            <td class="update-payment-cell <?= $hasRow ? 'status-' . strtolower($status) : '' ?>">
+                                                                <?php if (!$hasRow): ?>
+                                                                    <div class="mini text-muted"><?= $isApplicable ? 'Missing fee row' : 'Not applicable' ?></div>
+                                                                <?php else: ?>
+                                                                    <label class="mb-1 mini d-block">
+                                                                        <input type="checkbox" class="payment-row-check mr-1" name="payment_ids[]" value="<?= $feeId ?>" form="bulkPaymentForm">
+                                                                        <span class="badge badge-<?= pcm_badge($status) ?>"><?= h($status) ?></span>
+                                                                    </label>
+                                                                    <div class="mini mb-1">Due: $<?= number_format((float)$r['due_amount'], 2) ?> / Paid: $<?= number_format((float)$r['paid_amount'], 2) ?></div>
+                                                                    <?php if (!empty($r['payment_ref'])): ?><div class="mini text-muted mb-1">Ref: <?= h((string)$r['payment_ref']) ?></div><?php endif; ?>
+                                                                    <?php if ($proof !== ''): ?>
+                                                                        <div class="mb-1"><a href="javascript:void(0)" class="mini proof-thumb" data-proof="<?= h($proof) ?>" data-type="<?= h($ptype) ?>" data-name="<?= h(basename($proof)) ?>"><i class="fas fa-eye"></i> Proof</a></div>
+                                                                    <?php endif; ?>
+                                                                    <?php if (!empty($r['reject_reason'])): ?><div class="mini text-danger mb-1"><?= h((string)$r['reject_reason']) ?></div><?php endif; ?>
+                                                                    <div class="btn-group btn-group-sm" role="group">
+                                                                        <button type="button" class="btn btn-outline-primary js-edit-btn" title="Edit"
+                                                                                data-id="<?= $feeId ?>" data-due="<?= h((string)$r['due_amount']) ?>" data-paid="<?= h((string)$r['paid_amount']) ?>"
+                                                                                data-ref="<?= h((string)($r['payment_ref'] ?? '')) ?>" data-status="<?= h($status) ?>"
+                                                                                data-label="<?= h(installment_label($code)) ?>" data-child="<?= h((string)$info['student_name']) ?>">
+                                                                            <i class="fas fa-edit"></i>
+                                                                        </button>
+                                                                        <?php if ($isAdminTier && in_array($status, ['Unpaid', 'Rejected'], true)): ?>
+                                                                            <button type="button" class="btn btn-outline-success js-markpaid-btn" title="Mark Paid"
+                                                                                    data-id="<?= $feeId ?>" data-due="<?= h((string)$r['due_amount']) ?>"
+                                                                                    data-child="<?= h((string)$info['student_name']) ?>" data-label="<?= h(installment_label($code)) ?>">
+                                                                                <i class="fas fa-hand-holding-usd"></i>
+                                                                            </button>
+                                                                        <?php endif; ?>
+                                                                        <?php if ($isAdminTier && $status === 'Pending'): ?>
+                                                                            <button type="button" class="btn btn-outline-success js-verify-btn" title="Verify"
+                                                                                    data-id="<?= $feeId ?>" data-child="<?= h((string)$info['student_name']) ?>" data-label="<?= h(installment_label($code)) ?>">
+                                                                                <i class="fas fa-check"></i>
+                                                                            </button>
+                                                                            <button type="button" class="btn btn-outline-danger js-reject-btn" title="Reject"
+                                                                                    data-id="<?= $feeId ?>" data-child="<?= h((string)$info['student_name']) ?>" data-label="<?= h(installment_label($code)) ?>">
+                                                                                <i class="fas fa-times"></i>
+                                                                            </button>
+                                                                        <?php endif; ?>
+                                                                        <?php if ($isAdminTier): ?>
+                                                                            <button type="button" class="btn btn-outline-info js-email-btn" title="Email parent" data-id="<?= $feeId ?>" data-child="<?= h((string)$info['student_name']) ?>">
+                                                                                <i class="fas fa-envelope"></i>
+                                                                            </button>
+                                                                        <?php endif; ?>
+                                                                    </div>
+                                                                <?php endif; ?>
+                                                            </td>
+                                                        <?php endforeach; ?>
+                                                        <td class="wrap update-payment-cell" style="min-width:220px;">
+                                                            <?php if (empty($additionalByStudent[$sid])): ?>
+                                                                <span class="mini text-muted">-</span>
+                                                            <?php else: foreach ($additionalByStudent[$sid] as $ar): ?>
+                                                                <?php
+                                                                    $aProof = trim((string)($ar['proof_path'] ?? ''));
+                                                                    $aPtype = $aProof !== '' ? proof_type($aProof) : '';
+                                                                    $aId = (int)$ar['id'];
+                                                                    $aStatus = (string)$ar['status'];
+                                                                ?>
+                                                                <div class="mb-2 pb-2 border-bottom">
+                                                                    <label class="mb-1 mini d-block">
+                                                                        <input type="checkbox" class="payment-row-check mr-1" name="payment_ids[]" value="<?= $aId ?>" form="bulkPaymentForm">
+                                                                        <strong><?= h((string)$ar['instalment_label']) ?></strong>
+                                                                        <span class="badge badge-<?= pcm_badge($aStatus) ?>"><?= h($aStatus) ?></span>
+                                                                    </label>
+                                                                    <div class="mini mb-1">Due: $<?= number_format((float)$ar['due_amount'], 2) ?> / Paid: $<?= number_format((float)$ar['paid_amount'], 2) ?></div>
+                                                                    <?php if ($aProof !== ''): ?>
+                                                                        <div class="mb-1"><a href="javascript:void(0)" class="mini proof-thumb" data-proof="<?= h($aProof) ?>" data-type="<?= h($aPtype) ?>" data-name="<?= h(basename($aProof)) ?>"><i class="fas fa-eye"></i> Proof</a></div>
+                                                                    <?php endif; ?>
+                                                                    <div class="btn-group btn-group-sm" role="group">
+                                                                        <button type="button" class="btn btn-outline-primary js-edit-btn" title="Edit"
+                                                                                data-id="<?= $aId ?>" data-due="<?= h((string)$ar['due_amount']) ?>" data-paid="<?= h((string)$ar['paid_amount']) ?>"
+                                                                                data-ref="<?= h((string)($ar['payment_ref'] ?? '')) ?>" data-status="<?= h($aStatus) ?>"
+                                                                                data-label="<?= h((string)$ar['instalment_label']) ?>" data-child="<?= h((string)$info['student_name']) ?>">
+                                                                            <i class="fas fa-edit"></i>
+                                                                        </button>
+                                                                        <?php if ($isAdminTier && in_array($aStatus, ['Unpaid', 'Rejected'], true)): ?>
+                                                                            <button type="button" class="btn btn-outline-success js-markpaid-btn" title="Mark Paid"
+                                                                                    data-id="<?= $aId ?>" data-due="<?= h((string)$ar['due_amount']) ?>"
+                                                                                    data-child="<?= h((string)$info['student_name']) ?>" data-label="<?= h((string)$ar['instalment_label']) ?>">
+                                                                                <i class="fas fa-hand-holding-usd"></i>
+                                                                            </button>
+                                                                        <?php endif; ?>
+                                                                        <?php if ($isAdminTier && $aStatus === 'Pending'): ?>
+                                                                            <button type="button" class="btn btn-outline-success js-verify-btn" title="Verify"
+                                                                                    data-id="<?= $aId ?>" data-child="<?= h((string)$info['student_name']) ?>" data-label="<?= h((string)$ar['instalment_label']) ?>">
+                                                                                <i class="fas fa-check"></i>
+                                                                            </button>
+                                                                            <button type="button" class="btn btn-outline-danger js-reject-btn" title="Reject"
+                                                                                    data-id="<?= $aId ?>" data-child="<?= h((string)$info['student_name']) ?>" data-label="<?= h((string)$ar['instalment_label']) ?>">
+                                                                                <i class="fas fa-times"></i>
+                                                                            </button>
+                                                                        <?php endif; ?>
+                                                                        <?php if ($isAdminTier): ?>
+                                                                            <button type="button" class="btn btn-outline-info js-email-btn" title="Email parent" data-id="<?= $aId ?>" data-child="<?= h((string)$info['student_name']) ?>">
+                                                                                <i class="fas fa-envelope"></i>
+                                                                            </button>
+                                                                        <?php endif; ?>
+                                                                    </div>
+                                                                </div>
+                                                            <?php endforeach; endif; ?>
+                                                        </td>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
                     </div>
                 </div>
 
@@ -1062,67 +1260,160 @@ Thank you.</textarea>
     </div>
 </div>
 
-<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap4.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    let dt = null;
-    if (document.getElementById('paymentsTable') && window.jQuery && jQuery.fn && typeof jQuery.fn.DataTable === 'function') {
-        dt = jQuery('#paymentsTable').DataTable({
-            pageLength: 25,
-            order: [[12, 'desc']],
-            columnDefs: [{ orderable: false, searchable: false, targets: [0, 13] }]
-        });
-    }
+    const classFilter = document.getElementById('updateClassFilter');
+    const paymentSort = document.getElementById('updatePaymentSort');
+    const paymentSearch = document.getElementById('updatePaymentSearch');
+    const paymentSearchBtn = document.getElementById('updatePaymentSearchBtn');
+    const clearPaymentSearch = document.getElementById('clearUpdatePaymentSearch');
+    const visiblePaymentCount = document.getElementById('visiblePaymentCount');
+    const paymentNoResults = document.getElementById('paymentNoResults');
 
-    function applyFilters() {
-        if (!dt) return;
-        const status = (document.querySelector('.status-filter-btn.active') || {}).dataset ? document.querySelector('.status-filter-btn.active').dataset.status : 'all';
-        dt.column(11).search(status === 'all' ? '' : '^' + status.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', true, false);
-
-        const cls = document.getElementById('updateClassFilter').value;
-        dt.column(3).search(cls === 'all' ? '' : '^' + cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', true, false);
-
-        const plan = document.getElementById('updatePlanFilter').value;
-        dt.column(5).search(plan === '' ? '' : '^' + plan.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', true, false);
-
-        const search = document.getElementById('updatePaymentSearch').value;
-        dt.search(search);
-
-        dt.draw();
-    }
-
-    document.querySelectorAll('.status-filter-btn').forEach(btn => {
-        btn.addEventListener('click', function () {
-            document.querySelectorAll('.status-filter-btn').forEach(b => b.classList.remove('active'));
-            this.classList.add('active');
-            applyFilters();
+    document.querySelectorAll('.update-overview-table tbody').forEach(tbody => {
+        Array.from(tbody.querySelectorAll('.update-student-row')).forEach((row, index) => {
+            row.dataset.originalIndex = String(index);
         });
     });
-    document.getElementById('updateClassFilter').addEventListener('change', applyFilters);
-    document.getElementById('updatePlanFilter').addEventListener('change', applyFilters);
-    document.getElementById('updatePaymentSearch').addEventListener('keyup', applyFilters);
 
+    function sortPaymentRows() {
+        const sortValue = paymentSort ? paymentSort.value : 'student-asc';
+        const separator = sortValue.lastIndexOf('-');
+        const field = separator > -1 ? sortValue.slice(0, separator) : 'student';
+        const dataField = field === 'class' ? 'className' : field;
+        const direction = sortValue.endsWith('-desc') ? -1 : 1;
+
+        document.querySelectorAll('.update-overview-table tbody').forEach(tbody => {
+            const rows = Array.from(tbody.querySelectorAll('.update-student-row'));
+            rows.sort((a, b) => {
+                let comparison = 0;
+                if (field === 'attendance') {
+                    comparison = (parseFloat(a.dataset[dataField] || '0') - parseFloat(b.dataset[dataField] || '0'));
+                } else {
+                    const aValue = (a.dataset[dataField] || '').trim();
+                    const bValue = (b.dataset[dataField] || '').trim();
+                    comparison = aValue.localeCompare(bValue, undefined, { numeric: true, sensitivity: 'base' });
+                }
+                if (comparison === 0) {
+                    comparison = Number(a.dataset.originalIndex || 0) - Number(b.dataset.originalIndex || 0);
+                }
+                return comparison * direction;
+            });
+            rows.forEach(row => tbody.appendChild(row));
+        });
+    }
+
+    function refreshPaymentResultSummary() {
+        let visibleRows = 0;
+        document.querySelectorAll('.update-student-row').forEach(row => {
+            const section = row.closest('.fee-plan-section');
+            const rowVisible = row.style.display !== 'none';
+            const sectionVisible = !section || section.style.display !== 'none';
+            if (rowVisible && sectionVisible) visibleRows++;
+        });
+        if (visiblePaymentCount) visiblePaymentCount.textContent = String(visibleRows);
+        if (paymentNoResults) paymentNoResults.style.display = visibleRows === 0 ? 'block' : 'none';
+    }
+
+    function applyPaymentRowFilters() {
+        const selectedClass = classFilter ? classFilter.value : 'all';
+        const query = paymentSearch ? paymentSearch.value.trim().toLowerCase() : '';
+        document.querySelectorAll('.update-student-row').forEach(row => {
+            const rowClass = row.getAttribute('data-class-id') || '0';
+            const classMatches = selectedClass === 'all'
+                || (selectedClass === 'unassigned' && rowClass === '0')
+                || rowClass === selectedClass;
+            const searchableText = (row.textContent || '').toLowerCase();
+            const searchMatches = query === '' || searchableText.includes(query);
+            row.style.display = classMatches && searchMatches ? '' : 'none';
+        });
+        refreshPaymentResultSummary();
+    }
+
+    if (classFilter) classFilter.addEventListener('change', applyPaymentRowFilters);
+    if (paymentSort) paymentSort.addEventListener('change', function () { sortPaymentRows(); refreshPaymentResultSummary(); });
+    if (paymentSearchBtn) paymentSearchBtn.addEventListener('click', applyPaymentRowFilters);
+    if (paymentSearch) {
+        paymentSearch.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') { event.preventDefault(); applyPaymentRowFilters(); }
+        });
+    }
+    if (clearPaymentSearch) {
+        clearPaymentSearch.addEventListener('click', function () {
+            if (paymentSearch) paymentSearch.value = '';
+            applyPaymentRowFilters();
+            if (paymentSearch) paymentSearch.focus();
+        });
+    }
+    sortPaymentRows();
+    applyPaymentRowFilters();
+
+    // ---------- Payment plan tabs ----------
+    const methodPills = document.querySelectorAll('.js-method-pill');
+    const planSections = document.querySelectorAll('.fee-plan-section');
+    function slugToActiveClass(slug) {
+        if (slug === 'term-wise') return 'is-active-term-wise';
+        if (slug === 'half-yearly') return 'is-active-half-yearly';
+        if (slug === 'yearly') return 'is-active-yearly';
+        return 'is-active-all';
+    }
+    function applyMethodFilter(planSlug) {
+        const slug = (planSlug || 'all').toLowerCase();
+        planSections.forEach(section => {
+            const current = (section.getAttribute('data-plan') || '').toLowerCase();
+            section.style.display = (slug === 'all' || current === slug) ? '' : 'none';
+        });
+        methodPills.forEach(btn => {
+            btn.classList.remove('is-active-all', 'is-active-term-wise', 'is-active-half-yearly', 'is-active-yearly');
+            const thisSlug = (btn.getAttribute('data-plan') || 'all').toLowerCase();
+            if (thisSlug === slug) btn.classList.add(slugToActiveClass(thisSlug));
+        });
+        refreshPaymentResultSummary();
+    }
+    methodPills.forEach(btn => {
+        btn.addEventListener('click', function () { applyMethodFilter(this.getAttribute('data-plan') || 'all'); });
+    });
+    applyMethodFilter('all');
+
+    // ---------- Bulk selection ----------
     function updateSelectedCount() {
         const count = document.querySelectorAll('.payment-row-check:checked').length;
         document.getElementById('selectedPaymentCount').textContent = String(count);
     }
     document.addEventListener('change', function (e) {
-        if (e.target.classList.contains('payment-row-check')) updateSelectedCount();
+        if (e.target.classList.contains('payment-row-check')) {
+            updateSelectedCount();
+        }
+        if (e.target.classList.contains('row-select-all')) {
+            const row = e.target.closest('tr');
+            if (row) {
+                row.querySelectorAll('.payment-row-check').forEach(cb => { cb.checked = e.target.checked; });
+                updateSelectedCount();
+            }
+        }
     });
     document.getElementById('selectVisiblePayments').addEventListener('click', function () {
-        document.querySelectorAll('#paymentsTable tbody tr').forEach(row => {
-            if (row.style.display !== 'none') {
-                const cb = row.querySelector('.payment-row-check');
-                if (cb) cb.checked = true;
-            }
+        document.querySelectorAll('.update-student-row').forEach(row => {
+            const section = row.closest('.fee-plan-section');
+            if (row.style.display === 'none') return;
+            if (section && section.style.display === 'none') return;
+            row.querySelectorAll('.payment-row-check').forEach(cb => { cb.checked = true; });
         });
         updateSelectedCount();
     });
 
-    // Row action buttons + proof viewer: delegated on document, since DataTables
-    // recreates row DOM nodes on paginate/search/sort, which would silently
-    // orphan any listener bound directly to a button at initial page load.
+    const bulkForm = document.getElementById('bulkPaymentForm');
+    if (bulkForm) {
+        bulkForm.addEventListener('submit', function (e) {
+            if (document.querySelectorAll('.payment-row-check:checked').length === 0) {
+                e.preventDefault();
+                Swal.fire({ icon: 'warning', title: 'Please select at least one payment row.', timer: 1800, showConfirmButton: false });
+            }
+        });
+    }
+
+    // Row action buttons + proof viewer: delegated on document (one listener
+    // covers every cell, including the repeated Additional-charges rows).
     document.addEventListener('click', function (e) {
         const editBtn = e.target.closest('.js-edit-btn');
         if (editBtn) {
