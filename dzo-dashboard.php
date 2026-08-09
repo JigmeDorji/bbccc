@@ -126,7 +126,6 @@ if (dzo_table_exists($pdo, 'pcm_fee_payments')) {
 
 // ── Students by age ──
 $ageBuckets = [];
-$ageMaxCount = 0;
 $approvedMissingDob = 0;
 if (dzo_table_exists($pdo, 'students')) {
     $ageRows = $pdo->query("
@@ -141,7 +140,6 @@ if (dzo_table_exists($pdo, 'students')) {
         $total = (int)$row['total'];
         if ($age < 0 || $age > 100) continue; // skip bad/missing DOB data
         $ageBuckets[$age] = $total;
-        $ageMaxCount = max($ageMaxCount, $total);
     }
     $approvedMissingDob = dzo_scalar(
         $pdo,
@@ -373,12 +371,6 @@ if (
         .dzo-mini-meta { font-size: 0.78rem; color: #7a7c84; }
         .dzo-summary-table thead th { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.02em; color: #6c757d; border-top: 0; }
         .dzo-summary-table td { font-size: 0.84rem; vertical-align: middle; }
-        .dzo-age-bars { display: flex; flex-direction: column; gap: 8px; }
-        .dzo-age-row { display: flex; align-items: center; gap: 12px; }
-        .dzo-age-label { flex: 0 0 52px; font-size: 0.8rem; font-weight: 600; color: #4b5563; }
-        .dzo-age-bar-track { flex: 1; background: #f1f3f9; border-radius: 6px; height: 14px; overflow: hidden; }
-        .dzo-age-bar-fill { background: #881b12; height: 100%; border-radius: 6px; transition: width .3s ease; }
-        .dzo-age-count { flex: 0 0 36px; text-align: right; font-size: 0.82rem; font-weight: 700; color: #1f2937; }
         .dzo-fee-panel { border: 1px solid #e8ecf4; background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%); }
         .dzo-fee-hero { display: flex; align-items: center; gap: 16px; }
         .dzo-fee-ring {
@@ -506,16 +498,23 @@ if (
                         <?php if (empty($ageBuckets)): ?>
                             <p class="text-muted mb-0">No approved students with a date of birth on file yet.</p>
                         <?php else: ?>
-                            <div class="dzo-age-bars">
-                                <?php foreach ($ageBuckets as $age => $count): ?>
-                                    <div class="dzo-age-row">
-                                        <div class="dzo-age-label"><?= (int)$age ?> yrs</div>
-                                        <div class="dzo-age-bar-track">
-                                            <div class="dzo-age-bar-fill" style="width:<?= $ageMaxCount > 0 ? max(4, round($count / $ageMaxCount * 100)) : 0 ?>%;"></div>
-                                        </div>
-                                        <div class="dzo-age-count"><?= dzo_h(number_format($count)) ?></div>
-                                    </div>
-                                <?php endforeach; ?>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered dzo-summary-table mb-0">
+                                    <thead>
+                                        <tr>
+                                            <?php foreach ($ageBuckets as $age => $count): ?>
+                                                <th class="text-center"><?= (int)$age ?> yrs</th>
+                                            <?php endforeach; ?>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <?php foreach ($ageBuckets as $age => $count): ?>
+                                                <td class="text-center font-weight-bold"><?= dzo_h(number_format($count)) ?></td>
+                                            <?php endforeach; ?>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         <?php endif; ?>
                         <?php if ($approvedMissingDob > 0): ?>
