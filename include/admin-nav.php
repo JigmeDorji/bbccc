@@ -429,11 +429,11 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                     <h6 class="collapse-header dzo-group-header d-none d-lg-block">Enrollment Workflow</h6>
                     <a class="collapse-item dzo-subgroup-trigger <?= $dzoEnrollActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseDzoEnroll" aria-expanded="<?= $dzoEnrollActive ? 'true' : 'false' ?>" aria-controls="collapseDzoEnroll">Enrollment Workflow</a>
                     <div id="collapseDzoEnroll" class="collapse dzo-subgroup-links <?= $dzoEnrollActive ? 'show' : '' ?>" data-parent="#collapseOrders">
-                        <a class="collapse-item <?= ($currentPage === 'dzoClassManagement.php') ? 'active' : '' ?>" href="dzoClassManagement"><i class="fas fa-user-plus fa-sm mr-1 text-muted"></i> Manage Children</a>
                         <a class="collapse-item <?= ($currentPage === 'admin-enrolments.php') ? 'active' : '' ?>" href="admin-enrolments"><i class="fas fa-file-signature fa-sm mr-1 text-muted"></i> Enrollment</a>
                         <a class="collapse-item <?= ($currentPage === 'admin-parents-children.php') ? 'active' : '' ?>" href="admin-parents-children"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Parents & Children</a>
                         <a class="collapse-item <?= ($currentPage == 'admin-assign-class.php') ? 'active' : '' ?>" href="admin-assign-class"><i class="fas fa-user-plus fa-sm mr-1 text-muted"></i> Assign Students</a>
                         <a class="collapse-item <?= ($currentPage == 'admin-class-students.php') ? 'active' : '' ?>" href="admin-class-students"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Class Allocation</a>
+                        <a class="collapse-item <?= ($currentPage === 'dzoClassManagement.php') ? 'active' : '' ?>" href="dzoClassManagement"><i class="fas fa-user-plus fa-sm mr-1 text-muted"></i> Manage Children</a>
                     </div>
 
                     <h6 class="collapse-header dzo-group-header d-none d-lg-block">Fees Management</h6>
