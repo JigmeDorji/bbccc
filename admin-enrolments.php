@@ -46,6 +46,89 @@ function bbcc_class_matches_campus(string $className, array $campusLabels): bool
     return false;
 }
 
+// Shared row markup for both the Unallocated and Enrolled-by-class tables --
+// same column shape either way, so a fix here only has to happen once.
+function bbcc_render_enrolment_rows(array $rows, array $campusChoices, array $allClasses, array $auditByEnrolment): void {
+    foreach ($rows as $i => $e) {
+        $rowStatusNorm = strtolower(trim((string)($e['status'] ?? '')));
+        $selectedCampusKeys = pcm_normalize_campus_selection((string)($e['campus_preference'] ?? ''));
+        $selectedCampusLabels = [];
+        foreach ($selectedCampusKeys as $ck) {
+            if (isset($campusChoices[$ck])) $selectedCampusLabels[] = $campusChoices[$ck];
+        }
+        $matchingClasses = array_values(array_filter($allClasses, function($cl) use ($selectedCampusLabels) {
+            return bbcc_class_matches_campus((string)($cl['class_name'] ?? ''), $selectedCampusLabels);
+        }));
+        if (empty($matchingClasses)) {
+            $matchingClasses = $allClasses;
+        }
+        $isManualEnrolment = (int)($e['is_manual_enrolment'] ?? 0) === 1;
+        $canAssignClass = $isManualEnrolment || in_array($rowStatusNorm, ['pending', 'approved'], true);
+        ?>
+        <tr data-status="<?= $e['status'] ?>">
+            <td><?= $i + 1 ?></td>
+            <td><code><?= h($e['stu_code']) ?></code></td>
+            <td><?= h($e['student_name']) ?></td>
+            <td><?= h(pcm_campus_selection_label((string)($e['campus_preference'] ?? ''))) ?></td>
+            <td><?= h($e['assigned_class_name'] ?? 'Not assigned') ?></td>
+            <td><?= h($e['assigned_teacher_name'] ?? '') ?></td>
+            <td><?= h($e['parent_phone'] ?? '-') ?></td>
+            <td><?= h($e['fee_plan']) ?></td>
+            <td>$<?= number_format($e['fee_amount'], 2) ?></td>
+            <td><?= h($e['payment_ref'] ?? '—') ?></td>
+            <td>
+                <?php if (!empty($e['proof_path'])): ?>
+                    <button type="button" class="btn btn-sm btn-outline-info js-proof-btn" data-proof="<?= h($e['proof_path']) ?>" data-child="<?= h($e['student_name']) ?>">
+                        View
+                    </button>
+                <?php else: ?>
+                    —
+                <?php endif; ?>
+            </td>
+            <td><?= h($e['parent_name']) ?><br><small class="text-muted"><?= h($e['parent_email']) ?></small></td>
+            <td><span class="badge badge-<?= pcm_badge($e['status']) ?>"><?= h($e['status']) ?></span>
+                <?php if ($e['admin_note']): ?><br><small><?= h($e['admin_note']) ?></small><?php endif; ?>
+            </td>
+            <td><?= date('d M Y', strtotime($e['submitted_at'])) ?></td>
+            <td>
+                <form method="POST" class="form-inline mb-1">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="assign_class">
+                    <input type="hidden" name="enrolment_id" value="<?= (int)$e['id'] ?>">
+                    <select name="class_id" class="form-control form-control-sm mr-1" style="min-width:155px;" <?= $canAssignClass ? 'required' : 'disabled' ?>>
+                        <option value=""><?= $canAssignClass ? 'Assign class' : 'Class assignment locked' ?></option>
+                        <?php foreach ($matchingClasses as $cl): ?>
+                            <option value="<?= (int)$cl['id'] ?>" <?= ((int)$e['assigned_class_id'] === (int)$cl['id']) ? 'selected' : '' ?>>
+                                <?= h($cl['class_name']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-outline-primary" <?= $canAssignClass ? '' : 'disabled' ?>>
+                        <i class="fas fa-sync-alt mr-1"></i>Update Class
+                    </button>
+                </form>
+                <?php if ($rowStatusNorm === 'pending'): ?>
+                <button type="button" class="btn btn-success btn-sm js-approve-enrol-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>"><i class="fas fa-check mr-1"></i>Approve</button>
+                <button type="button" class="btn btn-danger btn-sm js-reject-enrol-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>"><i class="fas fa-times mr-1"></i>Reject</button>
+                <button type="button" class="btn btn-warning btn-sm js-changes-enrol-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>"><i class="fas fa-edit mr-1"></i>Request Changes</button>
+                <?php else: ?>
+                    <span class="text-muted small"><?= h($e['reviewed_by'] ?? '') ?></span>
+                <?php endif; ?>
+            </td>
+            <td>
+                <?php
+                    $historyItems = $auditByEnrolment[(int)$e['id']] ?? [];
+                    $historyCount = count($historyItems);
+                ?>
+                <button type="button" class="btn btn-sm btn-outline-secondary js-history-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>">
+                    View (<?= $historyCount ?>)
+                </button>
+            </td>
+        </tr>
+        <?php
+    }
+}
+
 // ── POST actions ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['approve','reject','request_changes','assign_class','manual_enrol','enrol_registered_child','reject_registration','save_age_settings'], true)) {
     verify_csrf();
@@ -617,6 +700,12 @@ $needsUpdate = count(array_filter($all, fn($r)=>$r['status']==='Needs Update'));
 $approved= count(array_filter($all, fn($r)=>$r['status']==='Approved'));
 $rejected= count(array_filter($all, fn($r)=>$r['status']==='Rejected'));
 
+// Enrolled-but-no-class vs enrolled-and-allocated -- shown as two separate
+// tables below (Unallocated / Enrolled -- By Class) instead of one mixed
+// list with a "Not assigned" group buried among the real classes.
+$unallocated = array_values(array_filter($all, fn($r) => empty($r['assigned_class_id'])));
+$allocated   = array_values(array_filter($all, fn($r) => !empty($r['assigned_class_id'])));
+
 $registeredChildren = $pdo->query("
     SELECT s.id, s.student_id, s.student_name, s.approval_status, s.registration_date,
            p.full_name AS parent_name, p.email AS parent_email, p.phone AS parent_phone,
@@ -837,11 +926,11 @@ document.addEventListener('DOMContentLoaded',()=>{
     </div>
 </div>
 
-<!-- Registered Children Queue -->
+<!-- Unenrolled: registered children with no enrolment submitted yet -->
 <div class="card shadow mb-4">
     <div class="card-header py-3 d-flex justify-content-between align-items-center">
-        <h6 class="m-0 font-weight-bold text-primary">Registered Children Enrollment Queue</h6>
-        <small class="text-muted">Review new registrations and enroll children directly from registration records</small>
+        <h6 class="m-0 font-weight-bold text-primary">Unenrolled</h6>
+        <small class="text-muted">Registered children with no enrolment yet -- review the registration or enroll them directly</small>
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -900,6 +989,33 @@ document.addEventListener('DOMContentLoaded',()=>{
                 </tbody>
             </table>
         </div>
+    </div>
+</div>
+
+<!-- Unallocated: enrolled, but no class assigned yet -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+        <h6 class="m-0 font-weight-bold text-primary">Unallocated <span class="badge badge-warning ml-1"><?= count($unallocated) ?></span></h6>
+        <small class="text-muted">Enrolled, but not yet assigned to a class</small>
+    </div>
+    <div class="card-body">
+        <?php if (empty($unallocated)): ?>
+            <p class="text-muted mb-0">Everyone enrolled has a class assigned.</p>
+        <?php else: ?>
+        <div class="table-responsive">
+            <table id="unallocatedTable" class="table table-bordered table-hover" style="width:100%">
+                <thead class="thead-light">
+                    <tr>
+                        <th>#</th><th>Student ID</th><th>Child Name</th><th>Campus</th><th>Class</th><th>Teacher</th><th>Phone</th>
+                        <th>Plan</th><th>Amount</th><th>Ref</th><th>Proof</th><th>Parent</th><th>Status</th><th>Submitted</th><th style="width:300px">Actions</th><th>History</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php bbcc_render_enrolment_rows($unallocated, $campusChoices, $allClasses, $auditByEnrolment); ?>
+                </tbody>
+            </table>
+        </div>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -985,8 +1101,12 @@ document.addEventListener('DOMContentLoaded',()=>{
     </div>
 </div>
 
-<!-- Enrolments Table -->
+<!-- Enrolled -- By Class -->
 <div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Enrolled — By Class <span class="badge badge-success ml-1"><?= count($allocated) ?></span></h6>
+        <small class="text-muted">Grouped by class -- use "Update Class" on any row to move a student</small>
+    </div>
     <div class="card-body">
         <div class="table-responsive">
             <table id="enrolTable" class="table table-bordered table-hover" style="width:100%">
@@ -997,84 +1117,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                     </tr>
                 </thead>
                 <tbody>
-                <?php foreach ($all as $i => $e): ?>
-                <?php $rowStatusNorm = strtolower(trim((string)($e['status'] ?? ''))); ?>
-                <?php
-                    $selectedCampusKeys = pcm_normalize_campus_selection((string)($e['campus_preference'] ?? ''));
-                    $selectedCampusLabels = [];
-                    foreach ($selectedCampusKeys as $ck) {
-                        if (isset($campusChoices[$ck])) $selectedCampusLabels[] = $campusChoices[$ck];
-                    }
-                    $matchingClasses = array_values(array_filter($allClasses, function($cl) use ($selectedCampusLabels) {
-                        return bbcc_class_matches_campus((string)($cl['class_name'] ?? ''), $selectedCampusLabels);
-                    }));
-                    if (empty($matchingClasses)) {
-                        $matchingClasses = $allClasses;
-                    }
-                    $isManualEnrolment = (int)($e['is_manual_enrolment'] ?? 0) === 1;
-                    $canAssignClass = $isManualEnrolment || in_array($rowStatusNorm, ['pending', 'approved'], true);
-                ?>
-                <tr data-status="<?= $e['status'] ?>">
-                    <td><?= $i+1 ?></td>
-                    <td><code><?= h($e['stu_code']) ?></code></td>
-                    <td><?= h($e['student_name']) ?></td>
-                    <td><?= h(pcm_campus_selection_label((string)($e['campus_preference'] ?? ''))) ?></td>
-                    <td><?= h($e['assigned_class_name'] ?? 'Not assigned') ?></td>
-                    <td><?= h($e['assigned_teacher_name'] ?? '') ?></td>
-                    <td><?= h($e['parent_phone'] ?? '-') ?></td>
-                    <td><?= h($e['fee_plan']) ?></td>
-                    <td>$<?= number_format($e['fee_amount'],2) ?></td>
-                    <td><?= h($e['payment_ref'] ?? '—') ?></td>
-                    <td>
-                        <?php if (!empty($e['proof_path'])): ?>
-                            <button type="button" class="btn btn-sm btn-outline-info js-proof-btn" data-proof="<?= h($e['proof_path']) ?>" data-child="<?= h($e['student_name']) ?>">
-                                View
-                            </button>
-                        <?php else: ?>
-                            —
-                        <?php endif; ?>
-                    </td>
-                    <td><?= h($e['parent_name']) ?><br><small class="text-muted"><?= h($e['parent_email']) ?></small></td>
-                    <td><span class="badge badge-<?= pcm_badge($e['status']) ?>"><?= h($e['status']) ?></span>
-                        <?php if ($e['admin_note']): ?><br><small><?= h($e['admin_note']) ?></small><?php endif; ?>
-                    </td>
-                    <td><?= date('d M Y', strtotime($e['submitted_at'])) ?></td>
-                    <td>
-                        <form method="POST" class="form-inline mb-1">
-                            <?= csrf_field() ?>
-                            <input type="hidden" name="action" value="assign_class">
-                            <input type="hidden" name="enrolment_id" value="<?= (int)$e['id'] ?>">
-                            <select name="class_id" class="form-control form-control-sm mr-1" style="min-width:155px;" <?= $canAssignClass ? 'required' : 'disabled' ?>>
-                                <option value=""><?= $canAssignClass ? 'Assign class' : 'Class assignment locked' ?></option>
-                                <?php foreach ($matchingClasses as $cl): ?>
-                                    <option value="<?= (int)$cl['id'] ?>" <?= ((int)$e['assigned_class_id'] === (int)$cl['id']) ? 'selected' : '' ?>>
-                                        <?= h($cl['class_name']) ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <button type="submit" class="btn btn-sm btn-outline-primary" <?= $canAssignClass ? '' : 'disabled' ?>>
-                                <i class="fas fa-sync-alt mr-1"></i>Update Class
-                            </button>
-                        </form>
-                        <?php if ($rowStatusNorm === 'pending'): ?>
-                        <button type="button" class="btn btn-success btn-sm js-approve-enrol-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>"><i class="fas fa-check mr-1"></i>Approve</button>
-                        <button type="button" class="btn btn-danger btn-sm js-reject-enrol-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>"><i class="fas fa-times mr-1"></i>Reject</button>
-                        <button type="button" class="btn btn-warning btn-sm js-changes-enrol-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>"><i class="fas fa-edit mr-1"></i>Request Changes</button>
-                        <?php else: ?>
-                            <span class="text-muted small"><?= h($e['reviewed_by'] ?? '') ?></span>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php
-                            $historyItems = $auditByEnrolment[(int)$e['id']] ?? [];
-                            $historyCount = count($historyItems);
-                        ?>
-                        <button type="button" class="btn btn-sm btn-outline-secondary js-history-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>">
-                            View (<?= $historyCount ?>)
-                        </button>
-                    </td>
-                </tr>
-                <?php endforeach; ?>
+                <?php bbcc_render_enrolment_rows($allocated, $campusChoices, $allClasses, $auditByEnrolment); ?>
                 </tbody>
             </table>
         </div>
@@ -1265,7 +1308,7 @@ $(function(){
         order: [[4, 'asc'], [13, 'desc']],
         columnDefs: [
             { orderable: false, targets: 0 },
-            { visible: false, targets: [5] }
+            { visible: false, targets: [4, 5] }
         ],
         rowGroup: {
             dataSrc: 4,
@@ -1274,7 +1317,7 @@ $(function(){
                 var teacher = d[5] || '';
                 var count = rows.count();
                 var $tr = $('<tr class="class-group-row"/>');
-                var $td = $('<td colspan="15"/>').appendTo($tr);
+                var $td = $('<td colspan="14"/>').appendTo($tr);
                 var $wrap = $('<div class="d-flex flex-wrap align-items-center justify-content-between"/>').appendTo($td);
                 var $left = $('<div/>').appendTo($wrap);
                 $('<strong class="class-name"/>').text(group || 'Not assigned').appendTo($left);
@@ -1289,6 +1332,18 @@ $(function(){
             }
         }
     });
+
+    if ($('#unallocatedTable').length) {
+        $('#unallocatedTable').DataTable({
+            pageLength: 10,
+            order: [[13, 'desc']],
+            columnDefs: [
+                { orderable: false, targets: 0 },
+                { visible: false, targets: [4, 5] }
+            ]
+        });
+    }
+
     var activeStatus = 'all';
     $.fn.dataTable.ext.search.push(function(settings, data, dataIndex){
         if (settings.nTable.id !== 'enrolTable') return true;
