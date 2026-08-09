@@ -184,6 +184,7 @@ if (dzo_table_exists($pdo, 'attendance') && dzo_table_exists($pdo, 'classes')) {
         FROM attendance a
         LEFT JOIN classes c ON c.id = a.class_id
         WHERE DATE(a.attendance_date) = :summary_date
+          AND (c.active = 1 OR c.active IS NULL)
         GROUP BY campus_key, class_name
         ORDER BY campus_key ASC, class_name ASC
     ");
@@ -247,6 +248,7 @@ if (
         LEFT JOIN pcm_kiosk_log k
             ON k.child_id = ca.student_id
            AND k.log_date = :summary_date
+        WHERE c.active = 1
         GROUP BY c.id, campus_key, class_name
         ORDER BY campus_key ASC, class_name ASC
     ");
