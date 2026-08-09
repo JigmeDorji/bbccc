@@ -90,6 +90,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $parentEmail = trim((string)($_POST['parent_email'] ?? ''));
                 $parentPhone = trim((string)($_POST['parent_phone'] ?? ''));
                 $parentAddress = trim((string)($_POST['parent_address'] ?? ''));
+                $startTermRaw = $_POST['start_term'] ?? null;
 
                 if ($studentName === '') {
                     throw new Exception("Student name is required.");
@@ -141,10 +142,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':address' => ($parentAddress !== '' ? $parentAddress : null),
                     ':id' => $parentId,
                 ]);
+
+                $termNote = '';
+                if ($startTermRaw !== null) {
+                    $newStartTerm = pcm_normalize_start_term($startTermRaw);
+                    $enrol = $pdo->prepare("SELECT id, start_term, fee_plan FROM pcm_enrolments WHERE student_id = :sid LIMIT 1");
+                    $enrol->execute([':sid' => $studentDbId]);
+                    $enrolRow = $enrol->fetch(PDO::FETCH_ASSOC);
+
+                    if ($enrolRow && pcm_normalize_start_term($enrolRow['start_term'] ?? 1) !== $newStartTerm) {
+                        $eid = (int)$enrolRow['id'];
+                        $plan = (string)$enrolRow['fee_plan'];
+                        if (!pcm_plan_allowed_for_start_term($plan, $newStartTerm)) {
+                            throw new Exception("The {$plan} plan is not available for Term {$newStartTerm}. Change the fee plan first, or choose a different term.");
+                        }
+                        $newAmount = pcm_plan_total_for_start_term($plan, $newStartTerm);
+
+                        $pdo->prepare("UPDATE pcm_enrolments SET start_term = :st, fee_amount = :amt WHERE id = :id")
+                            ->execute([':st' => $newStartTerm, ':amt' => $newAmount, ':id' => $eid]);
+
+                        $touchedStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE enrolment_id = :eid AND status <> 'Unpaid'");
+                        $touchedStmt->execute([':eid' => $eid]);
+                        $touchedCount = (int)$touchedStmt->fetchColumn();
+
+                        if ($touchedCount > 0) {
+                            $termNote = ' Starting term updated, but existing fee instalments were left as-is because some have already been paid or reviewed -- please check the fees page.';
+                        } else {
+                            $pdo->prepare("DELETE FROM pcm_fee_payments WHERE enrolment_id = :eid")->execute([':eid' => $eid]);
+                            pcm_create_fee_rows($pdo, $eid, $studentDbId, $parentId, $plan, null, $newStartTerm);
+                            $termNote = ' Fee instalment schedule was regenerated for the new starting term.';
+                        }
+
+                        pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_start_term_updated', (string)$reviewer, "Starting term changed to Term {$newStartTerm}.");
+                    }
+                }
+
                 $pdo->commit();
 
                 pcm_log_enrolment_event($pdo, $studentDbId, null, 'admin_child_profile_updated', (string)$reviewer, 'Student and parent details updated from child registration page.');
-                $flash = 'Child and parent details updated successfully.';
+                $flash = 'Child and parent details updated successfully.' . $termNote;
                 $ok = true;
             } elseif ($action === 'move_past') {
                 $stu = $pdo->prepare("SELECT student_name FROM students WHERE id = :id LIMIT 1");
@@ -214,9 +250,13 @@ $students = $pdo->query("
            p.email       AS parent_email,
            p.phone       AS parent_phone,
            p.address     AS parent_address,
-           p.id          AS parent_db_id
+           p.id          AS parent_db_id,
+           e.id          AS enrolment_id,
+           e.start_term  AS enrolment_start_term,
+           e.fee_plan    AS enrolment_fee_plan
     FROM students s
     LEFT JOIN parents p ON p.id = {$studentParentJoinExpr}
+    LEFT JOIN pcm_enrolments e ON e.student_id = s.id
     ORDER BY s.id DESC
 ")->fetchAll();
 $parentList = $pdo->query("
@@ -644,6 +684,28 @@ document.addEventListener('DOMContentLoaded', () => {
                             <input type="text" class="form-control" name="medical_issue" value="<?= h((string)($s['medical_issue'] ?? '')) ?>" maxlength="500">
                         </div>
                     </div>
+
+                    <?php if (!empty($s['enrolment_id'])): ?>
+                    <hr>
+                    <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-file-signature mr-1"></i>Enrollment</h6>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Starting Term</label>
+                            <?php
+                                $curStartTerm = pcm_normalize_start_term($s['enrolment_start_term'] ?? 1);
+                                $curPlan = (string)($s['enrolment_fee_plan'] ?? '');
+                            ?>
+                            <select class="form-control" name="start_term">
+                                <?php for ($termNo = 1; $termNo <= 4; $termNo++): ?>
+                                    <?php if (pcm_plan_allowed_for_start_term($curPlan, $termNo)): ?>
+                                    <option value="<?= $termNo ?>" <?= $curStartTerm === $termNo ? 'selected' : '' ?>>Term <?= $termNo ?></option>
+                                    <?php endif; ?>
+                                <?php endfor; ?>
+                            </select>
+                            <small class="form-text text-muted">Only terms valid for the <?= h($curPlan) ?> plan are shown. Changing this recalculates the fee amount and instalment schedule if no instalments have been paid or reviewed yet.</small>
+                        </div>
+                    </div>
+                    <?php endif; ?>
 
                     <hr>
                     <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-user-friends mr-1"></i>Parent Contact Details</h6>
