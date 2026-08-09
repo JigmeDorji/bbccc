@@ -458,6 +458,119 @@ function pcm_create_fee_rows(PDO $pdo, int $enrolmentId, int $studentId, int $pa
     }
 }
 
+/**
+ * Update a student's bio/parent details and (optionally) their
+ * enrolment's starting term, from an admin form. Shared by
+ * dzoClassManagement.php and student-profile.php so the validation and
+ * fee-regeneration rules only live in one place. Throws Exception on
+ * validation failure (caller is expected to catch and roll back).
+ */
+function pcm_admin_update_child_details(PDO $pdo, int $studentDbId, array $post, string $reviewer): array {
+    $studentName = trim((string)($post['student_name'] ?? ''));
+    $dob = trim((string)($post['dob'] ?? ''));
+    $gender = trim((string)($post['gender'] ?? ''));
+    $medical = trim((string)($post['medical_issue'] ?? ''));
+    $parentName = trim((string)($post['parent_name'] ?? ''));
+    $parentEmail = trim((string)($post['parent_email'] ?? ''));
+    $parentPhone = trim((string)($post['parent_phone'] ?? ''));
+    $parentAddress = trim((string)($post['parent_address'] ?? ''));
+    $startTermRaw = $post['start_term'] ?? null;
+
+    if ($studentName === '') {
+        throw new Exception("Student name is required.");
+    }
+    if ($dob !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dob)) {
+        throw new Exception("Invalid DOB format.");
+    }
+    if ($parentEmail !== '' && !filter_var($parentEmail, FILTER_VALIDATE_EMAIL)) {
+        throw new Exception("Invalid parent email address.");
+    }
+    if ($parentName === '') {
+        throw new Exception("Parent name is required.");
+    }
+
+    $stu = $pdo->prepare("SELECT parent_id, student_name FROM students WHERE id = :id LIMIT 1");
+    $stu->execute([':id' => $studentDbId]);
+    $student = $stu->fetch(PDO::FETCH_ASSOC);
+    if (!$student) {
+        throw new Exception("Student not found.");
+    }
+    $parentId = (int)($student['parent_id'] ?? 0);
+    if ($parentId <= 0) {
+        throw new Exception("Parent link missing for this child.");
+    }
+
+    $pdo->beginTransaction();
+    $upStudent = $pdo->prepare("
+        UPDATE students
+        SET student_name = :name, dob = :dob, gender = :gender, medical_issue = :medical
+        WHERE id = :id
+    ");
+    $upStudent->execute([
+        ':name' => $studentName,
+        ':dob' => ($dob !== '' ? $dob : null),
+        ':gender' => ($gender !== '' ? $gender : null),
+        ':medical' => ($medical !== '' ? $medical : null),
+        ':id' => $studentDbId,
+    ]);
+
+    $upParent = $pdo->prepare("
+        UPDATE parents
+        SET full_name = :full_name, email = :email, phone = :phone, address = :address
+        WHERE id = :id
+    ");
+    $upParent->execute([
+        ':full_name' => $parentName,
+        ':email' => ($parentEmail !== '' ? $parentEmail : null),
+        ':phone' => ($parentPhone !== '' ? $parentPhone : null),
+        ':address' => ($parentAddress !== '' ? $parentAddress : null),
+        ':id' => $parentId,
+    ]);
+
+    $termNote = '';
+    if ($startTermRaw !== null) {
+        $newStartTerm = pcm_normalize_start_term($startTermRaw);
+        $enrol = $pdo->prepare("SELECT id, start_term, fee_plan FROM pcm_enrolments WHERE student_id = :sid LIMIT 1");
+        $enrol->execute([':sid' => $studentDbId]);
+        $enrolRow = $enrol->fetch(PDO::FETCH_ASSOC);
+
+        if ($enrolRow && pcm_normalize_start_term($enrolRow['start_term'] ?? 1) !== $newStartTerm) {
+            $eid = (int)$enrolRow['id'];
+            $plan = (string)$enrolRow['fee_plan'];
+            if (!pcm_plan_allowed_for_start_term($plan, $newStartTerm)) {
+                throw new Exception("The {$plan} plan is not available for Term {$newStartTerm}. Change the fee plan first, or choose a different term.");
+            }
+            $newAmount = pcm_plan_total_for_start_term($plan, $newStartTerm);
+
+            $pdo->prepare("UPDATE pcm_enrolments SET start_term = :st, fee_amount = :amt WHERE id = :id")
+                ->execute([':st' => $newStartTerm, ':amt' => $newAmount, ':id' => $eid]);
+
+            $touchedStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE enrolment_id = :eid AND status <> 'Unpaid'");
+            $touchedStmt->execute([':eid' => $eid]);
+            $touchedCount = (int)$touchedStmt->fetchColumn();
+
+            if ($touchedCount > 0) {
+                $termNote = ' Starting term updated, but existing fee instalments were left as-is because some have already been paid or reviewed -- please check the fees page.';
+            } else {
+                $pdo->prepare("DELETE FROM pcm_fee_payments WHERE enrolment_id = :eid")->execute([':eid' => $eid]);
+                pcm_create_fee_rows($pdo, $eid, $studentDbId, $parentId, $plan, null, $newStartTerm);
+                $termNote = ' Fee instalment schedule was regenerated for the new starting term.';
+            }
+
+            pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_start_term_updated', $reviewer, "Starting term changed to Term {$newStartTerm}.");
+        }
+    }
+
+    $pdo->commit();
+
+    pcm_log_enrolment_event($pdo, $studentDbId, null, 'admin_child_profile_updated', $reviewer, 'Student and parent details updated by admin.');
+
+    return [
+        'flash' => 'Child and parent details updated successfully.' . $termNote,
+        'ok' => true,
+    ];
+}
+
 // ─── Badge CSS class from status string ───────────────────
 function pcm_badge(string $status): string {
     $s = strtolower(trim($status));
