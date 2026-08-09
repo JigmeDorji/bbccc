@@ -467,6 +467,21 @@ function pcm_create_fee_rows(PDO $pdo, int $enrolmentId, int $studentId, int $pa
  * validation failure (caller is expected to catch and roll back).
  */
 function pcm_admin_update_child_details(PDO $pdo, int $studentDbId, array $post, string $reviewer): array {
+    // Each group of fields is only validated/updated if the caller's form
+    // actually included it -- lets the same handler serve a combined
+    // quick-edit form (dzoClassManagement.php) or separate per-section
+    // forms (student-profile.php) without touching what wasn't submitted.
+    $updatingStudent = array_key_exists('student_name', $post);
+    $updatingParent = array_key_exists('parent_name', $post);
+    $hasCampusField = array_key_exists('campus_choice', $post);
+    $hasClassField = !empty($post['class_id']);
+    $startTermRaw = $post['start_term'] ?? null;
+    $updatingEnrolment = ($startTermRaw !== null || isset($post['fee_plan']) || $hasCampusField || $hasClassField);
+
+    if (!$updatingStudent && !$updatingParent && !$updatingEnrolment) {
+        throw new Exception("Nothing to update.");
+    }
+
     $studentName = trim((string)($post['student_name'] ?? ''));
     $dob = trim((string)($post['dob'] ?? ''));
     $gender = trim((string)($post['gender'] ?? ''));
@@ -475,19 +490,22 @@ function pcm_admin_update_child_details(PDO $pdo, int $studentDbId, array $post,
     $parentEmail = trim((string)($post['parent_email'] ?? ''));
     $parentPhone = trim((string)($post['parent_phone'] ?? ''));
     $parentAddress = trim((string)($post['parent_address'] ?? ''));
-    $startTermRaw = $post['start_term'] ?? null;
 
-    if ($studentName === '') {
-        throw new Exception("Student name is required.");
+    if ($updatingStudent) {
+        if ($studentName === '') {
+            throw new Exception("Student name is required.");
+        }
+        if ($dob !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dob)) {
+            throw new Exception("Invalid DOB format.");
+        }
     }
-    if ($dob !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dob)) {
-        throw new Exception("Invalid DOB format.");
-    }
-    if ($parentEmail !== '' && !filter_var($parentEmail, FILTER_VALIDATE_EMAIL)) {
-        throw new Exception("Invalid parent email address.");
-    }
-    if ($parentName === '') {
-        throw new Exception("Parent name is required.");
+    if ($updatingParent) {
+        if ($parentEmail !== '' && !filter_var($parentEmail, FILTER_VALIDATE_EMAIL)) {
+            throw new Exception("Invalid parent email address.");
+        }
+        if ($parentName === '') {
+            throw new Exception("Parent name is required.");
+        }
     }
 
     $stu = $pdo->prepare("SELECT parent_id, student_name FROM students WHERE id = :id LIMIT 1");
@@ -501,37 +519,48 @@ function pcm_admin_update_child_details(PDO $pdo, int $studentDbId, array $post,
         throw new Exception("Parent link missing for this child.");
     }
 
-    $pdo->beginTransaction();
-    $upStudent = $pdo->prepare("
-        UPDATE students
-        SET student_name = :name, dob = :dob, gender = :gender, medical_issue = :medical
-        WHERE id = :id
-    ");
-    $upStudent->execute([
-        ':name' => $studentName,
-        ':dob' => ($dob !== '' ? $dob : null),
-        ':gender' => ($gender !== '' ? $gender : null),
-        ':medical' => ($medical !== '' ? $medical : null),
-        ':id' => $studentDbId,
-    ]);
+    // Run schema-ensure checks (CREATE TABLE IF NOT EXISTS / ALTER TABLE)
+    // before opening the transaction -- MySQL implicitly commits on DDL,
+    // which would otherwise silently close a transaction opened below and
+    // make the final commit() fail with "no active transaction" the first
+    // time these run in a fresh PHP process.
+    pcm_ensure_enrolment_audit_table($pdo);
+    pcm_ensure_enrolment_start_term($pdo);
 
-    $upParent = $pdo->prepare("
-        UPDATE parents
-        SET full_name = :full_name, email = :email, phone = :phone, address = :address
-        WHERE id = :id
-    ");
-    $upParent->execute([
-        ':full_name' => $parentName,
-        ':email' => ($parentEmail !== '' ? $parentEmail : null),
-        ':phone' => ($parentPhone !== '' ? $parentPhone : null),
-        ':address' => ($parentAddress !== '' ? $parentAddress : null),
-        ':id' => $parentId,
-    ]);
+    $pdo->beginTransaction();
+
+    if ($updatingStudent) {
+        $upStudent = $pdo->prepare("
+            UPDATE students
+            SET student_name = :name, dob = :dob, gender = :gender, medical_issue = :medical
+            WHERE id = :id
+        ");
+        $upStudent->execute([
+            ':name' => $studentName,
+            ':dob' => ($dob !== '' ? $dob : null),
+            ':gender' => ($gender !== '' ? $gender : null),
+            ':medical' => ($medical !== '' ? $medical : null),
+            ':id' => $studentDbId,
+        ]);
+    }
+
+    if ($updatingParent) {
+        $upParent = $pdo->prepare("
+            UPDATE parents
+            SET full_name = :full_name, email = :email, phone = :phone, address = :address
+            WHERE id = :id
+        ");
+        $upParent->execute([
+            ':full_name' => $parentName,
+            ':email' => ($parentEmail !== '' ? $parentEmail : null),
+            ':phone' => ($parentPhone !== '' ? $parentPhone : null),
+            ':address' => ($parentAddress !== '' ? $parentAddress : null),
+            ':id' => $parentId,
+        ]);
+    }
 
     $termNote = '';
-    $hasCampusField = array_key_exists('campus_choice', $post);
-    $hasClassField = !empty($post['class_id']);
-    if ($startTermRaw !== null || isset($post['fee_plan']) || $hasCampusField || $hasClassField) {
+    if ($updatingEnrolment) {
         $enrol = $pdo->prepare("SELECT id, start_term, fee_plan FROM pcm_enrolments WHERE student_id = :sid LIMIT 1");
         $enrol->execute([':sid' => $studentDbId]);
         $enrolRow = $enrol->fetch(PDO::FETCH_ASSOC);
@@ -606,10 +635,16 @@ function pcm_admin_update_child_details(PDO $pdo, int $studentDbId, array $post,
 
     $pdo->commit();
 
-    pcm_log_enrolment_event($pdo, $studentDbId, null, 'admin_child_profile_updated', $reviewer, 'Student and parent details updated by admin.');
+    $updatedParts = [];
+    if ($updatingStudent) $updatedParts[] = 'bio data';
+    if ($updatingParent) $updatedParts[] = 'parent details';
+    if ($updatingEnrolment) $updatedParts[] = 'enrollment & class';
+    $summary = ucfirst(implode(', ', $updatedParts));
+
+    pcm_log_enrolment_event($pdo, $studentDbId, null, 'admin_child_profile_updated', $reviewer, $summary . ' updated by admin.');
 
     return [
-        'flash' => 'Child and parent details updated successfully.' . $termNote,
+        'flash' => $summary . ' updated successfully.' . $termNote,
         'ok' => true,
     ];
 }

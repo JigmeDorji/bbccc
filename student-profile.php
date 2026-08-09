@@ -194,13 +194,10 @@ document.addEventListener('DOMContentLoaded',()=>{
 </script>
 <?php endif; ?>
 
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
+<div class="mb-3">
     <a href="dzoClassManagement" class="btn btn-sm btn-outline-secondary">
         <i class="fas fa-arrow-left mr-1"></i> Back to Manage Children
     </a>
-    <button type="button" class="btn btn-sm btn-primary mt-2 mt-md-0" id="openEditBtn">
-        <i class="fas fa-user-edit mr-1"></i> Edit Details
-    </button>
 </div>
 
 <div class="card shadow-sm profile-header mb-4">
@@ -251,7 +248,10 @@ document.addEventListener('DOMContentLoaded',()=>{
 <div class="row">
     <div class="col-lg-6 mb-4">
         <div class="card shadow-sm section-card h-100">
-            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-user-graduate mr-1"></i>Bio Data</h6></div>
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-user-graduate mr-1"></i>Bio Data</h6>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="openEditBioBtn"><i class="fas fa-edit mr-1"></i>Edit</button>
+            </div>
             <div class="card-body">
                 <div class="dl-row"><div class="dl-label">Student ID</div><div class="dl-value"><?= h((string)($student['student_id'] ?? '—')) ?></div></div>
                 <div class="dl-row"><div class="dl-label">Full Name</div><div class="dl-value"><?= h((string)($student['student_name'] ?? '—')) ?></div></div>
@@ -265,7 +265,10 @@ document.addEventListener('DOMContentLoaded',()=>{
     </div>
     <div class="col-lg-6 mb-4">
         <div class="card shadow-sm section-card h-100">
-            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-user-friends mr-1"></i>Parent Details</h6></div>
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-user-friends mr-1"></i>Parent Details</h6>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="openEditParentBtn"><i class="fas fa-edit mr-1"></i>Edit</button>
+            </div>
             <div class="card-body">
                 <div class="dl-row"><div class="dl-label">Name</div><div class="dl-value"><?= h((string)($student['parent_name'] ?? '—')) ?></div></div>
                 <div class="dl-row"><div class="dl-label">Email</div><div class="dl-value"><?= h((string)($student['parent_email'] ?? '—')) ?></div></div>
@@ -280,7 +283,12 @@ document.addEventListener('DOMContentLoaded',()=>{
 <div class="row">
     <div class="col-lg-6 mb-4">
         <div class="card shadow-sm section-card h-100">
-            <div class="card-header py-3"><h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-file-signature mr-1"></i>Enrollment &amp; Class</h6></div>
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-file-signature mr-1"></i>Enrollment &amp; Class</h6>
+                <?php if ($hasEnrolment): ?>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="openEditEnrolmentBtn"><i class="fas fa-edit mr-1"></i>Edit</button>
+                <?php endif; ?>
+            </div>
             <div class="card-body">
                 <?php if (!$hasEnrolment): ?>
                     <p class="text-muted mb-0">No enrolment on file yet.</p>
@@ -407,22 +415,19 @@ document.addEventListener('DOMContentLoaded',()=>{
 </div>
 
 <!-- Edit Modal -->
-<div class="modal fade" id="editChildModal" tabindex="-1">
+<!-- Edit Bio Data Modal -->
+<div class="modal fade" id="editBioModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="POST" id="editChildForm">
+            <form method="POST">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="admin_update_child_details">
                 <input type="hidden" name="student_id" value="<?= (int)$studentDbId ?>">
                 <div class="modal-header">
-                    <div>
-                        <h5 class="modal-title font-weight-bold"><i class="fas fa-user-edit text-primary mr-2"></i>Edit Child Details</h5>
-                        <small class="text-muted">Update child profile and parent contact details</small>
-                    </div>
+                    <h5 class="modal-title font-weight-bold"><i class="fas fa-user-graduate text-primary mr-2"></i>Edit Bio Data</h5>
                     <button type="button" class="close" data-dismiss="modal">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-user-graduate mr-1"></i>Child Details</h6>
                     <div class="form-row">
                         <div class="form-group col-md-6">
                             <label>Student ID</label>
@@ -453,10 +458,73 @@ document.addEventListener('DOMContentLoaded',()=>{
                             <input type="text" class="form-control" name="medical_issue" value="<?= h((string)($student['medical_issue'] ?? '')) ?>" maxlength="500">
                         </div>
                     </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
-                    <?php if ($hasEnrolment): ?>
-                    <hr>
-                    <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-file-signature mr-1"></i>Enrollment &amp; Class</h6>
+<!-- Edit Parent Details Modal -->
+<div class="modal fade" id="editParentModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="admin_update_child_details">
+                <input type="hidden" name="student_id" value="<?= (int)$studentDbId ?>">
+                <div class="modal-header">
+                    <h5 class="modal-title font-weight-bold"><i class="fas fa-user-friends text-primary mr-2"></i>Edit Parent Details</h5>
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Parent Name</label>
+                            <input type="text" class="form-control" name="parent_name" value="<?= h((string)($student['parent_name'] ?? '')) ?>" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>Parent Phone</label>
+                            <input type="text" class="form-control" name="parent_phone" value="<?= h((string)($student['parent_phone'] ?? '')) ?>">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Parent Email</label>
+                            <input type="email" class="form-control" name="parent_email" value="<?= h((string)($student['parent_email'] ?? '')) ?>">
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>Parent Address</label>
+                            <input type="text" class="form-control" name="parent_address" value="<?= h((string)($student['parent_address'] ?? '')) ?>">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<?php if ($hasEnrolment): ?>
+<!-- Edit Enrollment & Class Modal -->
+<div class="modal fade" id="editEnrolmentModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="admin_update_child_details">
+                <input type="hidden" name="student_id" value="<?= (int)$studentDbId ?>">
+                <div class="modal-header">
+                    <h5 class="modal-title font-weight-bold"><i class="fas fa-file-signature text-primary mr-2"></i>Edit Enrollment &amp; Class</h5>
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
                     <div class="form-row">
                         <div class="form-group col-md-6">
                             <label>Fee Plan</label>
@@ -488,7 +556,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                         <?php endforeach; ?>
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group mb-0">
                         <label>Class</label>
                         <select class="form-control" name="class_id">
                             <option value="">— Not assigned —</option>
@@ -497,39 +565,16 @@ document.addEventListener('DOMContentLoaded',()=>{
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <?php endif; ?>
-
-                    <hr>
-                    <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-user-friends mr-1"></i>Parent Contact Details</h6>
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label>Parent Name</label>
-                            <input type="text" class="form-control" name="parent_name" value="<?= h((string)($student['parent_name'] ?? '')) ?>" required>
-                        </div>
-                        <div class="form-group col-md-6">
-                            <label>Parent Phone</label>
-                            <input type="text" class="form-control" name="parent_phone" value="<?= h((string)($student['parent_phone'] ?? '')) ?>">
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label>Parent Email</label>
-                            <input type="email" class="form-control" name="parent_email" value="<?= h((string)($student['parent_email'] ?? '')) ?>">
-                        </div>
-                        <div class="form-group col-md-6">
-                            <label>Parent Address</label>
-                            <input type="text" class="form-control" name="parent_address" value="<?= h((string)($student['parent_address'] ?? '')) ?>">
-                        </div>
-                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Save Details</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Save</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- Edit Fee Row Modal -->
 <div class="modal fade" id="editFeeModal" tabindex="-1">
@@ -578,8 +623,17 @@ document.addEventListener('DOMContentLoaded',()=>{
 </div>
 
 <script>
-document.getElementById('openEditBtn').addEventListener('click', function() {
-    $('#editChildModal').modal('show');
+[
+    ['openEditBioBtn', 'editBioModal'],
+    ['openEditParentBtn', 'editParentModal'],
+    ['openEditEnrolmentBtn', 'editEnrolmentModal']
+].forEach(function(pair) {
+    var btn = document.getElementById(pair[0]);
+    if (btn) {
+        btn.addEventListener('click', function() {
+            $('#' + pair[1]).modal('show');
+        });
+    }
 });
 
 document.querySelectorAll('.js-edit-fee-btn').forEach(function(btn) {
