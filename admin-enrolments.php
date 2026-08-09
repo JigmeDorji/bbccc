@@ -47,11 +47,46 @@ function bbcc_class_matches_campus(string $className, array $campusLabels): bool
 }
 
 // ── POST actions ──
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['approve','reject','request_changes','assign_class','manual_enrol','enrol_registered_child','save_age_settings'], true)) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['approve','reject','request_changes','assign_class','manual_enrol','enrol_registered_child','reject_registration','save_age_settings'], true)) {
     verify_csrf();
     $action = $_POST['action'];
 
-    if ($action === 'enrol_registered_child') {
+    if ($action === 'reject_registration') {
+        $studentDbId = (int)($_POST['student_id'] ?? 0);
+        $note = trim((string)($_POST['admin_note'] ?? ''));
+        if ($studentDbId <= 0) {
+            $flash = 'Invalid student.';
+        } elseif ($note === '') {
+            $flash = 'A rejection reason is required.';
+        } else {
+            try {
+                $result = pcm_process_enrolment_decision($pdo, $studentDbId, 'reject', $currentActor, $note);
+                pcm_log_enrolment_event($pdo, $studentDbId, (int)($result['enrolment_id'] ?? 0), 'child_registration_rejected', $currentActor, $note);
+
+                if (!empty($result['parent_email'])) {
+                    pcm_notify_parent_enrolment(
+                        (string)$result['parent_email'],
+                        (string)$result['parent_name'],
+                        (string)$result['student_name'],
+                        (string)$result['new_status'],
+                        $note
+                    );
+                    bbcc_notify_username(
+                        $pdo,
+                        (string)$result['parent_email'],
+                        'Child Registration Rejected for ' . (string)$result['student_name'],
+                        'Your child registration was not approved. Please review admin notes and contact admin if needed.',
+                        'children-enrollment'
+                    );
+                }
+
+                $flash = 'Registration rejected for <strong>' . h((string)$result['student_name']) . '</strong>.';
+                $ok = true;
+            } catch (Throwable $e) {
+                $flash = 'Error: ' . $e->getMessage();
+            }
+        }
+    } elseif ($action === 'enrol_registered_child') {
         $studentDbId = (int)($_POST['student_id'] ?? 0);
         $plan = trim((string)($_POST['fee_plan'] ?? 'Term-wise'));
         $startTerm = pcm_normalize_start_term($_POST['start_term'] ?? 1);
@@ -762,7 +797,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 <div class="card shadow mb-4">
     <div class="card-header py-3 d-flex justify-content-between align-items-center">
         <h6 class="m-0 font-weight-bold text-primary">Registered Children Enrollment Queue</h6>
-        <small class="text-muted">Enroll children directly from registration records</small>
+        <small class="text-muted">Review new registrations and enroll children directly from registration records</small>
     </div>
     <div class="card-body">
         <div class="table-responsive">
@@ -807,6 +842,26 @@ document.addEventListener('DOMContentLoaded',()=>{
                             >
                                 <i class="fas fa-file-signature mr-1"></i> Enroll
                             </button>
+                            <?php if (strtolower((string)($rc['approval_status'] ?? '')) !== 'rejected'): ?>
+                            <button type="button" class="btn btn-sm btn-outline-danger" data-toggle="modal" data-target="#rejectRegModal<?= (int)$rc['id'] ?>">
+                                <i class="fas fa-times mr-1"></i> Reject
+                            </button>
+                            <div class="modal fade" id="rejectRegModal<?= (int)$rc['id'] ?>" tabindex="-1">
+                                <div class="modal-dialog"><div class="modal-content">
+                                    <form method="POST">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="action" value="reject_registration">
+                                        <input type="hidden" name="student_id" value="<?= (int)$rc['id'] ?>">
+                                        <div class="modal-header bg-danger text-white"><h5 class="modal-title">Reject Registration</h5><button type="button" class="close text-white" data-dismiss="modal">&times;</button></div>
+                                        <div class="modal-body">
+                                            <p>Reject registration for <strong><?= h((string)($rc['student_name'] ?? '')) ?></strong>? This does not create or affect any enrollment.</p>
+                                            <div class="form-group"><label>Reason / Note</label><textarea name="admin_note" class="form-control" rows="2" required></textarea></div>
+                                        </div>
+                                        <div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button><button type="submit" class="btn btn-danger">Reject</button></div>
+                                    </form>
+                                </div></div>
+                            </div>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>
