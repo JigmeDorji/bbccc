@@ -91,29 +91,35 @@ function bbcc_render_enrolment_rows(array $rows, array $campusChoices, array $al
             </td>
             <td><?= date('d M Y', strtotime($e['submitted_at'])) ?></td>
             <td>
-                <form method="POST" class="form-inline mb-1">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="assign_class">
-                    <input type="hidden" name="enrolment_id" value="<?= (int)$e['id'] ?>">
-                    <select name="class_id" class="form-control form-control-sm mr-1" style="min-width:155px;" <?= $canAssignClass ? 'required' : 'disabled' ?>>
-                        <option value=""><?= $canAssignClass ? 'Assign class' : 'Class assignment locked' ?></option>
-                        <?php foreach ($matchingClasses as $cl): ?>
-                            <option value="<?= (int)$cl['id'] ?>" <?= ((int)$e['assigned_class_id'] === (int)$cl['id']) ? 'selected' : '' ?>>
-                                <?= h($cl['class_name']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <button type="submit" class="btn btn-sm btn-outline-primary" <?= $canAssignClass ? '' : 'disabled' ?>>
-                        <i class="fas fa-sync-alt mr-1"></i>Update Class
-                    </button>
-                </form>
-                <?php if ($rowStatusNorm === 'pending'): ?>
-                <button type="button" class="btn btn-success btn-sm js-approve-enrol-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>"><i class="fas fa-check mr-1"></i>Approve</button>
-                <button type="button" class="btn btn-danger btn-sm js-reject-enrol-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>"><i class="fas fa-times mr-1"></i>Reject</button>
-                <button type="button" class="btn btn-warning btn-sm js-changes-enrol-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>"><i class="fas fa-edit mr-1"></i>Request Changes</button>
-                <?php else: ?>
-                    <span class="text-muted small"><?= h($e['reviewed_by'] ?? '') ?></span>
-                <?php endif; ?>
+                <div class="d-flex flex-column" style="gap:6px;min-width:220px;">
+                    <form method="POST" class="input-group input-group-sm">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="assign_class">
+                        <input type="hidden" name="enrolment_id" value="<?= (int)$e['id'] ?>">
+                        <select name="class_id" class="form-control" <?= $canAssignClass ? 'required' : 'disabled' ?>>
+                            <option value=""><?= $canAssignClass ? 'Assign class…' : 'Class assignment locked' ?></option>
+                            <?php foreach ($matchingClasses as $cl): ?>
+                                <option value="<?= (int)$cl['id'] ?>" <?= ((int)$e['assigned_class_id'] === (int)$cl['id']) ? 'selected' : '' ?>>
+                                    <?= h($cl['class_name']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="input-group-append">
+                            <button type="submit" class="btn btn-outline-primary" <?= $canAssignClass ? '' : 'disabled' ?> title="Update Class">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </form>
+                    <?php if ($rowStatusNorm === 'pending'): ?>
+                    <div class="btn-group btn-group-sm w-100" role="group">
+                        <button type="button" class="btn btn-outline-success js-approve-enrol-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>" title="Approve"><i class="fas fa-check mr-1"></i>Approve</button>
+                        <button type="button" class="btn btn-outline-danger js-reject-enrol-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>" title="Reject"><i class="fas fa-times"></i></button>
+                        <button type="button" class="btn btn-outline-warning js-changes-enrol-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>" title="Request Changes"><i class="fas fa-edit"></i></button>
+                    </div>
+                    <?php else: ?>
+                        <span class="text-muted small"><?= h($e['reviewed_by'] ?? '') ?></span>
+                    <?php endif; ?>
+                </div>
             </td>
             <td>
                 <?php
