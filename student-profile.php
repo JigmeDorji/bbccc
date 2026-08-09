@@ -43,6 +43,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'admin
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_fee_row') {
+    verify_csrf();
+    try {
+        $result = pcm_admin_update_fee_row($pdo, (int)($_POST['payment_id'] ?? 0), $_POST, $reviewer);
+        $flash = $result['flash'];
+        $ok = $result['ok'];
+    } catch (Throwable $e) {
+        $flash = 'Error: ' . $e->getMessage();
+        $ok = false;
+    }
+    $_SESSION['student_profile_flash'] = ['message' => $flash, 'ok' => $ok];
+    header('Location: student-profile?id=' . $studentDbId);
+    exit;
+}
+
 if (isset($_SESSION['student_profile_flash'])) {
     $saved = (array)$_SESSION['student_profile_flash'];
     unset($_SESSION['student_profile_flash']);
@@ -52,6 +67,7 @@ if (isset($_SESSION['student_profile_flash'])) {
 
 $campusChoices = pcm_campus_choice_labels();
 $latestClassJoin = pcm_latest_class_assignment_join('s.id', 'ca', 'c');
+$allClasses = $pdo->query("SELECT id, class_name FROM classes WHERE active = 1 ORDER BY class_name")->fetchAll(PDO::FETCH_ASSOC);
 
 $stmt = $pdo->prepare("
     SELECT s.*,
@@ -60,7 +76,7 @@ $stmt = $pdo->prepare("
            e.id AS enrolment_id, e.fee_plan AS enrolment_fee_plan, e.campus_preference,
            e.start_term AS enrolment_start_term, e.fee_amount, e.status AS enrolment_status,
            e.payment_ref, e.submitted_at AS enrolment_submitted_at,
-           c.class_name
+           ca.class_id AS assigned_class_id, c.class_name
     FROM students s
     LEFT JOIN parents p ON p.id = s.parent_id
     LEFT JOIN pcm_enrolments e ON e.student_id = s.id
@@ -329,7 +345,7 @@ document.addEventListener('DOMContentLoaded',()=>{
             <div class="table-responsive">
                 <table class="table table-sm table-bordered mb-0">
                     <thead class="thead-light">
-                        <tr><th>Instalment</th><th>Due</th><th>Paid</th><th>Reference</th><th>Proof</th><th>Status</th></tr>
+                        <tr><th>Instalment</th><th>Due</th><th>Paid</th><th>Reference</th><th>Proof</th><th>Status</th><th></th></tr>
                     </thead>
                     <tbody>
                     <?php foreach ($feePayments as $fp): ?>
@@ -340,6 +356,16 @@ document.addEventListener('DOMContentLoaded',()=>{
                             <td><?= h((string)($fp['payment_ref'] ?? '—')) ?></td>
                             <td><?= !empty($fp['proof_path']) ? '<a href="' . h((string)$fp['proof_path']) . '" target="_blank">View</a>' : '—' ?></td>
                             <td><span class="badge badge-<?= pcm_badge((string)($fp['status'] ?? '')) ?>"><?= h((string)($fp['status'] ?? '—')) ?></span></td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-outline-primary js-edit-fee-btn"
+                                    data-id="<?= (int)$fp['id'] ?>"
+                                    data-label="<?= h((string)($fp['instalment_label'] ?? '')) ?>"
+                                    data-due="<?= h(number_format((float)($fp['due_amount'] ?? 0), 2, '.', '')) ?>"
+                                    data-paid="<?= h(number_format((float)($fp['paid_amount'] ?? 0), 2, '.', '')) ?>"
+                                    data-ref="<?= h((string)($fp['payment_ref'] ?? '')) ?>"
+                                    data-status="<?= h((string)($fp['status'] ?? 'Unpaid')) ?>"
+                                ><i class="fas fa-edit"></i></button>
+                            </td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>
@@ -430,17 +456,46 @@ document.addEventListener('DOMContentLoaded',()=>{
 
                     <?php if ($hasEnrolment): ?>
                     <hr>
-                    <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-file-signature mr-1"></i>Enrollment</h6>
+                    <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-file-signature mr-1"></i>Enrollment &amp; Class</h6>
                     <div class="form-row">
                         <div class="form-group col-md-6">
-                            <label>Starting Term</label>
-                            <select class="form-control" name="start_term">
-                                <?php foreach ($allowedTerms as $termNo): ?>
-                                    <option value="<?= $termNo ?>" <?= $curStartTerm === $termNo ? 'selected' : '' ?>>Term <?= $termNo ?></option>
+                            <label>Fee Plan</label>
+                            <select class="form-control" name="fee_plan" id="editFeePlan">
+                                <?php foreach (['Term-wise', 'Half-yearly', 'Yearly'] as $planOpt): ?>
+                                    <option value="<?= h($planOpt) ?>" <?= $curPlan === $planOpt ? 'selected' : '' ?>><?= h($planOpt) ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <small class="form-text text-muted">Only terms valid for the <?= h($curPlan) ?> plan are shown. Changing this recalculates the fee amount and instalment schedule if no instalments have been paid or reviewed yet.</small>
                         </div>
+                        <div class="form-group col-md-6">
+                            <label>Starting Term</label>
+                            <select class="form-control" name="start_term" id="editStartTerm">
+                                <?php for ($termNo = 1; $termNo <= 4; $termNo++): ?>
+                                    <option value="<?= $termNo ?>" <?= !in_array($termNo, $allowedTerms, true) ? 'hidden' : '' ?> <?= $curStartTerm === $termNo ? 'selected' : '' ?>>Term <?= $termNo ?></option>
+                                <?php endfor; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <small class="form-text text-muted d-block mb-3">Changing plan or term recalculates the fee amount and regenerates the instalment schedule if no instalments have been paid or reviewed yet.</small>
+
+                    <div class="form-group">
+                        <label>Campus</label>
+                        <?php $curCampus = array_filter(array_map('trim', explode(',', (string)($student['campus_preference'] ?? '')))); ?>
+                        <?php foreach ($campusChoices as $ck => $cl): ?>
+                            <div class="custom-control custom-checkbox custom-control-inline">
+                                <input type="checkbox" class="custom-control-input" id="editCampus_<?= h($ck) ?>" name="campus_choice[]" value="<?= h($ck) ?>" <?= in_array($ck, $curCampus, true) ? 'checked' : '' ?>>
+                                <label class="custom-control-label" for="editCampus_<?= h($ck) ?>"><?= h($cl) ?></label>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Class</label>
+                        <select class="form-control" name="class_id">
+                            <option value="">— Not assigned —</option>
+                            <?php foreach ($allClasses as $cl): ?>
+                                <option value="<?= (int)$cl['id'] ?>" <?= (int)($student['assigned_class_id'] ?? 0) === (int)$cl['id'] ? 'selected' : '' ?>><?= h((string)$cl['class_name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <?php endif; ?>
 
@@ -476,10 +531,100 @@ document.addEventListener('DOMContentLoaded',()=>{
     </div>
 </div>
 
+<!-- Edit Fee Row Modal -->
+<div class="modal fade" id="editFeeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" id="editFeeForm">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="update_fee_row">
+                <input type="hidden" name="payment_id" id="editFeePaymentId" value="">
+                <div class="modal-header">
+                    <h5 class="modal-title font-weight-bold"><i class="fas fa-money-check-alt text-primary mr-2"></i>Edit Fee Instalment — <span id="editFeeLabel"></span></h5>
+                    <button type="button" class="close" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label>Due Amount</label>
+                            <input type="number" min="0" step="0.01" class="form-control" name="due_amount" id="editFeeDue" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label>Paid Amount</label>
+                            <input type="number" min="0" step="0.01" class="form-control" name="paid_amount" id="editFeePaid" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Payment Reference</label>
+                        <input type="text" class="form-control" name="payment_ref" id="editFeeRef">
+                    </div>
+                    <div class="form-group mb-0">
+                        <label>Status</label>
+                        <select class="form-control" name="status" id="editFeeStatus">
+                            <option value="Unpaid">Unpaid</option>
+                            <option value="Pending">Pending</option>
+                            <option value="Verified">Verified</option>
+                            <option value="Rejected">Rejected</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 document.getElementById('openEditBtn').addEventListener('click', function() {
     $('#editChildModal').modal('show');
 });
+
+document.querySelectorAll('.js-edit-fee-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var d = this.dataset;
+        document.getElementById('editFeePaymentId').value = d.id;
+        document.getElementById('editFeeLabel').textContent = d.label || '';
+        document.getElementById('editFeeDue').value = d.due || '0';
+        document.getElementById('editFeePaid').value = d.paid || '0';
+        document.getElementById('editFeeRef').value = d.ref || '';
+        document.getElementById('editFeeStatus').value = d.status || 'Unpaid';
+        $('#editFeeModal').modal('show');
+    });
+});
+
+// Keep the Starting Term options in sync with the selected Fee Plan
+// (same Term-wise/Half-yearly/Yearly x Term 1-4 matrix used across the
+// enrollment flows -- see pcm_plan_allowed_for_start_term()).
+(function() {
+    var planSelect = document.getElementById('editFeePlan');
+    var termSelect = document.getElementById('editStartTerm');
+    if (!planSelect || !termSelect) return;
+
+    var allowedByPlan = {
+        'Term-wise': ['1', '2', '3', '4'],
+        'Half-yearly': ['1', '3'],
+        'Yearly': ['1', '2']
+    };
+
+    function applyAllowedTerms() {
+        var allowed = allowedByPlan[planSelect.value] || ['1', '2', '3', '4'];
+        var options = termSelect.querySelectorAll('option');
+        var currentStillValid = false;
+        options.forEach(function(opt) {
+            var isAllowed = allowed.indexOf(opt.value) !== -1;
+            opt.hidden = !isAllowed;
+            if (isAllowed && opt.value === termSelect.value) currentStillValid = true;
+        });
+        if (!currentStillValid) {
+            termSelect.value = allowed[0];
+        }
+    }
+
+    planSelect.addEventListener('change', applyAllowedTerms);
+})();
 </script>
 </body>
 </html>

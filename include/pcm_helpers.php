@@ -4,6 +4,7 @@
 
 require_once __DIR__ . '/mailer.php';
 require_once __DIR__ . '/mail_queue.php';
+require_once __DIR__ . '/fee_audit.php';
 
 /**
  * Minimum age (in whole years + months) a child must be, as of today,
@@ -528,36 +529,78 @@ function pcm_admin_update_child_details(PDO $pdo, int $studentDbId, array $post,
     ]);
 
     $termNote = '';
-    if ($startTermRaw !== null) {
-        $newStartTerm = pcm_normalize_start_term($startTermRaw);
+    $hasCampusField = array_key_exists('campus_choice', $post);
+    $hasClassField = !empty($post['class_id']);
+    if ($startTermRaw !== null || isset($post['fee_plan']) || $hasCampusField || $hasClassField) {
         $enrol = $pdo->prepare("SELECT id, start_term, fee_plan FROM pcm_enrolments WHERE student_id = :sid LIMIT 1");
         $enrol->execute([':sid' => $studentDbId]);
         $enrolRow = $enrol->fetch(PDO::FETCH_ASSOC);
 
-        if ($enrolRow && pcm_normalize_start_term($enrolRow['start_term'] ?? 1) !== $newStartTerm) {
+        if ($enrolRow) {
             $eid = (int)$enrolRow['id'];
-            $plan = (string)$enrolRow['fee_plan'];
-            if (!pcm_plan_allowed_for_start_term($plan, $newStartTerm)) {
-                throw new Exception("The {$plan} plan is not available for Term {$newStartTerm}. Change the fee plan first, or choose a different term.");
-            }
-            $newAmount = pcm_plan_total_for_start_term($plan, $newStartTerm);
+            $curTerm = pcm_normalize_start_term($enrolRow['start_term'] ?? 1);
+            $curPlan = (string)$enrolRow['fee_plan'];
 
-            $pdo->prepare("UPDATE pcm_enrolments SET start_term = :st, fee_amount = :amt WHERE id = :id")
-                ->execute([':st' => $newStartTerm, ':amt' => $newAmount, ':id' => $eid]);
-
-            $touchedStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE enrolment_id = :eid AND status <> 'Unpaid'");
-            $touchedStmt->execute([':eid' => $eid]);
-            $touchedCount = (int)$touchedStmt->fetchColumn();
-
-            if ($touchedCount > 0) {
-                $termNote = ' Starting term updated, but existing fee instalments were left as-is because some have already been paid or reviewed -- please check the fees page.';
-            } else {
-                $pdo->prepare("DELETE FROM pcm_fee_payments WHERE enrolment_id = :eid")->execute([':eid' => $eid]);
-                pcm_create_fee_rows($pdo, $eid, $studentDbId, $parentId, $plan, null, $newStartTerm);
-                $termNote = ' Fee instalment schedule was regenerated for the new starting term.';
+            $newStartTerm = $startTermRaw !== null ? pcm_normalize_start_term($startTermRaw) : $curTerm;
+            $newPlan = $curPlan;
+            if (isset($post['fee_plan'])) {
+                $newPlan = trim((string)$post['fee_plan']);
+                if (!in_array($newPlan, ['Term-wise', 'Half-yearly', 'Yearly'], true)) {
+                    throw new Exception("Invalid fee plan.");
+                }
             }
 
-            pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_start_term_updated', $reviewer, "Starting term changed to Term {$newStartTerm}.");
+            if ($newPlan !== $curPlan || $newStartTerm !== $curTerm) {
+                if (!pcm_plan_allowed_for_start_term($newPlan, $newStartTerm)) {
+                    throw new Exception("The {$newPlan} plan is not available for Term {$newStartTerm}. Choose a different combination.");
+                }
+                $newAmount = pcm_plan_total_for_start_term($newPlan, $newStartTerm);
+
+                $pdo->prepare("UPDATE pcm_enrolments SET start_term = :st, fee_plan = :plan, fee_amount = :amt WHERE id = :id")
+                    ->execute([':st' => $newStartTerm, ':plan' => $newPlan, ':amt' => $newAmount, ':id' => $eid]);
+
+                $touchedStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE enrolment_id = :eid AND status <> 'Unpaid'");
+                $touchedStmt->execute([':eid' => $eid]);
+                $touchedCount = (int)$touchedStmt->fetchColumn();
+
+                if ($touchedCount > 0) {
+                    $termNote = ' Plan/starting term updated, but existing fee instalments were left as-is because some have already been paid or reviewed -- please check the fees page.';
+                } else {
+                    $pdo->prepare("DELETE FROM pcm_fee_payments WHERE enrolment_id = :eid")->execute([':eid' => $eid]);
+                    pcm_create_fee_rows($pdo, $eid, $studentDbId, $parentId, $newPlan, null, $newStartTerm);
+                    $termNote = ' Fee instalment schedule was regenerated.';
+                }
+
+                pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_plan_term_updated', $reviewer, "Plan/term changed to {$newPlan} / Term {$newStartTerm}.");
+            }
+
+            if ($hasCampusField) {
+                $campusSelection = $post['campus_choice'];
+                if (!is_array($campusSelection)) $campusSelection = [];
+                $campusSelection = array_values(array_unique(array_filter(array_map('strval', $campusSelection))));
+                if (empty($campusSelection)) {
+                    throw new Exception("Please select at least one campus.");
+                }
+                $pdo->prepare("UPDATE pcm_enrolments SET campus_preference = :c WHERE id = :id")
+                    ->execute([':c' => implode(',', $campusSelection), ':id' => $eid]);
+            }
+
+            if ($hasClassField) {
+                $classId = (int)$post['class_id'];
+                // class_assignments.assigned_by is VARCHAR(10) -- a short user id,
+                // not a username/email (matches admin-enrolments.php's assign_class).
+                $assignedBy = substr((string)($_SESSION['userid'] ?? ''), 0, 10);
+                $exist = $pdo->prepare("SELECT id FROM class_assignments WHERE student_id = :sid LIMIT 1");
+                $exist->execute([':sid' => $studentDbId]);
+                if ($exist->fetch()) {
+                    $pdo->prepare("UPDATE class_assignments SET class_id=:cid, assigned_by=:by, assigned_at=NOW() WHERE student_id=:sid")
+                        ->execute([':cid' => $classId, ':by' => $assignedBy, ':sid' => $studentDbId]);
+                } else {
+                    $pdo->prepare("INSERT INTO class_assignments (class_id, student_id, assigned_by) VALUES (:cid, :sid, :by)")
+                        ->execute([':cid' => $classId, ':sid' => $studentDbId, ':by' => $assignedBy]);
+                }
+                pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_class_assigned', $reviewer, "Class assignment updated.");
+            }
         }
     }
 
@@ -567,6 +610,66 @@ function pcm_admin_update_child_details(PDO $pdo, int $studentDbId, array $post,
 
     return [
         'flash' => 'Child and parent details updated successfully.' . $termNote,
+        'ok' => true,
+    ];
+}
+
+/**
+ * Manually edit one fee instalment row (due/paid amount, reference,
+ * status) -- same rules as feesManagement.php's manual override, shared
+ * so both places use identical validation and audit logging.
+ */
+function pcm_admin_update_fee_row(PDO $pdo, int $paymentId, array $post, string $reviewer): array {
+    $due = (float)($post['due_amount'] ?? 0);
+    $paid = (float)($post['paid_amount'] ?? 0);
+    $ref = trim((string)($post['payment_ref'] ?? ''));
+    $status = trim((string)($post['status'] ?? 'Unpaid'));
+    $allowed = ['Unpaid', 'Pending', 'Verified', 'Rejected'];
+
+    if ($paymentId <= 0) {
+        throw new Exception("Invalid payment record.");
+    }
+    if ($due < 0 || $paid < 0) {
+        throw new Exception("Amounts cannot be negative.");
+    }
+    if (!in_array($status, $allowed, true)) {
+        throw new Exception("Invalid status.");
+    }
+
+    $before = bbcc_fee_payment_snapshot($pdo, $paymentId);
+    if (!$before) {
+        throw new Exception("Payment record not found.");
+    }
+
+    if (in_array($status, ['Verified', 'Rejected'], true)) {
+        $stmt = $pdo->prepare("
+            UPDATE pcm_fee_payments
+            SET due_amount = :due, paid_amount = :paid, payment_ref = :ref,
+                status = :st, verified_by = :by, verified_at = NOW()
+            WHERE id = :id
+        ");
+        $stmt->execute([
+            ':due' => $due, ':paid' => $paid, ':ref' => ($ref !== '' ? $ref : null),
+            ':st' => $status, ':by' => $reviewer, ':id' => $paymentId,
+        ]);
+    } else {
+        $stmt = $pdo->prepare("
+            UPDATE pcm_fee_payments
+            SET due_amount = :due, paid_amount = :paid, payment_ref = :ref,
+                status = :st, verified_by = NULL, verified_at = NULL
+            WHERE id = :id
+        ");
+        $stmt->execute([
+            ':due' => $due, ':paid' => $paid, ':ref' => ($ref !== '' ? $ref : null),
+            ':st' => $status, ':id' => $paymentId,
+        ]);
+    }
+
+    $after = bbcc_fee_payment_snapshot($pdo, $paymentId);
+    bbcc_audit_fee_payment_change($pdo, $paymentId, 'manual_update', $before, $after);
+
+    return [
+        'flash' => 'Fee instalment updated successfully.',
         'ok' => true,
     ];
 }
