@@ -1,9 +1,12 @@
 <?php
 require_once "include/config.php";
 require_once "include/auth.php";
+require_once "include/role_helpers.php";
 require_once "include/pcm_helpers.php";
 require_once "include/csrf.php";
 require_once "include/fee_audit.php";
+require_once "include/notifications.php";
+require_once "include/mailer.php";
 require_login();
 
 $role = strtolower($_SESSION['role'] ?? '');
@@ -18,7 +21,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $message = "";
 $success = false;
 $reload  = false;
-$updateOnlyMode = true; // Dedicated Update Payments page
 
 // ---------------- DB CONNECTION ----------------
 try {
@@ -41,98 +43,16 @@ $feesSettings = $stmtSet->fetch() ?: [];
 
 // ---------------- HELPERS ----------------
 // h() comes from include/pcm_helpers.php
-
 // pcm_ensure_class_charge_schema() / pcm_apply_class_charge() come from include/pcm_helpers.php
-
-function badge_class(string $status): string {
-    $s = strtolower(trim($status));
-    if (in_array($s, ['approved', 'verified'], true)) return 'success';
-    if ($s === 'rejected') return 'danger';
-    return 'warning';
-}
-
-function installment_label(string $code): string {
-    return match ($code) {
-        'TERM1' => 'Term 1',
-        'TERM2' => 'Term 2',
-        'TERM3' => 'Term 3',
-        'TERM4' => 'Term 4',
-        'HALF1' => 'Half 1',
-        'HALF2' => 'Half 2',
-        'YEARLY' => 'Yearly',
-        default => $code
-    };
-}
-
-function installment_code_from_label(string $label): string {
-    $l = strtolower(trim($label));
-    return match ($l) {
-        'term 1', 'term1' => 'TERM1',
-        'term 2', 'term2' => 'TERM2',
-        'term 3', 'term3' => 'TERM3',
-        'term 4', 'term4' => 'TERM4',
-        'half 1', 'half1', 'half-year 1', 'half-yearly 1' => 'HALF1',
-        'half 2', 'half2', 'half-year 2', 'half-yearly 2' => 'HALF2',
-        'yearly' => 'YEARLY',
-        default => '',
-    };
-}
+// pcm_badge() comes from include/pcm_helpers.php (status -> Bootstrap badge class)
 
 function proof_type(string $path): string {
     $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
     return ($ext === 'pdf') ? 'pdf' : 'img';
 }
 
-/**
- * Due date rules requested:
- * TERM1 = HALF1 = YEARLY -> due_term1
- * TERM3 = HALF2 -> due_term3
- * TERM2 -> due_term2
- * TERM4 -> due_term4
- */
-function installment_due_date(array $settings, string $installmentCode): ?string {
-    return match ($installmentCode) {
-        'TERM1','HALF1','YEARLY' => ($settings['due_term1'] ?? null),
-        'TERM2' => ($settings['due_term2'] ?? null),
-        'TERM3','HALF2' => ($settings['due_term3'] ?? null),
-        'TERM4' => ($settings['due_term4'] ?? null),
-        default => null
-    };
-}
-
 function pretty_date(?string $d): string {
     return $d ? htmlspecialchars($d) : '-';
-}
-
-/**
- * ✅ First installment codes per plan (used for paid counts & reference column)
- * Term-wise -> TERM1
- * Half-yearly -> HALF1
- * Yearly -> YEARLY
- */
-function first_installment_code(string $planType, int $startTerm = 1): string {
-    $startTerm = max(1, min(4, $startTerm));
-    return match ($planType) {
-        'Term-wise' => 'TERM' . $startTerm,
-        'Half-yearly' => $startTerm <= 2 ? 'HALF1' : 'HALF2',
-        'Yearly' => 'YEARLY',
-        default => 'TERM1'
-    };
-}
-
-function installment_applies_to_start_term(string $planType, string $code, int $startTerm): bool {
-    $startTerm = max(1, min(4, $startTerm));
-    $allowed = match ($planType) {
-        'Term-wise' => array_slice(['TERM1','TERM2','TERM3','TERM4'], $startTerm - 1),
-        'Half-yearly' => $startTerm <= 2 ? ['HALF1','HALF2'] : ['HALF2'],
-        'Yearly' => ['YEARLY'],
-        default => [],
-    };
-    return in_array($code, $allowed, true);
-}
-
-function normalize_status($v): string {
-    return strtolower(trim((string)$v));
 }
 
 pcm_ensure_class_charge_schema($pdo);
@@ -141,6 +61,7 @@ if (!$hasStartTerm) {
     $pdo->exec("ALTER TABLE pcm_enrolments ADD COLUMN start_term TINYINT NOT NULL DEFAULT 1");
 }
 
+// ---------------- CLASS-BASED ADDITIONAL CHARGES ----------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['class_charge_action'])) {
     try {
         $act = trim((string)($_POST['class_charge_action'] ?? ''));
@@ -215,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['class_charge_action']
     }
 }
 
-// ---------------- UPDATE (POST) ----------------
+// ---------------- QUICK STATUS CHANGE ----------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
     try {
         $feeId = (int)($_POST['update_fee_id'] ?? 0);
@@ -234,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
     }
 }
 
-// ---------------- UPDATE PAYMENTS (DEDICATED MODE) ----------------
+// ---------------- EDIT A FEE ROW (due/paid/ref/status) ----------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_payment_row') {
     try {
         $pid = (int)($_POST['payment_id'] ?? 0);
@@ -251,6 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'updat
     }
 }
 
+// ---------------- BULK STATUS UPDATE ----------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'bulk_update_payments') {
     try {
         $ids = $_POST['payment_ids'] ?? [];
@@ -315,9 +237,186 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'bulk_
     }
 }
 
-// ---------------- LOAD ALL FEE DATA ----------------
-$studentParentExpr = "s.parent_id";
+// ---------------- MARK PAID (record a manual/cash payment) — admin-tier only ----------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'manual_mark_paid') {
+    try {
+        if (!is_admin_role()) {
+            throw new Exception('You do not have permission to record manual payments.');
+        }
 
+        $paymentId = (int)($_POST['payment_id'] ?? 0);
+        $paidAmount = (float)($_POST['paid_amount'] ?? 0);
+        $paymentRef = trim((string)($_POST['payment_ref'] ?? ''));
+
+        if ($paymentId <= 0) {
+            throw new Exception('Invalid payment row.');
+        }
+        if ($paidAmount < 0) {
+            throw new Exception('Paid amount cannot be negative.');
+        }
+
+        $rowStmt = $pdo->prepare("SELECT due_amount FROM pcm_fee_payments WHERE id = :id LIMIT 1");
+        $rowStmt->execute([':id' => $paymentId]);
+        $row = $rowStmt->fetch();
+        if (!$row) {
+            throw new Exception('Payment row not found.');
+        }
+
+        $dueAmount = (float)($row['due_amount'] ?? 0);
+        if ($paidAmount <= 0) {
+            $paidAmount = $dueAmount;
+        }
+
+        $reviewer = (string)($_SESSION['username'] ?? 'admin');
+        $before = bbcc_fee_payment_snapshot($pdo, $paymentId);
+        $upd = $pdo->prepare("
+            UPDATE pcm_fee_payments
+            SET paid_amount = :paid,
+                payment_ref = :ref,
+                status = 'Verified',
+                submitted_at = COALESCE(submitted_at, NOW()),
+                verified_by = :by,
+                verified_at = NOW(),
+                reject_reason = NULL
+            WHERE id = :id
+        ");
+        $upd->execute([
+            ':paid' => $paidAmount,
+            ':ref' => ($paymentRef !== '' ? $paymentRef : null),
+            ':by' => $reviewer,
+            ':id' => $paymentId,
+        ]);
+        $after = bbcc_fee_payment_snapshot($pdo, $paymentId);
+        bbcc_audit_fee_payment_change($pdo, $paymentId, 'manual_mark_paid', $before, $after);
+
+        $message = 'Manual payment saved successfully.';
+        $success = true;
+        $reload = true;
+    } catch (Throwable $e) {
+        $message = 'Error: ' . $e->getMessage();
+        $success = false;
+        $reload = false;
+    }
+}
+
+// ---------------- VERIFY / REJECT a pending proof — admin-only ----------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['verify', 'reject'], true)) {
+    try {
+        if (!is_admin_role()) {
+            throw new Exception('You do not have permission to verify or reject payments.');
+        }
+
+        $fid    = (int)($_POST['fee_id'] ?? 0);
+        $action = (string)$_POST['action'];
+        $reason = trim((string)($_POST['reject_reason'] ?? ''));
+
+        $row = $pdo->prepare("
+            SELECT f.*, s.student_name, p.full_name AS parent_name, p.email AS parent_email
+            FROM pcm_fee_payments f
+            JOIN students s ON s.id = f.student_id
+            JOIN parents  p ON p.id = f.parent_id
+            WHERE f.id = :id LIMIT 1
+        ");
+        $row->execute([':id' => $fid]);
+        $fee = $row->fetch();
+
+        if (!$fee) {
+            throw new Exception('Record not found.');
+        }
+        if ($fee['status'] !== 'Pending') {
+            throw new Exception('This payment is not awaiting review.');
+        }
+        if ($action === 'reject' && $reason === '') {
+            throw new Exception('A rejection reason is required.');
+        }
+
+        $newStatus = ($action === 'verify') ? 'Verified' : 'Rejected';
+        $reviewer  = (string)($_SESSION['username'] ?? 'admin');
+
+        $before = bbcc_fee_payment_snapshot($pdo, $fid);
+        $upd = $pdo->prepare("
+            UPDATE pcm_fee_payments
+            SET status=:st, verified_by=:vb, verified_at=NOW(),
+                reject_reason = CASE WHEN :st2='Rejected' THEN :rr ELSE NULL END,
+                paid_amount   = CASE WHEN :st3='Verified' THEN due_amount ELSE 0 END
+            WHERE id=:id
+        ");
+        $upd->execute([':st'=>$newStatus, ':vb'=>$reviewer, ':st2'=>$newStatus, ':rr'=>$reason?:null, ':st3'=>$newStatus, ':id'=>$fid]);
+        $after = bbcc_fee_payment_snapshot($pdo, $fid);
+        bbcc_audit_fee_payment_change($pdo, $fid, strtolower($newStatus), $before, $after, $reason);
+
+        pcm_notify_parent_fee($fee['parent_email'], $fee['parent_name'], $fee['student_name'], $fee['instalment_label'], $newStatus);
+        bbcc_notify_username(
+            $pdo,
+            (string)$fee['parent_email'],
+            'Fee Payment ' . $newStatus . ' for ' . (string)$fee['student_name'],
+            'Your payment proof for ' . (string)$fee['instalment_label'] . ' is now marked as ' . $newStatus . '.',
+            'parent-payments'
+        );
+
+        $message = "Payment {$newStatus} — {$fee['student_name']} ({$fee['instalment_label']}).";
+        $success = true;
+        $reload = true;
+    } catch (Throwable $e) {
+        $message = 'Error: ' . $e->getMessage();
+        $success = false;
+        $reload = false;
+    }
+}
+
+// ---------------- SEND CUSTOM EMAIL TO PARENT — admin-only ----------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_custom_email') {
+    try {
+        if (!is_admin_role()) {
+            throw new Exception('You do not have permission to email parents from this page.');
+        }
+
+        $fid = (int)($_POST['fee_id'] ?? 0);
+        $subjectTpl = trim((string)($_POST['email_subject'] ?? 'Fee Update for {child_name}'));
+        $bodyTpl = trim((string)($_POST['email_body'] ?? 'Dear {parent_name},'));
+
+        if ($fid <= 0) throw new Exception('Invalid fee record.');
+        if ($subjectTpl === '' || $bodyTpl === '') throw new Exception('Subject and message are required.');
+
+        $row = $pdo->prepare("
+            SELECT f.*, s.student_name, p.full_name AS parent_name, p.email AS parent_email
+            FROM pcm_fee_payments f
+            JOIN students s ON s.id = f.student_id
+            JOIN parents p ON p.id = f.parent_id
+            WHERE f.id = :id LIMIT 1
+        ");
+        $row->execute([':id' => $fid]);
+        $fee = $row->fetch(PDO::FETCH_ASSOC);
+        if (!$fee) throw new Exception('Record not found.');
+        $toEmail = trim((string)($fee['parent_email'] ?? ''));
+        if ($toEmail === '') throw new Exception('Parent email not available.');
+
+        $vars = [
+            '{parent_name}' => (string)($fee['parent_name'] ?? 'Parent'),
+            '{child_name}' => (string)($fee['student_name'] ?? 'Student'),
+            '{plan_type}' => (string)($fee['plan_type'] ?? ''),
+            '{instalment_label}' => (string)($fee['instalment_label'] ?? ''),
+            '{due_amount}' => number_format((float)($fee['due_amount'] ?? 0), 2),
+            '{paid_amount}' => number_format((float)($fee['paid_amount'] ?? 0), 2),
+            '{status}' => (string)($fee['status'] ?? ''),
+        ];
+        $subject = strtr($subjectTpl, $vars);
+        $bodyText = strtr($bodyTpl, $vars);
+        $html = '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;">' . nl2br(htmlspecialchars($bodyText, ENT_QUOTES, 'UTF-8')) . '</div>';
+        $sent = @send_mail($toEmail, (string)($fee['parent_name'] ?? 'Parent'), $subject, $html, 8);
+        if (!$sent) throw new Exception('Email send failed.');
+
+        $message = 'Email sent successfully to ' . $toEmail . '.';
+        $success = true;
+        $reload = true;
+    } catch (Throwable $e) {
+        $message = 'Error: ' . $e->getMessage();
+        $success = false;
+        $reload = false;
+    }
+}
+
+// ---------------- LOAD UNIFIED PAYMENTS TABLE (flat, one row per instalment) ----------------
 $latestClassJoin = "
     LEFT JOIN (
         SELECT ca1.student_id, ca1.class_id
@@ -340,278 +439,32 @@ $attendanceTotalJoin = "
     ) attendance_totals ON attendance_totals.student_id = s.id
 ";
 
-// 1) Enrollment base rows: ensures student details appear under each payment method
-$stmtEnroll = $pdo->prepare("
+$stmtPayments = $pdo->prepare("
     SELECT
-        e.id AS enrolment_id,
-        e.student_id,
-        e.fee_plan AS plan_type,
-        e.start_term,
-        e.status AS enrolment_status,
-        e.fee_amount AS enrollment_amount,
-        e.payment_ref AS enrollment_reference,
-        e.proof_path AS enrollment_proof,
-        s.student_id AS public_student_id,
-        s.student_name,
-        current_class.id AS class_id,
+        f.id, f.enrolment_id, f.student_id, f.parent_id, f.plan_type, f.instalment_label,
+        f.due_amount, f.paid_amount, f.payment_ref, f.proof_path, f.status, f.reject_reason,
+        f.submitted_at, f.verified_by, f.verified_at,
+        s.student_name, s.student_id AS stu_code,
         current_class.class_name,
         COALESCE(attendance_totals.total_attendance, 0) AS total_attendance,
-        p.full_name AS parent_name,
-        p.email AS parent_email,
-        p.phone AS parent_phone,
-        p.address AS parent_address
-    FROM pcm_enrolments e
-    JOIN students s ON s.id = e.student_id
+        p.full_name AS parent_name, p.email AS parent_email, p.phone AS parent_phone
+    FROM pcm_fee_payments f
+    JOIN students s ON s.id = f.student_id
     {$latestClassJoin}
     {$attendanceTotalJoin}
-    LEFT JOIN parents p ON p.id = COALESCE(e.parent_id, {$studentParentExpr})
-    WHERE e.fee_plan IN ('Term-wise','Half-yearly','Yearly')
-    ORDER BY s.id DESC, e.id DESC
+    LEFT JOIN parents p ON p.id = f.parent_id
+    WHERE f.plan_type IN ('Term-wise','Half-yearly','Yearly','Additional')
+    ORDER BY FIELD(f.status,'Pending','Rejected','Unpaid','Verified'), f.submitted_at DESC, f.id DESC
+    LIMIT 1000
 ");
-$stmtEnroll->execute();
-$enrollmentRows = $stmtEnroll->fetchAll();
+$stmtPayments->execute();
+$payments = $stmtPayments->fetchAll(PDO::FETCH_ASSOC);
 
-// 2) Installment rows: keep payment-status details/actions from current PCM fee table
-$stmt = $pdo->prepare("
-    SELECT
-        fp.id,
-        fp.enrolment_id,
-        fp.student_id,
-        fp.parent_id,
-        fp.plan_type,
-        fp.instalment_label,
-        CASE
-            WHEN fp.instalment_label = 'Term 1' THEN 'TERM1'
-            WHEN fp.instalment_label = 'Term 2' THEN 'TERM2'
-            WHEN fp.instalment_label = 'Term 3' THEN 'TERM3'
-            WHEN fp.instalment_label = 'Term 4' THEN 'TERM4'
-            WHEN fp.instalment_label = 'Half 1' THEN 'HALF1'
-            WHEN fp.instalment_label = 'Half 2' THEN 'HALF2'
-            WHEN fp.instalment_label = 'Yearly' THEN 'YEARLY'
-            ELSE ''
-        END AS installment_code,
-        fp.due_amount,
-        fp.paid_amount,
-        fp.proof_path,
-        fp.payment_ref AS payment_reference,
-        fp.status,
-        fp.submitted_at,
-        fp.verified_by,
-        fp.verified_at,
-        s.student_id AS public_student_id,
-        s.student_name,
-        current_class.id AS class_id,
-        current_class.class_name,
-        COALESCE(attendance_totals.total_attendance, 0) AS total_attendance,
-        COALESCE(e.status, s.approval_status) AS enrollment_status,
-        COALESCE(e.fee_plan, fp.plan_type, s.payment_plan) AS payment_plan,
-        COALESCE(e.payment_ref, fp.payment_ref, s.payment_reference) AS enrollment_reference,
-        COALESCE(e.proof_path, fp.proof_path, s.payment_proof) AS enrollment_proof,
-        p.full_name AS parent_name,
-        p.email AS parent_email,
-        p.phone AS parent_phone,
-        p.address AS parent_address
-    FROM pcm_fee_payments fp
-    JOIN students s ON s.id = fp.student_id
-    {$latestClassJoin}
-    {$attendanceTotalJoin}
-    LEFT JOIN pcm_enrolments e ON e.id = fp.enrolment_id
-    LEFT JOIN parents p ON p.id = COALESCE(fp.parent_id, e.parent_id, {$studentParentExpr})
-    WHERE fp.plan_type IN ('Term-wise','Half-yearly','Yearly')
-    ORDER BY s.id DESC, fp.id ASC
-");
-$stmt->execute();
-$rows = $stmt->fetchAll();
-
-// Group by plan -> student -> installment
-$group = [
-    'Term-wise' => [],
-    'Half-yearly' => [],
-    'Yearly' => [],
-];
-
-// Seed group from enrollments first (so students always appear per payment method)
-foreach ($enrollmentRows as $r) {
-    $plan = (string)$r['plan_type'];
-    if (!isset($group[$plan])) $group[$plan] = [];
-
-    $sid = (string)$r['student_id'];
-    if ($sid === '') continue;
-
-    if (!isset($group[$plan][$sid])) {
-        $group[$plan][$sid] = [
-            'student_db_id' => $sid,
-            'public_student_id' => $r['public_student_id'] ?? '',
-            'student_name' => $r['student_name'] ?? '',
-            'class_id' => (int)($r['class_id'] ?? 0),
-            'class_name' => $r['class_name'] ?? '',
-            'total_attendance' => (int)($r['total_attendance'] ?? 0),
-            'payment_plan' => $r['plan_type'] ?? $plan,
-            'start_term' => (int)($r['start_term'] ?? 1),
-            'enrollment_status' => $r['enrolment_status'] ?? 'Pending',
-            'enrollment_amount' => (float)($r['enrollment_amount'] ?? 0),
-            'enrollment_reference' => $r['enrollment_reference'] ?? '',
-            'enrollment_proof' => $r['enrollment_proof'] ?? '',
-            'parent_name' => $r['parent_name'] ?? '',
-            'parent_email' => $r['parent_email'] ?? '',
-            'parent_phone' => $r['parent_phone'] ?? '',
-            'parent_address' => $r['parent_address'] ?? '',
-            'installments' => []
-        ];
-    }
+$updateCounts = ['Pending' => 0, 'Verified' => 0, 'Rejected' => 0, 'Unpaid' => 0];
+foreach ($payments as $row) {
+    $k = (string)($row['status'] ?? '');
+    if (isset($updateCounts[$k])) $updateCounts[$k]++;
 }
-
-foreach ($rows as $r) {
-    $plan = (string)$r['plan_type'];
-    if (!isset($group[$plan])) $group[$plan] = [];
-
-    $sid = (string)$r['student_id']; // students.id stored in fees_payments
-    if (!isset($group[$plan][$sid])) {
-        $group[$plan][$sid] = [
-            'student_db_id' => $sid,
-            'public_student_id' => $r['public_student_id'] ?? '',
-            'student_name' => $r['student_name'] ?? '',
-            'class_id' => (int)($r['class_id'] ?? 0),
-            'class_name' => $r['class_name'] ?? '',
-            'total_attendance' => (int)($r['total_attendance'] ?? 0),
-            'payment_plan' => $r['payment_plan'] ?? $plan,
-            'enrollment_status' => $r['enrollment_status'] ?? 'Pending',
-            'enrollment_amount' => 0.0,
-            'enrollment_reference' => $r['enrollment_reference'] ?? '',
-            'enrollment_proof' => $r['enrollment_proof'] ?? '',
-            'parent_name' => $r['parent_name'] ?? '',
-            'parent_email' => $r['parent_email'] ?? '',
-            'parent_phone' => $r['parent_phone'] ?? '',
-            'parent_address' => $r['parent_address'] ?? '',
-            'installments' => []
-        ];
-    }
-
-    $code = (string)($r['installment_code'] ?? '');
-    if ($code === '') {
-        $code = installment_code_from_label((string)($r['instalment_label'] ?? ''));
-    }
-    if ($code === '') {
-        continue;
-    }
-    $group[$plan][$sid]['installments'][$code] = $r;
-}
-
-// Plans
-$plans = [
-    'Term-wise' => ['TERM1','TERM2','TERM3','TERM4'],
-    'Half-yearly' => ['HALF1','HALF2'],
-    'Yearly' => ['YEARLY'],
-];
-
-if ($updateOnlyMode) {
-    foreach ($plans as $planName => $codes) {
-        if (empty($group[$planName])) {
-            continue;
-        }
-        foreach ($group[$planName] as $sid => $info) {
-            $hasEditable = false;
-            foreach ($codes as $c) {
-                $inst = $info['installments'][$c] ?? null;
-                if (is_array($inst) && (int)($inst['id'] ?? 0) > 0) {
-                    $hasEditable = true;
-                    break;
-                }
-            }
-            if (!$hasEditable) {
-                unset($group[$planName][$sid]);
-            }
-        }
-    }
-}
-
-// ---------------- GLOBAL SUMMARY (students/enrollments/paid counts) ----------------
-// count unique students shown in grouped plan tables
-$seenStudents = [];
-foreach ($group as $planRows) {
-    foreach ($planRows as $sid => $_v) {
-        $seenStudents[(string)$sid] = true;
-    }
-}
-$totalStudents = count($seenStudents);
-
-// Paid counts by installment code (unique students who have that installment Approved)
-$paidCounts = [
-    'TERM1'=>0,'TERM2'=>0,'TERM3'=>0,'TERM4'=>0,
-    'HALF1'=>0,'HALF2'=>0,
-    'YEARLY'=>0
-];
-$paidSeen = [
-    'TERM1'=>[],'TERM2'=>[],'TERM3'=>[],'TERM4'=>[],
-    'HALF1'=>[],'HALF2'=>[],
-    'YEARLY'=>[]
-];
-
-foreach ($rows as $r) {
-    $code = (string)($r['installment_code'] ?? '');
-    $sid  = (string)($r['student_id'] ?? '');
-    if ($sid === '' || $code === '') continue;
-
-    if (in_array(normalize_status($r['status'] ?? ''), ['approved', 'verified'], true)) {
-        $paidSeen[$code][$sid] = true;
-    }
-}
-foreach ($paidSeen as $code => $set) {
-    $paidCounts[$code] = count($set);
-}
-
-// ---------------- New collection summary requested ----------------
-// Source of truth: confirmed enrollments (pcm_enrolments.status = 'Approved')
-$totalFeesCollected = 0.0;
-$paidStudentsAll = [];
-$paidStudentsByPlan = [
-    'Term-wise' => [],
-    'Half-yearly' => [],
-    'Yearly' => [],
-];
-
-try {
-    $stmtConfirmed = $pdo->query("
-        SELECT e.student_id, e.fee_plan, COALESCE(SUM(fp.due_amount), e.fee_amount, 0) AS fee_amount
-        FROM pcm_enrolments e
-        LEFT JOIN pcm_fee_payments fp ON fp.enrolment_id = e.id
-        WHERE e.status = 'Approved'
-        GROUP BY e.id, e.student_id, e.fee_plan, e.fee_amount
-    ");
-    $confirmedRows = $stmtConfirmed->fetchAll(PDO::FETCH_ASSOC);
-} catch (Throwable $e) {
-    $confirmedRows = [];
-}
-
-foreach ($confirmedRows as $r) {
-    $sid = (string)($r['student_id'] ?? '');
-    if ($sid === '') continue;
-
-    $totalFeesCollected += (float)($r['fee_amount'] ?? 0);
-    $paidStudentsAll[$sid] = true;
-
-    $plan = (string)($r['fee_plan'] ?? '');
-    if (isset($paidStudentsByPlan[$plan])) {
-        $paidStudentsByPlan[$plan][$sid] = true;
-    }
-}
-
-$totalStudentsPaid = count($paidStudentsAll);
-$paidTermWise = count($paidStudentsByPlan['Term-wise']);
-$paidHalfYearly = count($paidStudentsByPlan['Half-yearly']);
-$paidYearly = count($paidStudentsByPlan['Yearly']);
-
-// ---------------- Summary values (bank + due) ----------------
-$bankName = $feesSettings['bank_name'] ?? '';
-$accName  = $feesSettings['account_name'] ?? '';
-$bsb      = $feesSettings['bsb'] ?? '';
-$accNo    = $feesSettings['account_number'] ?? '';
-$notes    = $feesSettings['bank_notes'] ?? '';
-
-$due1 = $feesSettings['due_term1'] ?? null;
-$due2 = $feesSettings['due_term2'] ?? null;
-$due3 = $feesSettings['due_term3'] ?? null;
-$due4 = $feesSettings['due_term4'] ?? null;
 
 $classOptions = $pdo->query("SELECT id, class_name FROM classes WHERE active = 1 ORDER BY class_name ASC")->fetchAll(PDO::FETCH_ASSOC);
 $classCharges = $pdo->query("
@@ -627,30 +480,13 @@ $classCharges = $pdo->query("
     ORDER BY cc.created_at DESC, cc.id DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-$updatePayments = [];
-$updateCounts = ['Pending' => 0, 'Verified' => 0, 'Rejected' => 0, 'Unpaid' => 0];
-$filterStudentId = trim((string)($_GET['student_id'] ?? ''));
-if ($updateOnlyMode) {
-    $stmtUpd = $pdo->query("
-        SELECT f.*, s.student_name, s.student_id AS stu_code, p.full_name AS parent_name
-        FROM pcm_fee_payments f
-        JOIN students s ON s.id = f.student_id
-        LEFT JOIN parents p ON p.id = f.parent_id
-        WHERE f.plan_type IN ('Term-wise','Half-yearly','Yearly')
-        ORDER BY FIELD(f.status,'Pending','Rejected','Unpaid','Verified'), f.submitted_at DESC, f.id DESC
-        LIMIT 500
-    ");
-    $updatePayments = $stmtUpd->fetchAll(PDO::FETCH_ASSOC);
-    if ($filterStudentId !== '') {
-        $updatePayments = array_values(array_filter($updatePayments, function ($row) use ($filterStudentId) {
-            return (string)($row['student_id'] ?? '') === $filterStudentId;
-        }));
-    }
-    foreach ($updatePayments as $row) {
-        $k = (string)($row['status'] ?? '');
-        if (isset($updateCounts[$k])) $updateCounts[$k]++;
-    }
-}
+$bankName = $feesSettings['bank_name'] ?? '';
+$accName  = $feesSettings['account_name'] ?? '';
+$bsb      = $feesSettings['bsb'] ?? '';
+$accNo    = $feesSettings['account_number'] ?? '';
+$notes    = $feesSettings['bank_notes'] ?? '';
+
+$isAdminTier = is_admin_role();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -658,7 +494,7 @@ if ($updateOnlyMode) {
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title>Update Payments</title>
+    <title>Manage Payments</title>
 
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet" type="text/css">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
@@ -676,257 +512,50 @@ if ($updateOnlyMode) {
         .due-pill { display:inline-block; padding:4px 8px; border-radius:999px; background:#eef2ff; color:#1b4fd6; font-size:11px; font-weight:700; margin-right:6px; margin-bottom:6px; }
         .kv strong { display:inline-block; min-width:120px; }
 
-        /* Top summary cards */
-        .stat-card { border:1px solid #e3e6f0; border-radius:12px; padding:14px; background:#fff; }
-        .stat-label { font-size:12px; font-weight:800; text-transform:uppercase; color:#6c757d; }
-        .stat-value { font-size:28px; font-weight:900; line-height:1.1; }
-        .stat-sub { font-size:12px; color:#6c757d; }
+        .proof-thumb { display:inline-flex; align-items:center; gap:8px; cursor:pointer; text-decoration:none; }
+        .thumb-img { width:42px; height:42px; object-fit:cover; border-radius:8px; border:1px solid #e3e6f0; background:#fff; }
+        .thumb-icon { width:42px; height:42px; display:flex; align-items:center; justify-content:center; border-radius:8px; border:1px solid #e3e6f0; background:#fff; color:#d93025; font-size:18px; }
 
-        /* Proof UI */
-        .proof-thumb {
-            display:inline-flex;
-            align-items:center;
-            gap:8px;
-            cursor:pointer;
-            text-decoration:none;
-        }
-        .thumb-img {
-            width:42px;
-            height:42px;
-            object-fit:cover;
-            border-radius:8px;
-            border:1px solid #e3e6f0;
-            background:#fff;
-        }
-        .thumb-icon {
-            width:42px;
-            height:42px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            border-radius:8px;
-            border:1px solid #e3e6f0;
-            background:#fff;
-            color:#d93025;
-            font-size:18px;
-        }
-
-        /* SweetAlert modal sizing */
         .swal2-popup { width: 920px !important; max-width: 96vw !important; }
-        .proof-frame { width: 100%; height: 70vh; border: 1px solid #e3e6f0; border-radius: 12px; }
-
-        .proof-stage {
-            width: 100%;
-            max-height: 72vh;
-            overflow: auto;
-            border: 1px solid #e3e6f0;
-            border-radius: 12px;
-            padding: 10px;
-            background: #fafbff;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .proof-img {
-            display:block;
-            transform-origin: top left;
-            border-radius: 10px;
-            border: 1px solid #e3e6f0;
-            background:#fff;
-            max-width: 100%;
-            max-height: calc(72vh - 24px);
-            width: auto;
-            height: auto;
-        }
-        .swal-toolbar {
-            display:flex;
-            gap:8px;
-            justify-content:center;
-            flex-wrap:wrap;
-            margin-top:10px;
-        }
+        .proof-stage { width: 100%; max-height: 72vh; overflow: auto; border: 1px solid #e3e6f0; border-radius: 12px; padding: 10px; background: #fafbff; display: flex; align-items: center; justify-content: center; }
+        .proof-img { display:block; transform-origin: top left; border-radius: 10px; border: 1px solid #e3e6f0; background:#fff; max-width: 100%; max-height: calc(72vh - 24px); width: auto; height: auto; }
+        .swal-toolbar { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:10px; }
 
         thead th { vertical-align: middle !important; }
         thead .mini { font-size:11px; font-weight:700; }
-
         .ref-col { max-width: 220px; }
 
-        /* Payment method tabs (dzoClass-style filter pills) */
-        .method-tabs-wrap { background:#f8f9fc; border:1px solid #e3e6f0; border-radius:12px; padding:14px 16px; margin-bottom:16px; }
-        .method-pill {
-            border-radius:20px !important;
-            font-weight:600;
-            font-size:.82rem;
-            padding:6px 16px;
-            border:2px solid transparent;
-            margin-right:6px;
-            margin-bottom:6px;
-        }
-        .method-pill.is-active-all { background:#881b12; color:#fff; border-color:#881b12; }
-        .method-pill.is-active-term-wise { background:#4e73df; color:#fff; border-color:#4e73df; }
-        .method-pill.is-active-half-yearly { background:#36b9cc; color:#fff; border-color:#36b9cc; }
-        .method-pill.is-active-yearly { background:#1cc88a; color:#fff; border-color:#1cc88a; }
+        .payments-table { min-width: 1300px; }
+        .payments-table tbody tr.status-pending { background:#fff8e1; }
+        .payments-table tbody tr.status-rejected { background:#fff1f0; }
+        .payments-table tbody tr.status-verified { background:#eefaf4; }
 
-        /* Update Payments table responsiveness */
-        .update-payments-table {
-            min-width: 1100px;
-            table-layout: auto;
-        }
-        .update-payments-table td,
-        .update-payments-table th {
-            vertical-align: middle;
-            white-space: nowrap;
-        }
-        .update-payments-table input.form-control-sm,
-        .update-payments-table select.form-control-sm {
-            width: 100%;
-            min-width: 96px;
-            height: 36px;
-            font-size: 0.88rem;
-        }
-        .update-payments-table .btn.btn-sm {
-            min-height: 36px;
-            font-size: 0.84rem;
-            padding: 0.38rem 0.6rem;
-        }
-        .upd-cell-label {
-            display: none;
-            font-size: 0.68rem;
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
-            color: #6c757d;
-            margin-bottom: 4px;
-            font-weight: 700;
-        }
-        .update-payments-table .col-child { min-width: 200px; }
-        .update-payments-table .col-parent { min-width: 150px; }
-        .update-payments-table .col-proof { min-width: 110px; }
-        .update-payments-table .col-action { min-width: 100px; }
-        .update-payments-table tbody tr.status-pending { background:#fff8e1; }
-        .update-payments-table tbody tr.status-rejected { background:#fff1f0; }
-        .update-payments-table tbody tr.status-verified { background:#eefaf4; }
-        .update-payments-toolbar {
-            background:#f8f9fc;
-            border:1px solid #e3e6f0;
-            border-radius:8px;
-            padding:12px;
-            margin-bottom:14px;
-        }
-        .update-payments-toolbar .form-control,
-        .update-payments-toolbar .btn { min-height:38px; }
-        .payment-summary-grid {
-            display:grid;
-            grid-template-columns:repeat(4, minmax(120px, 1fr));
-            gap:10px;
-            margin-bottom:16px;
-        }
-        .payment-summary-item {
-            display:flex;
-            align-items:center;
-            gap:10px;
-            padding:12px 14px;
-            border:1px solid #e3e6f0;
-            border-radius:10px;
-            background:#fff;
-        }
-        .payment-summary-icon {
-            width:34px;
-            height:34px;
-            border-radius:9px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            flex:0 0 34px;
-        }
+        .payment-summary-grid { display:grid; grid-template-columns:repeat(4, minmax(120px, 1fr)); gap:10px; margin-bottom:16px; }
+        .payment-summary-item { display:flex; align-items:center; gap:10px; padding:12px 14px; border:1px solid #e3e6f0; border-radius:10px; background:#fff; }
+        .payment-summary-icon { width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; flex:0 0 34px; }
         .summary-pending .payment-summary-icon { background:#fff4cf; color:#b77900; }
         .summary-verified .payment-summary-icon { background:#def7ec; color:#087f5b; }
         .summary-rejected .payment-summary-icon { background:#fde8e7; color:#c53030; }
         .summary-unpaid .payment-summary-icon { background:#edf0f5; color:#5a5c69; }
         .payment-summary-value { font-size:1.15rem; font-weight:800; line-height:1; color:#2e3440; }
         .payment-summary-label { margin-top:4px; font-size:.69rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#858796; }
-        .payment-filter-panel {
-            background:#f8f9fc;
-            border:1px solid #e3e6f0;
-            border-radius:10px;
-            padding:14px;
-            margin-bottom:14px;
-        }
+
+        .update-payments-toolbar { background:#f8f9fc; border:1px solid #e3e6f0; border-radius:8px; padding:12px; margin-bottom:14px; }
+        .update-payments-toolbar .form-control, .update-payments-toolbar .btn { min-height:38px; }
+
+        .payment-filter-panel { background:#f8f9fc; border:1px solid #e3e6f0; border-radius:10px; padding:14px; margin-bottom:14px; }
         .payment-filter-panel .form-control { min-height:40px; border-color:#d9deea; }
         .payment-filter-panel .input-group .btn { min-height:40px; }
-        .payment-result-meta { font-size:.8rem; color:#6c757d; }
-        .payment-no-results {
-            display:none;
-            padding:24px;
-            margin-bottom:16px;
-            text-align:center;
-            border:1px dashed #cdd3df;
-            border-radius:10px;
-            color:#6c757d;
-            background:#fbfcfe;
-        }
+
         .status-filter-btn.active { color:#fff !important; }
         .status-filter-btn[data-status="Pending"].active { background:#f6c23e; border-color:#f6c23e; color:#1f2933 !important; }
         .status-filter-btn[data-status="Verified"].active { background:#1cc88a; border-color:#1cc88a; }
         .status-filter-btn[data-status="Rejected"].active { background:#e74a3b; border-color:#e74a3b; }
         .status-filter-btn[data-status="Unpaid"].active { background:#5a5c69; border-color:#5a5c69; }
-        .quick-paid-btn {
-            border:0;
-            background:transparent;
-            color:#4e73df;
-            padding:3px 0 0;
-            font-size:.75rem;
-            font-weight:700;
-        }
-        .update-overview-table {
-            min-width: 1220px;
-        }
-        .update-overview-table th,
-        .update-overview-table td {
-            vertical-align: top;
-        }
-        .update-overview-table .update-payment-cell {
-            min-width: 230px;
-            background:#fff;
-        }
-        .update-overview-table .update-payment-cell.status-pending { background:#fff8e1; }
-        .update-overview-table .update-payment-cell.status-rejected { background:#fff1f0; }
-        .update-overview-table .update-payment-cell.status-verified { background:#eefaf4; }
-        .update-overview-table .update-payment-cell .form-control-sm {
-            height:34px;
-            font-size:.84rem;
-        }
-        @media (max-width: 768px) {
-            .payment-summary-grid { grid-template-columns:repeat(2, minmax(120px, 1fr)); }
-            .update-payments-table {
-                min-width: 1200px;
-            }
-            .update-payments-table input.form-control-sm,
-            .update-payments-table select.form-control-sm {
-                height: 40px;
-                font-size: 0.92rem;
-            }
-            .update-payments-table .btn.btn-sm {
-                min-height: 40px;
-                font-size: 0.9rem;
-            }
-        }
-        @media (max-width: 480px) {
-            .payment-summary-grid { grid-template-columns:1fr 1fr; gap:8px; }
-            .payment-summary-item { padding:10px; }
-            .payment-filter-panel .input-group { display:block; }
-            .payment-filter-panel .input-group > .form-control { width:100%; border-radius:.25rem; margin-bottom:8px; }
-            .payment-filter-panel .input-group-append { display:flex; margin-left:0; }
-            .payment-filter-panel .input-group-append .btn { flex:1; }
-            .update-payments-table {
-                min-width: 1320px;
-            }
-            .upd-cell-label {
-                display: block;
-            }
-            .update-payments-table .form-control-sm {
-                min-width: 128px;
-            }
-        }
+
+        .method-tabs-wrap { background:#f8f9fc; border:1px solid #e3e6f0; border-radius:12px; padding:14px 16px; margin-bottom:16px; }
+        .method-pill { border-radius:20px !important; font-weight:600; font-size:.82rem; padding:6px 16px; border:2px solid transparent; margin-right:6px; margin-bottom:6px; }
+        .method-pill.is-active-all { background:#881b12; color:#fff; border-color:#881b12; }
     </style>
 </head>
 <body id="page-top">
@@ -939,8 +568,7 @@ if ($updateOnlyMode) {
 
             <div class="container-fluid">
                 <div class="d-flex align-items-center justify-content-between mb-3">
-                    <h1 class="h3 text-gray-800 mb-0">Update Payments</h1>
-
+                    <h1 class="h3 text-gray-800 mb-0">Manage Payments</h1>
                     <a href="feesManagement" class="btn btn-sm btn-outline-primary">
                         <i class="fas fa-table"></i> Fees Overview
                     </a>
@@ -963,7 +591,42 @@ if ($updateOnlyMode) {
                     });
                 </script>
 
-                <?php if (!$updateOnlyMode): ?>
+                <!-- Bank & Due Dates reference -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-info-circle"></i> Current Bank & Due Dates Summary</h6>
+                        <span class="mini">These values come from Fees Settings</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="summary-box">
+                            <div class="row">
+                                <div class="col-lg-6 mb-3 mb-lg-0">
+                                    <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-university"></i> Bank Details</h6>
+                                    <div class="kv mini"><strong>Bank:</strong> <?php echo h($bankName ?: '-'); ?></div>
+                                    <div class="kv mini"><strong>Account Name:</strong> <?php echo h($accName ?: '-'); ?></div>
+                                    <div class="kv mini"><strong>BSB:</strong> <?php echo h($bsb ?: '-'); ?></div>
+                                    <div class="kv mini"><strong>Account No:</strong> <?php echo h($accNo ?: '-'); ?></div>
+                                    <?php if (!empty($notes)): ?>
+                                        <div class="mini mt-2"><strong>Notes:</strong> <?php echo h($notes); ?></div>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="col-lg-6">
+                                    <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-calendar-alt"></i> Due Dates</h6>
+                                    <div class="mini mb-2">
+                                        <span class="due-pill">TERM1 / HALF1 / YEARLY: <?php echo pretty_date($feesSettings['due_term1'] ?? null); ?></span>
+                                        <span class="due-pill">TERM2: <?php echo pretty_date($feesSettings['due_term2'] ?? null); ?></span>
+                                        <span class="due-pill">TERM3 / HALF2: <?php echo pretty_date($feesSettings['due_term3'] ?? null); ?></span>
+                                        <span class="due-pill">TERM4: <?php echo pretty_date($feesSettings['due_term4'] ?? null); ?></span>
+                                    </div>
+                                    <div class="mini text-muted">Rule applied: Term1 = Half1 = Yearly, and Term3 = Half2.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <?php if ($isAdminTier): ?>
+                <!-- Class-Based Additional Charges -->
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center">
                         <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-book mr-1"></i>Class-Based Additional Charges</h6>
@@ -1009,14 +672,7 @@ if ($updateOnlyMode) {
                             <table class="table table-bordered table-sm mb-0">
                                 <thead class="thead-light">
                                     <tr>
-                                        <th>#</th>
-                                        <th>Class</th>
-                                        <th>Charge</th>
-                                        <th>Amount</th>
-                                        <th>Due Date</th>
-                                        <th>Applied Students</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
+                                        <th>#</th><th>Class</th><th>Charge</th><th>Amount</th><th>Due Date</th><th>Applied Students</th><th>Status</th><th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1060,581 +716,192 @@ if ($updateOnlyMode) {
                         </div>
                     </div>
                 </div>
-
-                <!-- ✅ SUMMARY: COLLECTED FEES + PAID STUDENTS -->
-                <div class="row mb-3">
-                    <div class="col-xl-3 col-md-6 mb-3">
-                        <div class="stat-card shadow-sm">
-                            <div class="stat-label text-success">Total Expected Fees</div>
-                            <div class="stat-value">$<?php echo number_format($totalFeesCollected, 2); ?></div>
-                            <div class="stat-sub">Based on active fee rows</div>
-                        </div>
-                    </div>
-                    <div class="col-xl-3 col-md-6 mb-3">
-                        <div class="stat-card shadow-sm">
-                            <div class="stat-label text-primary">Approved Enrollments</div>
-                            <div class="stat-value"><?php echo (int)$totalStudentsPaid; ?></div>
-                            <div class="stat-sub">Unique approved enrolments</div>
-                        </div>
-                    </div>
-                    <div class="col-xl-2 col-md-4 mb-3">
-                        <div class="stat-card shadow-sm">
-                            <div class="stat-label text-info">Term-wise</div>
-                            <div class="stat-value"><?php echo (int)$paidTermWise; ?></div>
-                            <div class="stat-sub">Students enrolled</div>
-                        </div>
-                    </div>
-                    <div class="col-xl-2 col-md-4 mb-3">
-                        <div class="stat-card shadow-sm">
-                            <div class="stat-label text-info">Half-yearly</div>
-                            <div class="stat-value"><?php echo (int)$paidHalfYearly; ?></div>
-                            <div class="stat-sub">Students enrolled</div>
-                        </div>
-                    </div>
-                    <div class="col-xl-2 col-md-4 mb-3">
-                        <div class="stat-card shadow-sm">
-                            <div class="stat-label text-info">Yearly</div>
-                            <div class="stat-value"><?php echo (int)$paidYearly; ?></div>
-                            <div class="stat-sub">Students enrolled</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ✅ SUMMARY: ENROLLMENTS + PAID COUNTS -->
-                <div class="row mb-3">
-                    <div class="col-lg-3 mb-3">
-                        <div class="stat-card shadow-sm">
-                            <div class="stat-label text-primary">Enrollments</div>
-                            <div class="stat-value"><?php echo (int)$totalStudents; ?></div>
-                            <div class="stat-sub">Students in fees system</div>
-                        </div>
-                    </div>
-
-                    <div class="col-lg-9 mb-3">
-                        <div class="stat-card shadow-sm">
-                            <div class="stat-label text-info">Paid students by installment (Approved)</div>
-                            <div class="mt-2 mini">
-                                <span class="due-pill">Term 1: <?php echo (int)$paidCounts['TERM1']; ?></span>
-                                <span class="due-pill">Term 2: <?php echo (int)$paidCounts['TERM2']; ?></span>
-                                <span class="due-pill">Term 3: <?php echo (int)$paidCounts['TERM3']; ?></span>
-                                <span class="due-pill">Term 4: <?php echo (int)$paidCounts['TERM4']; ?></span>
-                                <span class="due-pill">Half 1: <?php echo (int)$paidCounts['HALF1']; ?></span>
-                                <span class="due-pill">Half 2: <?php echo (int)$paidCounts['HALF2']; ?></span>
-                                <span class="due-pill">Yearly: <?php echo (int)$paidCounts['YEARLY']; ?></span>
-                            </div>
-                            <div class="stat-sub mt-2">
-                                Counts are unique students whose installment status is <strong>Approved</strong>.
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ✅ BANK + DUE SUMMARY BOX -->
-                <div class="card shadow mb-4">
-                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                        <h6 class="m-0 font-weight-bold text-primary">
-                            <i class="fas fa-info-circle"></i> Current Bank & Due Dates Summary
-                        </h6>
-                        <span class="mini">These values come from Fees Settings</span>
-                    </div>
-                    <div class="card-body">
-                        <div class="summary-box">
-                            <div class="row">
-                                <div class="col-lg-6 mb-3 mb-lg-0">
-                                    <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-university"></i> Bank Details</h6>
-                                    <div class="kv mini"><strong>Bank:</strong> <?php echo h($bankName ?: '-'); ?></div>
-                                    <div class="kv mini"><strong>Account Name:</strong> <?php echo h($accName ?: '-'); ?></div>
-                                    <div class="kv mini"><strong>BSB:</strong> <?php echo h($bsb ?: '-'); ?></div>
-                                    <div class="kv mini"><strong>Account No:</strong> <?php echo h($accNo ?: '-'); ?></div>
-                                    <?php if (!empty($notes)): ?>
-                                        <div class="mini mt-2"><strong>Notes:</strong> <?php echo h($notes); ?></div>
-                                    <?php endif; ?>
-                                </div>
-
-                                <div class="col-lg-6">
-                                    <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-calendar-alt"></i> Due Dates</h6>
-                                    <div class="mini mb-2">
-                                        <span class="due-pill">TERM1 / HALF1 / YEARLY: <?php echo pretty_date($due1); ?></span>
-                                        <span class="due-pill">TERM2: <?php echo pretty_date($due2); ?></span>
-                                        <span class="due-pill">TERM3 / HALF2: <?php echo pretty_date($due3); ?></span>
-                                        <span class="due-pill">TERM4: <?php echo pretty_date($due4); ?></span>
-                                    </div>
-                                    <div class="mini text-muted">
-                                        Rule applied: Term1 = Half1 = Yearly, and Term3 = Half2.
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
                 <?php endif; ?>
 
-                <?php if ($updateOnlyMode): ?>
-                    <div class="card shadow mb-4">
-                        <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-edit mr-1"></i>Update Payments</h6>
-                            <a href="feesManagement" class="btn btn-sm btn-outline-secondary">Back to Full Fees</a>
+                <!-- Unified payments table -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-money-check-alt mr-1"></i>All Payments</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="payment-summary-grid">
+                            <div class="payment-summary-item summary-pending"><span class="payment-summary-icon"><i class="fas fa-clock"></i></span><div><div class="payment-summary-value"><?= (int)$updateCounts['Pending'] ?></div><div class="payment-summary-label">Pending</div></div></div>
+                            <div class="payment-summary-item summary-verified"><span class="payment-summary-icon"><i class="fas fa-check"></i></span><div><div class="payment-summary-value"><?= (int)$updateCounts['Verified'] ?></div><div class="payment-summary-label">Verified</div></div></div>
+                            <div class="payment-summary-item summary-rejected"><span class="payment-summary-icon"><i class="fas fa-times"></i></span><div><div class="payment-summary-value"><?= (int)$updateCounts['Rejected'] ?></div><div class="payment-summary-label">Rejected</div></div></div>
+                            <div class="payment-summary-item summary-unpaid"><span class="payment-summary-icon"><i class="fas fa-wallet"></i></span><div><div class="payment-summary-value"><?= (int)$updateCounts['Unpaid'] ?></div><div class="payment-summary-label">Unpaid</div></div></div>
                         </div>
-                        <div class="card-body">
-                            <div class="payment-summary-grid">
-                                <div class="payment-summary-item summary-pending"><span class="payment-summary-icon"><i class="fas fa-clock"></i></span><div><div class="payment-summary-value"><?= (int)$updateCounts['Pending'] ?></div><div class="payment-summary-label">Pending</div></div></div>
-                                <div class="payment-summary-item summary-verified"><span class="payment-summary-icon"><i class="fas fa-check"></i></span><div><div class="payment-summary-value"><?= (int)$updateCounts['Verified'] ?></div><div class="payment-summary-label">Verified</div></div></div>
-                                <div class="payment-summary-item summary-rejected"><span class="payment-summary-icon"><i class="fas fa-times"></i></span><div><div class="payment-summary-value"><?= (int)$updateCounts['Rejected'] ?></div><div class="payment-summary-label">Rejected</div></div></div>
-                                <div class="payment-summary-item summary-unpaid"><span class="payment-summary-icon"><i class="fas fa-wallet"></i></span><div><div class="payment-summary-value"><?= (int)$updateCounts['Unpaid'] ?></div><div class="payment-summary-label">Unpaid</div></div></div>
-                            </div>
-                            <form method="POST" id="bulkPaymentForm" class="update-payments-toolbar">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="action" value="bulk_update_payments">
-                                <div class="row align-items-end">
-                                    <div class="col-lg-3 col-md-6 mb-2">
-                                        <label class="mini font-weight-bold text-uppercase mb-1">Bulk status</label>
-                                        <select name="bulk_status" class="form-control form-control-sm" required>
-                                            <option value="">Choose status</option>
-                                            <option value="Verified">Verified</option>
-                                            <option value="Pending">Pending</option>
-                                            <option value="Rejected">Rejected</option>
-                                            <option value="Unpaid">Unpaid</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-lg-3 col-md-6 mb-2">
-                                        <label class="mini font-weight-bold text-uppercase mb-1">Amount helper</label>
-                                        <div class="custom-control custom-checkbox">
-                                            <input type="checkbox" class="custom-control-input" id="bulkSetPaidToDue" name="set_paid_to_due" value="1">
-                                            <label class="custom-control-label" for="bulkSetPaidToDue">Set paid amount to due</label>
-                                        </div>
-                                    </div>
-                                    <div class="col-lg-3 col-md-6 mb-2">
-                                        <label class="mini font-weight-bold text-uppercase mb-1">Selected rows</label>
-                                        <div><strong id="selectedPaymentCount">0</strong> selected</div>
-                                    </div>
-                                    <div class="col-lg-3 col-md-6 mb-2 text-lg-right">
-                                        <button type="button" class="btn btn-sm btn-outline-secondary mr-1" id="selectVisiblePayments">Select visible</button>
-                                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-check mr-1"></i>Apply selected</button>
+
+                        <form method="POST" id="bulkPaymentForm" class="update-payments-toolbar">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="bulk_update_payments">
+                            <div class="row align-items-end">
+                                <div class="col-lg-3 col-md-6 mb-2">
+                                    <label class="mini font-weight-bold text-uppercase mb-1">Bulk status</label>
+                                    <select name="bulk_status" class="form-control form-control-sm" required>
+                                        <option value="">Choose status</option>
+                                        <option value="Verified">Verified</option>
+                                        <option value="Pending">Pending</option>
+                                        <option value="Rejected">Rejected</option>
+                                        <option value="Unpaid">Unpaid</option>
+                                    </select>
+                                </div>
+                                <div class="col-lg-3 col-md-6 mb-2">
+                                    <label class="mini font-weight-bold text-uppercase mb-1">Amount helper</label>
+                                    <div class="custom-control custom-checkbox">
+                                        <input type="checkbox" class="custom-control-input" id="bulkSetPaidToDue" name="set_paid_to_due" value="1">
+                                        <label class="custom-control-label" for="bulkSetPaidToDue">Set paid amount to due</label>
                                     </div>
                                 </div>
-                            </form>
+                                <div class="col-lg-3 col-md-6 mb-2">
+                                    <label class="mini font-weight-bold text-uppercase mb-1">Selected rows</label>
+                                    <div><strong id="selectedPaymentCount">0</strong> selected</div>
+                                </div>
+                                <div class="col-lg-3 col-md-6 mb-2 text-lg-right">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary mr-1" id="selectVisiblePayments">Select visible</button>
+                                    <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-check mr-1"></i>Apply selected</button>
+                                </div>
+                            </div>
+                        </form>
 
-                            <div class="payment-filter-panel">
+                        <div class="payment-filter-panel">
                             <div class="form-row align-items-end">
-                                <div class="col-lg-3 col-md-4">
-                                    <label for="updateClassFilter" class="mini font-weight-bold text-uppercase mb-1">Filter by class</label>
+                                <div class="col-lg-3 col-md-6 mb-2">
+                                    <label class="mini font-weight-bold text-uppercase mb-1">Status</label><br>
+                                    <button class="btn btn-sm btn-primary status-filter-btn active" data-status="all" type="button">All</button>
+                                    <button class="btn btn-sm btn-outline-secondary status-filter-btn" data-status="Pending" type="button">Pending</button>
+                                    <button class="btn btn-sm btn-outline-secondary status-filter-btn" data-status="Verified" type="button">Verified</button>
+                                    <button class="btn btn-sm btn-outline-secondary status-filter-btn" data-status="Rejected" type="button">Rejected</button>
+                                    <button class="btn btn-sm btn-outline-secondary status-filter-btn" data-status="Unpaid" type="button">Unpaid</button>
+                                </div>
+                                <div class="col-lg-2 col-md-6 mb-2">
+                                    <label for="updateClassFilter" class="mini font-weight-bold text-uppercase mb-1">Class</label>
                                     <select id="updateClassFilter" class="form-control form-control-sm">
                                         <option value="all">All classes</option>
                                         <?php foreach ($classOptions as $classOption): ?>
-                                            <option value="<?= (int)$classOption['id'] ?>"><?= h((string)$classOption['class_name']) ?></option>
+                                            <option value="<?= h((string)$classOption['class_name']) ?>"><?= h((string)$classOption['class_name']) ?></option>
                                         <?php endforeach; ?>
-                                        <option value="unassigned">Not assigned</option>
                                     </select>
                                 </div>
-                                <div class="col-lg-3 col-md-4 mt-2 mt-md-0">
-                                    <label for="updatePaymentSort" class="mini font-weight-bold text-uppercase mb-1">Sort by</label>
-                                    <select id="updatePaymentSort" class="form-control form-control-sm">
-                                        <option value="student-asc">Student: A to Z</option>
-                                        <option value="student-desc">Student: Z to A</option>
-                                        <option value="class-asc">Class: A to Z</option>
-                                        <option value="attendance-desc">Attendance: High to Low</option>
-                                        <option value="attendance-asc">Attendance: Low to High</option>
-                                        <option value="amount-desc">Amount: High to Low</option>
-                                        <option value="amount-asc">Amount: Low to High</option>
-                                        <option value="status-asc">Status: Paid first</option>
-                                        <option value="status-desc">Status: Unpaid first</option>
+                                <div class="col-lg-2 col-md-6 mb-2">
+                                    <label for="updatePlanFilter" class="mini font-weight-bold text-uppercase mb-1">Plan</label>
+                                    <select id="updatePlanFilter" class="form-control form-control-sm">
+                                        <option value="">All Plans</option>
+                                        <option value="Term-wise">Term-wise</option>
+                                        <option value="Half-yearly">Half-yearly</option>
+                                        <option value="Yearly">Yearly</option>
+                                        <option value="Additional">Additional</option>
                                     </select>
                                 </div>
-                                <div class="col-lg-6 col-md-4 mt-2 mt-md-0">
+                                <div class="col-lg-5 col-md-6 mb-2">
                                     <label for="updatePaymentSearch" class="mini font-weight-bold text-uppercase mb-1">Search payments</label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="search" id="updatePaymentSearch" class="form-control" placeholder="Child, student ID, parent, email, phone or reference">
-                                        <div class="input-group-append">
-                                            <button type="button" class="btn btn-primary" id="updatePaymentSearchBtn">
-                                                <i class="fas fa-search mr-1"></i>Search
+                                    <input type="search" id="updatePaymentSearch" class="form-control form-control-sm" placeholder="Child, student ID, parent, email, phone or reference">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table id="paymentsTable" class="table table-bordered table-hover payments-table" width="100%">
+                                <thead class="thead-light">
+                                <tr>
+                                    <th></th>
+                                    <th>#</th>
+                                    <th>Child</th>
+                                    <th>Class</th>
+                                    <th>Parent</th>
+                                    <th>Plan</th>
+                                    <th>Instalment</th>
+                                    <th>Due</th>
+                                    <th>Paid</th>
+                                    <th>Ref</th>
+                                    <th>Proof</th>
+                                    <th>Status</th>
+                                    <th>Submitted</th>
+                                    <th style="min-width:220px;">Actions</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($payments as $i => $f): ?>
+                                    <?php
+                                        $proof = trim((string)($f['proof_path'] ?? ''));
+                                        $ptype = $proof !== '' ? proof_type($proof) : '';
+                                        $rowStatus = strtolower((string)$f['status']);
+                                    ?>
+                                    <tr class="status-<?= h($rowStatus) ?>"
+                                        data-class="<?= h((string)($f['class_name'] ?? '')) ?>"
+                                        data-plan="<?= h((string)$f['plan_type']) ?>"
+                                        data-status="<?= h((string)$f['status']) ?>"
+                                        data-search="<?= h(strtolower(($f['student_name'] ?? '') . ' ' . ($f['stu_code'] ?? '') . ' ' . ($f['parent_name'] ?? '') . ' ' . ($f['parent_email'] ?? '') . ' ' . ($f['parent_phone'] ?? '') . ' ' . ($f['payment_ref'] ?? ''))) ?>">
+                                        <td><input type="checkbox" class="payment-row-check" name="payment_ids[]" value="<?= (int)$f['id'] ?>" form="bulkPaymentForm"></td>
+                                        <td><?= $i + 1 ?></td>
+                                        <td class="wrap"><?= h($f['student_name']) ?> <small class="text-muted">(<?= h($f['stu_code']) ?>)</small></td>
+                                        <td><?= $f['class_name'] ? h($f['class_name']) : '<span class="text-muted">-</span>' ?></td>
+                                        <td class="wrap"><?= h($f['parent_name'] ?: '-') ?><br><span class="mini"><?= h($f['parent_email'] ?: '-') ?></span></td>
+                                        <td><?= h($f['plan_type']) ?></td>
+                                        <td class="font-weight-bold"><?= h($f['instalment_label']) ?></td>
+                                        <td>$<?= number_format((float)$f['due_amount'], 2) ?></td>
+                                        <td>$<?= number_format((float)$f['paid_amount'], 2) ?></td>
+                                        <td><?= h($f['payment_ref'] ?? '-') ?></td>
+                                        <td>
+                                            <?php if ($proof !== ''): ?>
+                                                <a href="javascript:void(0)" class="mini proof-thumb" data-proof="<?= h($proof) ?>" data-type="<?= h($ptype) ?>" data-name="<?= h(basename($proof)) ?>"><i class="fas fa-eye"></i> View</a>
+                                            <?php else: ?>
+                                                <span class="mini text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-<?= pcm_badge((string)$f['status']) ?>"><?= h($f['status']) ?></span>
+                                            <?php if (!empty($f['reject_reason'])): ?><br><small class="text-danger"><?= h($f['reject_reason']) ?></small><?php endif; ?>
+                                        </td>
+                                        <td class="nowrap"><?= $f['submitted_at'] ? date('d M Y', strtotime($f['submitted_at'])) : '-' ?></td>
+                                        <td class="nowrap">
+                                            <button type="button" class="btn btn-sm btn-outline-primary js-edit-btn" title="Edit"
+                                                    data-id="<?= (int)$f['id'] ?>"
+                                                    data-due="<?= h((string)$f['due_amount']) ?>"
+                                                    data-paid="<?= h((string)$f['paid_amount']) ?>"
+                                                    data-ref="<?= h((string)($f['payment_ref'] ?? '')) ?>"
+                                                    data-status="<?= h((string)$f['status']) ?>"
+                                                    data-label="<?= h((string)$f['instalment_label']) ?>"
+                                                    data-child="<?= h((string)$f['student_name']) ?>">
+                                                <i class="fas fa-edit"></i>
                                             </button>
-                                            <button type="button" class="btn btn-outline-secondary" id="clearUpdatePaymentSearch">Clear</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="payment-result-meta mt-2"><i class="fas fa-list mr-1"></i><strong id="visiblePaymentCount">0</strong> students shown</div>
-                            </div>
-
-                            <div class="method-tabs-wrap">
-                                <div class="mini font-weight-bold text-uppercase mb-2" style="letter-spacing:.4px;">Payment Method</div>
-                                <button type="button" class="btn method-pill is-active-all js-method-pill" data-plan="all">All</button>
-                                <button type="button" class="btn btn-outline-primary method-pill js-method-pill" data-plan="term-wise">Term-wise</button>
-                                <button type="button" class="btn btn-outline-info method-pill js-method-pill" data-plan="half-yearly">Half-yearly</button>
-                                <button type="button" class="btn btn-outline-success method-pill js-method-pill" data-plan="yearly">Yearly</button>
-                            </div>
-
-                            <div class="payment-no-results" id="paymentNoResults">
-                                <i class="fas fa-search fa-2x mb-2"></i>
-                                <div class="font-weight-bold">No matching payments found</div>
-                                <div class="small">Try another name, student ID, parent, class, or reference.</div>
-                            </div>
-
-                            <?php foreach ($plans as $planName => $codes): ?>
-                                <div class="card shadow-sm mb-4 fee-plan-section" data-plan="<?php echo strtolower($planName); ?>">
-                                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                                        <h6 class="m-0 font-weight-bold text-primary"><?php echo h($planName); ?> Fees</h6>
-                                        <span class="mini">Installments: <?php echo count($codes); ?></span>
-                                    </div>
-                                    <div class="card-body">
-                                        <?php if (empty($group[$planName])): ?>
-                                            <div class="alert alert-light mb-0">No records found for this plan.</div>
-                                        <?php else: ?>
-                                            <div class="table-responsive">
-                                                <table class="table table-bordered table-hover update-overview-table" width="100%">
-                                                    <thead class="thead-light">
-                                                    <tr>
-                                                        <th>Student</th>
-                                                        <th>Class</th>
-                                                        <th class="nowrap">Total Attendance</th>
-                                                        <th>Parent</th>
-                                                        <th class="nowrap">Amount</th>
-                                                        <th class="nowrap">Status</th>
-                                                        <th class="ref-col">Reference No.</th>
-                                                        <?php foreach ($codes as $c): ?>
-                                                            <?php $dueHeader = installment_due_date($feesSettings, $c); ?>
-                                                            <th class="nowrap text-center">
-                                                                <div><?php echo h(installment_label($c)); ?></div>
-                                                                <div class="mini text-muted">Due: <?php echo $dueHeader ? h($dueHeader) : '-'; ?></div>
-                                                            </th>
-                                                        <?php endforeach; ?>
-                                                    </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                    <?php foreach ($group[$planName] as $sid => $info): ?>
-                                                        <?php
-                                                            $totalPlanAmount = 0.0;
-                                                            $hasInstallmentRows = false;
-                                                            $isFullyPaid = true;
-                                                            foreach ($codes as $codeForPlan) {
-                                                                if (!installment_applies_to_start_term($planName, $codeForPlan, (int)($info['start_term'] ?? 1))) {
-                                                                    continue;
-                                                                }
-                                                                $instRow = $info['installments'][$codeForPlan] ?? null;
-                                                                if (!$instRow) {
-                                                                    $isFullyPaid = false;
-                                                                    continue;
-                                                                }
-                                                                $hasInstallmentRows = true;
-                                                                $totalPlanAmount += (float)($instRow['due_amount'] ?? 0);
-                                                                if (!in_array(normalize_status($instRow['status'] ?? ''), ['approved','verified'], true)) {
-                                                                    $isFullyPaid = false;
-                                                                }
-                                                            }
-                                                            if ($totalPlanAmount <= 0) {
-                                                                $totalPlanAmount = (float)($info['enrollment_amount'] ?? 0);
-                                                            }
-                                                            $planPaymentStatus = ($hasInstallmentRows && $isFullyPaid) ? 'Paid' : 'Unpaid';
-                                                            $firstCode = first_installment_code($planName, (int)($info['start_term'] ?? 1));
-                                                            $ref = (string)($info['installments'][$firstCode]['payment_reference'] ?? '');
-                                                            if ($ref === '') $ref = (string)($info['enrollment_reference'] ?? '');
-                                                        ?>
-                                                        <tr class="update-student-row"
-                                                            data-class-id="<?php echo (int)($info['class_id'] ?? 0); ?>"
-                                                            data-student="<?php echo h((string)($info['student_name'] ?? '')); ?>"
-                                                            data-class-name="<?php echo h((string)($info['class_name'] ?? '')); ?>"
-                                                            data-attendance="<?php echo (int)($info['total_attendance'] ?? 0); ?>"
-                                                            data-amount="<?php echo h((string)$totalPlanAmount); ?>"
-                                                            data-status="<?php echo h(strtolower($planPaymentStatus)); ?>">
-                                                            <td class="wrap">
-                                                                <strong><?php echo h($info['student_name']); ?></strong><br>
-                                                                <span class="mini">Student ID: <?php echo h($info['public_student_id']); ?></span><br>
-                                                                <span class="mini">Enrollment:
-                                                                <span class="badge badge-<?php echo badge_class($info['enrollment_status'] ?? 'Pending'); ?>">
-                                                                    <?php echo h($info['enrollment_status'] ?? 'Pending'); ?>
-                                                                </span>
-                                                                </span>
-                                                                <?php if ((int)($info['start_term'] ?? 1) > 1): ?>
-                                                                    <br><span class="badge badge-light border mt-1">Started Term <?php echo (int)$info['start_term']; ?></span>
-                                                                <?php endif; ?>
-                                                            </td>
-                                                            <td class="nowrap">
-                                                                <?php if (!empty($info['class_name'])): ?>
-                                                                    <span class="badge badge-info"><?php echo h($info['class_name']); ?></span>
-                                                                <?php else: ?>
-                                                                    <span class="text-muted">Not assigned</span>
-                                                                <?php endif; ?>
-                                                            </td>
-                                                            <td class="text-center nowrap" title="Total Present attendance records">
-                                                                <strong><?php echo (int)($info['total_attendance'] ?? 0); ?></strong>
-                                                            </td>
-                                                            <td class="wrap">
-                                                                <?php echo h($info['parent_name'] ?: '-'); ?><br>
-                                                                <span class="mini"><?php echo h($info['parent_email'] ?: '-'); ?></span><br>
-                                                                <span class="mini"><?php echo h($info['parent_phone'] ?: '-'); ?></span>
-                                                            </td>
-                                                            <td class="nowrap"><strong>$<?php echo number_format((float)$totalPlanAmount, 2); ?></strong></td>
-                                                            <td class="nowrap">
-                                                                <span class="badge badge-<?php echo $planPaymentStatus === 'Paid' ? 'success' : 'warning'; ?>">
-                                                                    <?php echo h($planPaymentStatus); ?>
-                                                                </span>
-                                                            </td>
-                                                            <td class="wrap">
-                                                                <div class="mini"><strong><?php echo $ref ? h($ref) : '-'; ?></strong></div>
-                                                                <div class="mini text-muted">Use this to match bank transfer</div>
-                                                            </td>
-                                                            <?php foreach ($codes as $code): ?>
-                                                                <?php
-                                                                    $r = $info['installments'][$code] ?? null;
-                                                                    $hasRow = is_array($r);
-                                                                    $status = (string)($r['status'] ?? 'Not Created');
-                                                                    $proof = trim((string)($r['proof_path'] ?? ''));
-                                                                    $feeId = (int)($r['id'] ?? 0);
-                                                                    $rowStatus = strtolower($status);
-                                                                    $rowFormId = 'rowPaymentForm' . $feeId;
-                                                                    $isApplicable = installment_applies_to_start_term($planName, $code, (int)($info['start_term'] ?? 1));
-                                                                ?>
-                                                                <td class="update-payment-cell status-<?php echo h($rowStatus); ?>">
-                                                                    <?php if (!$hasRow && !$isApplicable): ?>
-                                                                        <div class="mini text-muted">Not applicable</div>
-                                                                    <?php elseif ($hasRow && $feeId > 0): ?>
-                                                                        <div class="d-flex justify-content-between align-items-center mb-2">
-                                                                            <label class="mb-0 mini">
-                                                                                <input type="checkbox" class="payment-row-check mr-1" name="payment_ids[]" value="<?php echo (int)$feeId; ?>" form="bulkPaymentForm">
-                                                                                Select
-                                                                            </label>
-                                                                            <span class="badge badge-<?php echo badge_class($status); ?>"><?php echo h($status); ?></span>
-                                                                        </div>
-                                                                        <form method="POST" id="<?php echo h($rowFormId); ?>"><?= csrf_field() ?></form>
-                                                                        <input type="hidden" name="payment_id" form="<?php echo h($rowFormId); ?>" value="<?php echo (int)$feeId; ?>">
-                                                                        <div class="form-row">
-                                                                            <div class="col-6 mb-2">
-                                                                                <label class="upd-cell-label d-block">Due</label>
-                                                                                <input type="number" step="0.01" min="0" name="due_amount" form="<?php echo h($rowFormId); ?>" class="form-control form-control-sm js-due-amount" value="<?php echo h((string)($r['due_amount'] ?? 0)); ?>">
-                                                                            </div>
-                                                                            <div class="col-6 mb-2">
-                                                                                <label class="upd-cell-label d-block">Paid</label>
-                                                                                <input type="number" step="0.01" min="0" name="paid_amount" form="<?php echo h($rowFormId); ?>" class="form-control form-control-sm js-paid-amount" value="<?php echo h((string)($r['paid_amount'] ?? 0)); ?>">
-                                                                                <button type="button" class="quick-paid-btn js-paid-due">Use due</button>
-                                                                            </div>
-                                                                        </div>
-                                                                        <label class="upd-cell-label d-block">Reference</label>
-                                                                        <input type="text" name="payment_ref" form="<?php echo h($rowFormId); ?>" class="form-control form-control-sm mb-2" value="<?php echo h((string)($r['payment_reference'] ?? '')); ?>" placeholder="Reference">
-                                                                        <label class="upd-cell-label d-block">Status</label>
-                                                                        <select name="status" form="<?php echo h($rowFormId); ?>" class="form-control form-control-sm mb-2">
-                                                                            <?php foreach (['Unpaid','Pending','Verified','Rejected'] as $st): ?>
-                                                                                <option value="<?php echo h($st); ?>" <?php echo ($status === $st) ? 'selected' : ''; ?>><?php echo h($st); ?></option>
-                                                                            <?php endforeach; ?>
-                                                                        </select>
-                                                                        <div class="d-flex align-items-center justify-content-between">
-                                                                            <?php if ($proof !== ''): ?>
-                                                                                <?php $ptype = proof_type($proof); ?>
-                                                                                <a href="javascript:void(0)" class="mini proof-thumb" data-proof="<?php echo h($proof); ?>" data-type="<?php echo h($ptype); ?>" data-name="<?php echo h(basename($proof)); ?>">
-                                                                                    <i class="fas fa-eye"></i> Proof
-                                                                                </a>
-                                                                            <?php else: ?>
-                                                                                <span class="mini text-muted">No proof</span>
-                                                                            <?php endif; ?>
-                                                                            <button class="btn btn-sm btn-primary" type="submit" form="<?php echo h($rowFormId); ?>" name="action" value="update_payment_row">
-                                                                                <i class="fas fa-save mr-1"></i>Save
-                                                                            </button>
-                                                                        </div>
-                                                                    <?php else: ?>
-                                                                        <div class="mini text-muted">Missing fee row</div>
-                                                                    <?php endif; ?>
-                                                                </td>
-                                                            <?php endforeach; ?>
-                                                        </tr>
-                                                    <?php endforeach; ?>
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
+                                            <?php if ($isAdminTier && in_array($f['status'], ['Unpaid', 'Rejected'], true)): ?>
+                                                <button type="button" class="btn btn-sm btn-outline-success js-markpaid-btn" title="Mark Paid"
+                                                        data-id="<?= (int)$f['id'] ?>"
+                                                        data-due="<?= h((string)$f['due_amount']) ?>"
+                                                        data-child="<?= h((string)$f['student_name']) ?>"
+                                                        data-label="<?= h((string)$f['instalment_label']) ?>">
+                                                    <i class="fas fa-hand-holding-usd"></i>
+                                                </button>
+                                            <?php endif; ?>
+                                            <?php if ($isAdminTier && $f['status'] === 'Pending'): ?>
+                                                <button type="button" class="btn btn-sm btn-outline-success js-verify-btn" title="Verify"
+                                                        data-id="<?= (int)$f['id'] ?>"
+                                                        data-child="<?= h((string)$f['student_name']) ?>"
+                                                        data-label="<?= h((string)$f['instalment_label']) ?>">
+                                                    <i class="fas fa-check"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-sm btn-outline-danger js-reject-btn" title="Reject"
+                                                        data-id="<?= (int)$f['id'] ?>"
+                                                        data-child="<?= h((string)$f['student_name']) ?>"
+                                                        data-label="<?= h((string)$f['instalment_label']) ?>">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            <?php endif; ?>
+                                            <?php if ($isAdminTier): ?>
+                                                <button type="button" class="btn btn-sm btn-outline-info js-email-btn" title="Email parent"
+                                                        data-id="<?= (int)$f['id'] ?>"
+                                                        data-child="<?= h((string)$f['student_name']) ?>">
+                                                    <i class="fas fa-envelope"></i>
+                                                </button>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                <?php else: ?>
-                <div class="method-tabs-wrap">
-                    <div class="mini font-weight-bold text-uppercase mb-2" style="letter-spacing:.4px;">Payment Method</div>
-                    <button type="button" class="btn method-pill is-active-all js-method-pill" data-plan="all">All</button>
-                    <button type="button" class="btn btn-outline-primary method-pill js-method-pill" data-plan="term-wise">Term-wise</button>
-                    <button type="button" class="btn btn-outline-info method-pill js-method-pill" data-plan="half-yearly">Half-yearly</button>
-                    <button type="button" class="btn btn-outline-success method-pill js-method-pill" data-plan="yearly">Yearly</button>
                 </div>
-
-                <?php foreach ($plans as $planName => $codes): ?>
-                    <div class="card shadow mb-4 fee-plan-section" data-plan="<?php echo strtolower($planName); ?>">
-                        <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                            <h6 class="m-0 font-weight-bold text-primary">
-                                <?php echo htmlspecialchars($planName); ?> Fees
-                            </h6>
-                            <span class="mini">Installments: <?php echo count($codes); ?></span>
-                        </div>
-
-                        <div class="card-body">
-                            <?php if (empty($group[$planName])): ?>
-                                <div class="alert alert-light mb-0">No records found for this plan.</div>
-                            <?php else: ?>
-                                <div class="table-responsive">
-                                    <table class="table table-bordered" width="100%">
-                                        <thead class="thead-light">
-                                        <tr>
-                                            <th>Student</th>
-                                            <th>Parent</th>
-                                            <th>Email</th>
-                                            <th>Phone</th>
-                                            <th class="wrap">Address</th>
-                                            <th class="nowrap">Amount</th>
-                                            <th class="nowrap">Status</th>
-                                            <th class="ref-col">Reference No.</th>
-
-                                            <!-- ✅ Due date shown in column header -->
-                                            <?php foreach ($codes as $c): ?>
-                                                <?php $dueHeader = installment_due_date($feesSettings, $c); ?>
-                                                <th class="nowrap text-center">
-                                                    <div><?php echo htmlspecialchars(installment_label($c)); ?></div>
-                                                    <div class="mini text-muted">Due: <?php echo $dueHeader ? htmlspecialchars($dueHeader) : '-'; ?></div>
-                                                </th>
-                                            <?php endforeach; ?>
-                                        </tr>
-                                        </thead>
-
-                                        <tbody>
-                                        <?php foreach ($group[$planName] as $sid => $info): ?>
-                                            <?php
-                                                $totalPlanAmount = 0.0;
-                                                $hasInstallmentRows = false;
-                                                $isFullyPaid = true;
-                                                foreach ($codes as $codeForPlan) {
-                                                    if (!installment_applies_to_start_term($planName, $codeForPlan, (int)($info['start_term'] ?? 1))) {
-                                                        continue;
-                                                    }
-                                                    $instRow = $info['installments'][$codeForPlan] ?? null;
-                                                    if (!$instRow) {
-                                                        $isFullyPaid = false;
-                                                        continue;
-                                                    }
-                                                    $hasInstallmentRows = true;
-                                                    $totalPlanAmount += (float)($instRow['due_amount'] ?? 0);
-                                                    if (!in_array(normalize_status($instRow['status'] ?? ''), ['approved','verified'], true)) {
-                                                        $isFullyPaid = false;
-                                                    }
-                                                }
-                                                if ($totalPlanAmount <= 0) {
-                                                    $totalPlanAmount = (float)($info['enrollment_amount'] ?? 0);
-                                                }
-                                                $planPaymentStatus = ($hasInstallmentRows && $isFullyPaid) ? 'Paid' : 'Unpaid';
-                                            ?>
-                                            <tr>
-                                                <td class="wrap">
-                                                    <strong><?php echo htmlspecialchars($info['student_name']); ?></strong><br>
-                                                    <span class="mini">Student ID: <?php echo htmlspecialchars($info['public_student_id']); ?></span><br>
-                                                    <span class="mini">Enrollment:
-                                                        <span class="badge badge-<?php echo badge_class($info['enrollment_status'] ?? 'Pending'); ?>">
-                                                            <?php echo htmlspecialchars($info['enrollment_status'] ?? 'Pending'); ?>
-                                                        </span>
-                                                    </span>
-                                                    <?php if ((int)($info['start_term'] ?? 1) > 1): ?>
-                                                        <br><span class="badge badge-light border mt-1">Started Term <?php echo (int)$info['start_term']; ?></span>
-                                                    <?php endif; ?>
-                                                </td>
-
-                                                <td class="wrap"><?php echo htmlspecialchars($info['parent_name'] ?: '-'); ?></td>
-                                                <td class="wrap"><?php echo htmlspecialchars($info['parent_email'] ?: '-'); ?></td>
-                                                <td class="wrap"><?php echo htmlspecialchars($info['parent_phone'] ?: '-'); ?></td>
-                                                <td class="wrap"><?php echo htmlspecialchars($info['parent_address'] ?: '-'); ?></td>
-                                                <td class="nowrap"><strong>$<?php echo number_format((float)$totalPlanAmount, 2); ?></strong></td>
-                                                <td class="nowrap">
-                                                    <span class="badge badge-<?php echo $planPaymentStatus === 'Paid' ? 'success' : 'warning'; ?>">
-                                                        <?php echo $planPaymentStatus; ?>
-                                                    </span>
-                                                </td>
-
-                                                <!-- ✅ Reference column -->
-                                                <td class="wrap">
-                                                    <?php
-                                                        // For each plan, display the reference of the FIRST installment row (best), else fallback to enrollment_reference.
-                                                        $firstCode = first_installment_code($planName, (int)($info['start_term'] ?? 1));
-                                                        $ref = '';
-                                                        if (isset($info['installments'][$firstCode]['payment_reference'])) {
-                                                            $ref = (string)$info['installments'][$firstCode]['payment_reference'];
-                                                        }
-                                                        if ($ref === '') {
-                                                            $ref = (string)($info['enrollment_reference'] ?? '');
-                                                        }
-                                                    ?>
-                                                    <div class="mini"><strong><?php echo $ref ? htmlspecialchars($ref) : '-'; ?></strong></div>
-                                                    <div class="mini text-muted">Use this to match bank transfer</div>
-                                                </td>
-
-                                                <?php foreach ($codes as $code): ?>
-                                                    <?php
-                                                        $r = $info['installments'][$code] ?? null;
-                                                        $hasRow = is_array($r);
-                                                        $status = $r['status'] ?? 'Not Created';
-                                                        $proof = trim((string)($r['proof_path'] ?? ''));
-                                                        $feeId = (int)($r['id'] ?? 0);
-                                                        $amount = $hasRow ? (float)($r['due_amount'] ?? 0) : null;
-
-                                                        $isApproved = (normalize_status($status) === 'approved');
-                                                    ?>
-                                                    <td>
-                                                        <div class="mini mb-1">
-                                                            <strong>Amount:</strong>
-                                                            <?php echo $amount === null ? '-' : ('$' . number_format($amount, 2)); ?>
-                                                        </div>
-                                                        <div class="mb-1">
-                                                            <span class="badge badge-<?php echo badge_class($status); ?>">
-                                                                <?php echo htmlspecialchars($status); ?>
-                                                            </span>
-                                                        </div>
-
-                                                        <?php if ($proof !== ''): ?>
-                                                            <?php $type = proof_type($proof); ?>
-                                                            <div class="mb-2">
-                                                                <a href="javascript:void(0)"
-                                                                   class="proof-thumb"
-                                                                   data-proof="<?php echo htmlspecialchars($proof); ?>"
-                                                                   data-type="<?php echo htmlspecialchars($type); ?>"
-                                                                   data-name="<?php echo htmlspecialchars(basename($proof)); ?>">
-                                                                    <?php if ($type === 'img'): ?>
-                                                                        <img class="thumb-img" src="<?php echo htmlspecialchars($proof); ?>" alt="proof">
-                                                                    <?php else: ?>
-                                                                        <span class="thumb-icon"><i class="fas fa-file-pdf"></i></span>
-                                                                    <?php endif; ?>
-                                                                    <span class="mini"><i class="fas fa-eye"></i> View</span>
-                                                                </a>
-                                                            </div>
-                                                        <?php else: ?>
-                                                            <div class="mini text-muted mb-2">No proof</div>
-                                                        <?php endif; ?>
-
-                                                        <?php if ($feeId > 0): ?>
-                                                            <?php if ($isApproved): ?>
-                                                                <!-- ✅ Replace Approve/Reject with Update -->
-                                                                <button type="button"
-                                                                        class="btn btn-sm btn-outline-primary update-btn"
-                                                                        data-fee-id="<?php echo (int)$feeId; ?>"
-                                                                        data-current-status="<?php echo htmlspecialchars($status); ?>">
-                                                                    <i class="fas fa-edit"></i> Update
-                                                                </button>
-                                                            <?php else: ?>
-                                                                <div>
-                                                                    <button type="button"
-                                                                            class="btn btn-sm btn-outline-primary update-btn"
-                                                                            data-fee-id="<?php echo (int)$feeId; ?>"
-                                                                            data-current-status="<?php echo htmlspecialchars($status); ?>">
-                                                                        <i class="fas fa-edit"></i> Update
-                                                                    </button>
-                                                                </div>
-                                                            <?php endif; ?>
-                                                        <?php else: ?>
-                                                            <div class="mini text-muted">Missing fee row</div>
-                                                        <?php endif; ?>
-                                                    </td>
-                                                <?php endforeach; ?>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-                <?php endif; ?>
 
             </div>
         </div>
@@ -1643,404 +910,289 @@ if ($updateOnlyMode) {
     </div>
 </div>
 
-<!-- Hidden Update Form (submitted via JS) -->
-<form id="updateFeeForm" method="POST" style="display:none;">
-    <?= csrf_field() ?>
-    <input type="hidden" name="update_fee_id" id="update_fee_id" value="">
-    <input type="hidden" name="new_status" id="new_status" value="">
-</form>
+<!-- Shared modal: Edit fee row -->
+<div class="modal fade" id="editPaymentModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="POST">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="update_payment_row">
+                <input type="hidden" name="payment_id" id="editPaymentId" value="">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Edit Payment</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="small mb-2"><strong id="editPaymentChild"></strong> - <span id="editPaymentLabel"></span></div>
+                    <div class="form-group"><label>Due Amount</label><input type="number" min="0" step="0.01" name="due_amount" id="editPaymentDue" class="form-control" required></div>
+                    <div class="form-group"><label>Paid Amount</label><input type="number" min="0" step="0.01" name="paid_amount" id="editPaymentPaid" class="form-control" required></div>
+                    <div class="form-group"><label>Reference</label><input type="text" name="payment_ref" id="editPaymentRef" class="form-control" placeholder="Payment reference"></div>
+                    <div class="form-group mb-0">
+                        <label>Status</label>
+                        <select name="status" id="editPaymentStatus" class="form-control">
+                            <option value="Unpaid">Unpaid</option>
+                            <option value="Pending">Pending</option>
+                            <option value="Verified">Verified</option>
+                            <option value="Rejected">Rejected</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Shared modal: Mark Paid -->
+<div class="modal fade" id="markPaidModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="POST">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="manual_mark_paid">
+                <input type="hidden" name="payment_id" id="markPaidId" value="">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">Record Manual Payment</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="small mb-2"><strong id="markPaidChild"></strong> - <span id="markPaidLabel"></span></div>
+                    <div class="form-group"><label>Paid Amount</label><input type="number" min="0" step="0.01" name="paid_amount" id="markPaidAmount" class="form-control" required></div>
+                    <div class="form-group mb-0"><label>Reference</label><input type="text" name="payment_ref" class="form-control" placeholder="Payment reference"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success">Save Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Shared modal: Verify -->
+<div class="modal fade" id="verifyPaymentModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="POST">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="verify">
+                <input type="hidden" name="fee_id" id="verifyPaymentId" value="">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title">Verify Payment</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <p>Confirm <strong id="verifyPaymentChild"></strong> — <span id="verifyPaymentLabel"></span> has been paid?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success"><i class="fas fa-check mr-1"></i>Verify</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Shared modal: Reject -->
+<div class="modal fade" id="rejectPaymentModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="POST">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="reject">
+                <input type="hidden" name="fee_id" id="rejectPaymentId" value="">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Reject Payment</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong id="rejectPaymentChild"></strong> — <span id="rejectPaymentLabel"></span></p>
+                    <div class="form-group mb-0"><label>Reason</label><textarea name="reject_reason" class="form-control" rows="2" required></textarea></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Reject</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Shared modal: Email parent -->
+<div class="modal fade" id="emailPaymentModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="POST">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="send_custom_email">
+                <input type="hidden" name="fee_id" id="emailPaymentId" value="">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">Send Parent Email</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mini mb-2">Variables: {parent_name}, {child_name}, {plan_type}, {instalment_label}, {due_amount}, {paid_amount}, {status}</div>
+                    <div class="form-group">
+                        <label>Subject</label>
+                        <input type="text" name="email_subject" class="form-control" value="Fee Update for {child_name}" required>
+                    </div>
+                    <div class="form-group mb-0">
+                        <label>Message</label>
+                        <textarea name="email_body" class="form-control" rows="6" required>Dear {parent_name},
+
+This is an update for {child_name}:
+- Plan: {plan_type}
+- Instalment: {instalment_label}
+- Due: ${due_amount}
+- Paid: ${paid_amount}
+- Status: {status}
+
+Thank you.</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-info">Send Email</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap4.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    let updateTable = null;
-    if (document.getElementById('updatePaymentsTable') && window.jQuery && jQuery.fn && typeof jQuery.fn.DataTable === 'function') {
-        updateTable = jQuery('#updatePaymentsTable').DataTable({
+    let dt = null;
+    if (document.getElementById('paymentsTable') && window.jQuery && jQuery.fn && typeof jQuery.fn.DataTable === 'function') {
+        dt = jQuery('#paymentsTable').DataTable({
             pageLength: 25,
-            order: [[1, 'asc']],
-            columnDefs: [
-                { orderable: false, searchable: false, targets: [0, 11] }
-            ]
+            order: [[12, 'desc']],
+            columnDefs: [{ orderable: false, searchable: false, targets: [0, 13] }]
         });
     }
 
-    const filterButtons = document.querySelectorAll('.plan-filter-btn');
-    filterButtons.forEach(btn => {
-        btn.addEventListener('click', function () {
-            filterButtons.forEach(b => {
-                b.classList.remove('active', 'btn-primary');
-                if (!b.classList.contains('btn-outline-primary') && !b.classList.contains('btn-outline-info') && !b.classList.contains('btn-outline-success') && !b.classList.contains('btn-outline-dark')) {
-                    b.classList.add('btn-outline-primary');
-                }
-            });
-            this.classList.add('active', 'btn-primary');
-            this.classList.remove('btn-outline-primary', 'btn-outline-info', 'btn-outline-success', 'btn-outline-dark');
+    function applyFilters() {
+        if (!dt) return;
+        const status = (document.querySelector('.status-filter-btn.active') || {}).dataset ? document.querySelector('.status-filter-btn.active').dataset.status : 'all';
+        dt.column(11).search(status === 'all' ? '' : '^' + status.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', true, false);
 
-            if (updateTable) {
-                const plan = this.getAttribute('data-plan') || 'all';
-                updateTable.column(4).search(plan === 'all' ? '' : '^' + plan + '$', true, false).draw();
-                updateSelectedCount();
-            }
-        });
-    });
+        const cls = document.getElementById('updateClassFilter').value;
+        dt.column(3).search(cls === 'all' ? '' : '^' + cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', true, false);
 
-    const statusButtons = document.querySelectorAll('.status-filter-btn');
-    statusButtons.forEach(btn => {
+        const plan = document.getElementById('updatePlanFilter').value;
+        dt.column(5).search(plan === '' ? '' : '^' + plan.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', true, false);
+
+        const search = document.getElementById('updatePaymentSearch').value;
+        dt.search(search);
+
+        dt.draw();
+    }
+
+    document.querySelectorAll('.status-filter-btn').forEach(btn => {
         btn.addEventListener('click', function () {
-            statusButtons.forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.status-filter-btn').forEach(b => b.classList.remove('active'));
             this.classList.add('active');
-            if (updateTable) {
-                const status = this.getAttribute('data-status') || 'all';
-                updateTable.column(9).search(status === 'all' ? '' : '^' + status + '$', true, false).draw();
-                updateSelectedCount();
-            }
+            applyFilters();
         });
     });
-
-    const selectedCount = document.getElementById('selectedPaymentCount');
-    const selectAll = document.getElementById('selectAllPayments');
-    const selectVisible = document.getElementById('selectVisiblePayments');
-    const classFilter = document.getElementById('updateClassFilter');
-    const paymentSort = document.getElementById('updatePaymentSort');
-    const paymentSearch = document.getElementById('updatePaymentSearch');
-    const paymentSearchBtn = document.getElementById('updatePaymentSearchBtn');
-    const clearPaymentSearch = document.getElementById('clearUpdatePaymentSearch');
-    const visiblePaymentCount = document.getElementById('visiblePaymentCount');
-    const paymentNoResults = document.getElementById('paymentNoResults');
-
-    document.querySelectorAll('.update-overview-table tbody').forEach(tbody => {
-        Array.from(tbody.querySelectorAll('.update-student-row')).forEach((row, index) => {
-            row.dataset.originalIndex = String(index);
-        });
-    });
-
-    function sortPaymentRows() {
-        const sortValue = paymentSort ? paymentSort.value : 'student-asc';
-        const separator = sortValue.lastIndexOf('-');
-        const field = separator > -1 ? sortValue.slice(0, separator) : 'student';
-        const dataField = field === 'class' ? 'className' : field;
-        const direction = sortValue.endsWith('-desc') ? -1 : 1;
-
-        document.querySelectorAll('.update-overview-table tbody').forEach(tbody => {
-            const rows = Array.from(tbody.querySelectorAll('.update-student-row'));
-            rows.sort((a, b) => {
-                let comparison = 0;
-                if (field === 'attendance' || field === 'amount') {
-                    comparison = (parseFloat(a.dataset[dataField] || '0') - parseFloat(b.dataset[dataField] || '0'));
-                } else {
-                    const aValue = (a.dataset[dataField] || '').trim();
-                    const bValue = (b.dataset[dataField] || '').trim();
-                    comparison = aValue.localeCompare(bValue, undefined, { numeric: true, sensitivity: 'base' });
-                }
-                if (comparison === 0) {
-                    comparison = Number(a.dataset.originalIndex || 0) - Number(b.dataset.originalIndex || 0);
-                }
-                return comparison * direction;
-            });
-            rows.forEach(row => tbody.appendChild(row));
-        });
-    }
-
-    function refreshPaymentResultSummary() {
-        let visibleRows = 0;
-        document.querySelectorAll('.update-student-row').forEach(row => {
-            const section = row.closest('.fee-plan-section');
-            const rowVisible = row.style.display !== 'none';
-            const sectionVisible = !section || section.style.display !== 'none';
-            if (rowVisible && sectionVisible) visibleRows++;
-        });
-        if (visiblePaymentCount) visiblePaymentCount.textContent = String(visibleRows);
-        if (paymentNoResults) paymentNoResults.style.display = visibleRows === 0 ? 'block' : 'none';
-    }
-
-    function applyPaymentRowFilters() {
-        const selectedClass = classFilter ? classFilter.value : 'all';
-        const query = paymentSearch ? paymentSearch.value.trim().toLowerCase() : '';
-        document.querySelectorAll('.update-student-row').forEach(row => {
-            const rowClass = row.getAttribute('data-class-id') || '0';
-            const classMatches = selectedClass === 'all'
-                || (selectedClass === 'unassigned' && rowClass === '0')
-                || rowClass === selectedClass;
-            const inputValues = Array.from(row.querySelectorAll('input, select'))
-                .map(field => field.value || '')
-                .join(' ');
-            const searchableText = ((row.textContent || '') + ' ' + inputValues).toLowerCase();
-            const searchMatches = query === '' || searchableText.includes(query);
-            row.style.display = classMatches && searchMatches ? '' : 'none';
-        });
-        updateSelectedCount();
-        refreshPaymentResultSummary();
-    }
-
-    if (classFilter) {
-        classFilter.addEventListener('change', applyPaymentRowFilters);
-    }
-    if (paymentSort) {
-        paymentSort.addEventListener('change', function () {
-            sortPaymentRows();
-            refreshPaymentResultSummary();
-        });
-    }
-    if (paymentSearchBtn) {
-        paymentSearchBtn.addEventListener('click', applyPaymentRowFilters);
-    }
-    if (paymentSearch) {
-        paymentSearch.addEventListener('keydown', function (event) {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                applyPaymentRowFilters();
-            }
-        });
-    }
-    if (clearPaymentSearch) {
-        clearPaymentSearch.addEventListener('click', function () {
-            if (paymentSearch) paymentSearch.value = '';
-            applyPaymentRowFilters();
-            if (paymentSearch) paymentSearch.focus();
-        });
-    }
-    sortPaymentRows();
-    applyPaymentRowFilters();
-
-    function paymentCheckboxes(scopeVisibleOnly) {
-        if (updateTable && scopeVisibleOnly) {
-            return Array.from(jQuery(updateTable.rows({ search: 'applied', page: 'current' }).nodes()).find('.payment-row-check'));
-        }
-        const boxes = Array.from(document.querySelectorAll('.payment-row-check'));
-        if (!scopeVisibleOnly) return boxes;
-        return boxes.filter(cb => {
-            const row = cb.closest('.update-student-row');
-            const section = cb.closest('.fee-plan-section');
-            return (!row || row.style.display !== 'none') && (!section || section.style.display !== 'none');
-        });
-    }
+    document.getElementById('updateClassFilter').addEventListener('change', applyFilters);
+    document.getElementById('updatePlanFilter').addEventListener('change', applyFilters);
+    document.getElementById('updatePaymentSearch').addEventListener('keyup', applyFilters);
 
     function updateSelectedCount() {
-        const checked = document.querySelectorAll('.payment-row-check:checked').length;
-        if (selectedCount) selectedCount.textContent = String(checked);
-        if (selectAll) {
-            const visible = paymentCheckboxes(true);
-            selectAll.checked = visible.length > 0 && visible.every(cb => cb.checked);
-            selectAll.indeterminate = visible.some(cb => cb.checked) && !selectAll.checked;
-        }
+        const count = document.querySelectorAll('.payment-row-check:checked').length;
+        document.getElementById('selectedPaymentCount').textContent = String(count);
     }
-
     document.addEventListener('change', function (e) {
-        if (e.target && e.target.classList.contains('payment-row-check')) {
-            updateSelectedCount();
-        }
+        if (e.target.classList.contains('payment-row-check')) updateSelectedCount();
     });
-
-    if (selectAll) {
-        selectAll.addEventListener('change', function () {
-            paymentCheckboxes(true).forEach(cb => { cb.checked = selectAll.checked; });
-            updateSelectedCount();
-        });
-    }
-
-    if (selectVisible) {
-        selectVisible.addEventListener('click', function () {
-            paymentCheckboxes(true).forEach(cb => { cb.checked = true; });
-            updateSelectedCount();
-        });
-    }
-
-    document.querySelectorAll('.js-paid-due').forEach(btn => {
-        btn.addEventListener('click', function () {
-            const row = this.closest('tr');
-            if (!row) return;
-            const due = row.querySelector('.js-due-amount');
-            const paid = row.querySelector('.js-paid-amount');
-            if (due && paid) paid.value = due.value;
-        });
-    });
-
-    const bulkForm = document.getElementById('bulkPaymentForm');
-    if (bulkForm) {
-        bulkForm.addEventListener('submit', function (e) {
-            if (document.querySelectorAll('.payment-row-check:checked').length === 0) {
-                e.preventDefault();
-                alert('Please select at least one payment row.');
+    document.getElementById('selectVisiblePayments').addEventListener('click', function () {
+        document.querySelectorAll('#paymentsTable tbody tr').forEach(row => {
+            if (row.style.display !== 'none') {
+                const cb = row.querySelector('.payment-row-check');
+                if (cb) cb.checked = true;
             }
         });
-    }
-
-    // ---------- Payment method tabs ----------
-    const methodPills = document.querySelectorAll('.js-method-pill');
-    const planSections = document.querySelectorAll('.fee-plan-section');
-
-    function slugToActiveClass(slug) {
-        if (slug === 'term-wise') return 'is-active-term-wise';
-        if (slug === 'half-yearly') return 'is-active-half-yearly';
-        if (slug === 'yearly') return 'is-active-yearly';
-        return 'is-active-all';
-    }
-
-    function applyMethodFilter(planSlug) {
-        const slug = (planSlug || 'all').toLowerCase();
-        planSections.forEach(section => {
-            const current = (section.getAttribute('data-plan') || '').toLowerCase();
-            section.style.display = (slug === 'all' || current === slug) ? '' : 'none';
-        });
-
-        methodPills.forEach(btn => {
-            btn.classList.remove('is-active-all', 'is-active-term-wise', 'is-active-half-yearly', 'is-active-yearly');
-            const thisSlug = (btn.getAttribute('data-plan') || 'all').toLowerCase();
-            if (thisSlug === slug) {
-                btn.classList.add(slugToActiveClass(thisSlug));
-            }
-        });
-        refreshPaymentResultSummary();
-    }
-
-    methodPills.forEach(btn => {
-        btn.addEventListener('click', function() {
-            applyMethodFilter((this.getAttribute('data-plan') || 'all'));
-        });
+        updateSelectedCount();
     });
-    applyMethodFilter('all');
 
-    // ---------- Proof Modal ----------
-    function openProofModal(path, type, filename) {
-        filename = filename || 'proof';
+    // Row action buttons + proof viewer: delegated on document, since DataTables
+    // recreates row DOM nodes on paginate/search/sort, which would silently
+    // orphan any listener bound directly to a button at initial page load.
+    document.addEventListener('click', function (e) {
+        const editBtn = e.target.closest('.js-edit-btn');
+        if (editBtn) {
+            document.getElementById('editPaymentId').value = editBtn.dataset.id;
+            document.getElementById('editPaymentDue').value = editBtn.dataset.due;
+            document.getElementById('editPaymentPaid').value = editBtn.dataset.paid;
+            document.getElementById('editPaymentRef').value = editBtn.dataset.ref;
+            document.getElementById('editPaymentStatus').value = editBtn.dataset.status;
+            document.getElementById('editPaymentChild').textContent = editBtn.dataset.child;
+            document.getElementById('editPaymentLabel').textContent = editBtn.dataset.label;
+            jQuery('#editPaymentModal').modal('show');
+            return;
+        }
 
-        if (type === 'img') {
-            let scale = 1;
+        const markPaidBtn = e.target.closest('.js-markpaid-btn');
+        if (markPaidBtn) {
+            document.getElementById('markPaidId').value = markPaidBtn.dataset.id;
+            document.getElementById('markPaidAmount').value = markPaidBtn.dataset.due;
+            document.getElementById('markPaidChild').textContent = markPaidBtn.dataset.child;
+            document.getElementById('markPaidLabel').textContent = markPaidBtn.dataset.label;
+            jQuery('#markPaidModal').modal('show');
+            return;
+        }
 
+        const verifyBtn = e.target.closest('.js-verify-btn');
+        if (verifyBtn) {
+            document.getElementById('verifyPaymentId').value = verifyBtn.dataset.id;
+            document.getElementById('verifyPaymentChild').textContent = verifyBtn.dataset.child;
+            document.getElementById('verifyPaymentLabel').textContent = verifyBtn.dataset.label;
+            jQuery('#verifyPaymentModal').modal('show');
+            return;
+        }
+
+        const rejectBtn = e.target.closest('.js-reject-btn');
+        if (rejectBtn) {
+            document.getElementById('rejectPaymentId').value = rejectBtn.dataset.id;
+            document.getElementById('rejectPaymentChild').textContent = rejectBtn.dataset.child;
+            document.getElementById('rejectPaymentLabel').textContent = rejectBtn.dataset.label;
+            jQuery('#rejectPaymentModal').modal('show');
+            return;
+        }
+
+        const emailBtn = e.target.closest('.js-email-btn');
+        if (emailBtn) {
+            document.getElementById('emailPaymentId').value = emailBtn.dataset.id;
+            jQuery('#emailPaymentModal').modal('show');
+            return;
+        }
+
+        const proofEl = e.target.closest('.proof-thumb');
+        if (proofEl) {
+            const proof = proofEl.dataset.proof;
+            const type = proofEl.dataset.type;
+            const name = proofEl.dataset.name;
+            let html;
+            if (type === 'img') {
+                html = '<div class="proof-stage"><img class="proof-img" src="' + proof + '" alt="' + name + '"></div>';
+            } else {
+                html = '<iframe class="proof-frame" src="' + proof + '"></iframe>';
+            }
             Swal.fire({
-                title: 'Payment Proof',
-                html: `
-                    <div class="proof-stage">
-                        <img id="swalProofImg" class="proof-img" src="${path}" alt="Proof" />
-                    </div>
-                    <div class="swal-toolbar">
-                        <button type="button" class="btn btn-sm btn-outline-primary" id="zoomInBtn">
-                            <i class="fas fa-search-plus"></i> Zoom In
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-primary" id="zoomOutBtn">
-                            <i class="fas fa-search-minus"></i> Zoom Out
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" id="resetZoomBtn">
-                            <i class="fas fa-undo"></i> Reset
-                        </button>
-                        <a class="btn btn-sm btn-success" href="${path}" download="${filename}">
-                            <i class="fas fa-download"></i> Download
-                        </a>
-                        <a class="btn btn-sm btn-primary" href="${path}" target="_blank">
-                            <i class="fas fa-external-link-alt"></i> Open
-                        </a>
-                    </div>
-                `,
-                showCloseButton: true,
-                showConfirmButton: false,
-                didOpen: () => {
-                    const img = document.getElementById('swalProofImg');
-                    if (!img) return;
-
-                    img.onload = () => {
-                        // Default behavior: fit full image inside modal viewport.
-                        img.style.width = 'auto';
-                        img.style.maxWidth = '100%';
-                        img.style.height = 'auto';
-                        applyScale();
-                    };
-
-                    function applyScale() {
-                        img.style.transform = `scale(${scale})`;
-                    }
-
-                    document.getElementById('zoomInBtn')?.addEventListener('click', () => {
-                        scale = Math.min(5, +(scale + 0.25).toFixed(2));
-                        applyScale();
-                    });
-
-                    document.getElementById('zoomOutBtn')?.addEventListener('click', () => {
-                        scale = Math.max(0.25, +(scale - 0.25).toFixed(2));
-                        applyScale();
-                    });
-
-                    document.getElementById('resetZoomBtn')?.addEventListener('click', () => {
-                        scale = 1;
-                        applyScale();
-                    });
-                }
-            });
-        } else {
-            Swal.fire({
-                title: 'Payment Proof (PDF)',
-                html: `
-                    <iframe class="proof-frame" src="${path}#toolbar=1&navpanes=0&scrollbar=1"></iframe>
-                    <div class="swal-toolbar">
-                        <a class="btn btn-sm btn-success" href="${path}" download="${filename}">
-                            <i class="fas fa-download"></i> Download
-                        </a>
-                        <a class="btn btn-sm btn-primary" href="${path}" target="_blank">
-                            <i class="fas fa-external-link-alt"></i> Open PDF
-                        </a>
-                    </div>
-                `,
-                showCloseButton: true,
-                showConfirmButton: false
+                title: name,
+                html: html,
+                showConfirmButton: true,
+                confirmButtonText: 'Close',
+                width: 920,
             });
         }
-    }
-
-    document.querySelectorAll('.proof-thumb').forEach(el => {
-        el.addEventListener('click', function () {
-            const path = this.getAttribute('data-proof');
-            const type = this.getAttribute('data-type');
-            const name = this.getAttribute('data-name') || 'proof';
-            if (!path) return;
-            openProofModal(path, type, name);
-        });
     });
-
-    // ---------- Update button ----------
-    document.querySelectorAll('.update-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const feeId = this.getAttribute('data-fee-id');
-            const current = this.getAttribute('data-current-status') || 'Pending';
-
-            Swal.fire({
-                title: 'Update Installment',
-                html: `
-                    <div class="text-left">
-                        <div class="mini mb-2">Fee ID: <strong>${feeId}</strong></div>
-                        <label class="mini mb-1">Status</label>
-                        <select id="statusSelect" class="form-control">
-                            <option value="Pending">Pending</option>
-                            <option value="Approved">Approved</option>
-                            <option value="Rejected">Rejected</option>
-                        </select>
-                        <div class="mini text-muted mt-2">
-                            If set to Pending, verified_by and verified_at will be cleared.
-                        </div>
-                    </div>
-                `,
-                showCancelButton: true,
-                confirmButtonText: 'Save',
-                cancelButtonText: 'Cancel',
-                didOpen: () => {
-                    const sel = document.getElementById('statusSelect');
-                    if (sel) sel.value = (current.charAt(0).toUpperCase() + current.slice(1).toLowerCase());
-                },
-                preConfirm: () => {
-                    const sel = document.getElementById('statusSelect');
-                    return sel ? sel.value : 'Pending';
-                }
-            }).then((res) => {
-                if (!res.isConfirmed) return;
-
-                document.getElementById('update_fee_id').value = feeId;
-                document.getElementById('new_status').value = res.value;
-                document.getElementById('updateFeeForm').submit();
-            });
-        });
-    });
-
 });
 </script>
-
 </body>
 </html>

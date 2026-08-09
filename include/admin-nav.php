@@ -440,9 +440,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                     <div id="collapseDzoFees" class="collapse dzo-subgroup-links <?= $dzoFeesActive ? 'show' : '' ?>" data-parent="#collapseOrders">
                         <a class="collapse-item <?= ($currentPage == 'feesManagement.php') ? 'active' : '' ?>" href="feesManagement"><i class="fas fa-money-check-alt fa-sm mr-1 text-muted"></i> Fees Overview</a>
                         <a class="collapse-item <?= ($currentPage == 'feesSetting.php') ? 'active' : '' ?>" href="feesSetting"><i class="fas fa-cog fa-sm mr-1 text-muted"></i> Fees Settings</a>
-                        <a class="collapse-item <?= ($currentPage == 'update-payments.php') ? 'active' : '' ?>" href="update-payments"><i class="fas fa-edit fa-sm mr-1 text-muted"></i> Update Payments</a>
-                        <a class="collapse-item <?= ($currentPage == 'manual-payments.php') ? 'active' : '' ?>" href="manual-payments"><i class="fas fa-hand-holding-usd fa-sm mr-1 text-muted"></i> Manual Payments</a>
-                        <a class="collapse-item <?= ($currentPage == 'admin-fee-verification.php') ? 'active' : '' ?>" href="admin-fee-verification"><i class="fas fa-check-double fa-sm mr-1 text-muted"></i> Verify Payments</a>
+                        <a class="collapse-item <?= ($currentPage == 'update-payments.php') ? 'active' : '' ?>" href="update-payments"><i class="fas fa-edit fa-sm mr-1 text-muted"></i> Manage Payments</a>
                     </div>
 
                     <h6 class="collapse-header dzo-group-header d-none d-lg-block">Classroom Operations</h6>
