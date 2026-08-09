@@ -564,10 +564,17 @@ if (!empty($allEnrolmentIds)) {
     ")->fetchAll(PDO::FETCH_ASSOC);
 }
 $auditByEnrolment = [];
+$auditForJs = [];
 foreach ($auditRows as $ar) {
     $k = (int)($ar['enrolment_id'] ?? 0);
     if ($k <= 0) continue;
     $auditByEnrolment[$k][] = $ar;
+    $auditForJs[$k][] = [
+        'time' => date('d M Y H:i', strtotime((string)$ar['created_at'])),
+        'event' => (string)$ar['event_type'],
+        'actor' => (string)($ar['actor'] ?? ''),
+        'details' => (string)($ar['details'] ?? ''),
+    ];
 }
 
 // Counts
@@ -843,24 +850,9 @@ document.addEventListener('DOMContentLoaded',()=>{
                                 <i class="fas fa-file-signature mr-1"></i> Enroll
                             </button>
                             <?php if (strtolower((string)($rc['approval_status'] ?? '')) !== 'rejected'): ?>
-                            <button type="button" class="btn btn-sm btn-outline-danger" data-toggle="modal" data-target="#rejectRegModal<?= (int)$rc['id'] ?>">
+                            <button type="button" class="btn btn-sm btn-outline-danger js-reject-reg-btn" data-student-id="<?= (int)$rc['id'] ?>" data-student-name="<?= h((string)($rc['student_name'] ?? '')) ?>">
                                 <i class="fas fa-times mr-1"></i> Reject
                             </button>
-                            <div class="modal fade" id="rejectRegModal<?= (int)$rc['id'] ?>" tabindex="-1">
-                                <div class="modal-dialog"><div class="modal-content">
-                                    <form method="POST">
-                                        <?= csrf_field() ?>
-                                        <input type="hidden" name="action" value="reject_registration">
-                                        <input type="hidden" name="student_id" value="<?= (int)$rc['id'] ?>">
-                                        <div class="modal-header bg-danger text-white"><h5 class="modal-title">Reject Registration</h5><button type="button" class="close text-white" data-dismiss="modal">&times;</button></div>
-                                        <div class="modal-body">
-                                            <p>Reject registration for <strong><?= h((string)($rc['student_name'] ?? '')) ?></strong>? This does not create or affect any enrollment.</p>
-                                            <div class="form-group"><label>Reason / Note</label><textarea name="admin_note" class="form-control" rows="2" required></textarea></div>
-                                        </div>
-                                        <div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button><button type="submit" class="btn btn-danger">Reject</button></div>
-                                    </form>
-                                </div></div>
-                            </div>
                             <?php endif; ?>
                         </td>
                     </tr>
@@ -1026,61 +1018,9 @@ document.addEventListener('DOMContentLoaded',()=>{
                             </button>
                         </form>
                         <?php if ($rowStatusNorm === 'pending'): ?>
-                        <button class="btn btn-success btn-sm" data-toggle="modal" data-target="#approveModal<?= $e['id'] ?>"><i class="fas fa-check mr-1"></i>Approve</button>
-                        <button class="btn btn-danger btn-sm"  data-toggle="modal" data-target="#rejectModal<?= $e['id'] ?>"><i class="fas fa-times mr-1"></i>Reject</button>
-                        <button class="btn btn-warning btn-sm" data-toggle="modal" data-target="#changesModal<?= $e['id'] ?>"><i class="fas fa-edit mr-1"></i>Request Changes</button>
-
-                        <!-- Approve Modal -->
-                        <div class="modal fade" id="approveModal<?= $e['id'] ?>" tabindex="-1">
-                            <div class="modal-dialog"><div class="modal-content">
-                                <form method="POST" class="js-enrol-action-form">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="action" value="approve">
-                                    <input type="hidden" name="enrolment_id" value="<?= $e['id'] ?>">
-                                    <div class="modal-header bg-success text-white"><h5 class="modal-title">Approve Enrolment</h5><button type="button" class="close text-white" data-dismiss="modal">&times;</button></div>
-                                    <div class="modal-body">
-                                        <p>Approve enrolment for <strong><?= h($e['student_name']) ?></strong>?</p>
-                                        <p class="small text-muted">This will also create fee instalment records and approve the first payment if proof is attached.</p>
-                                        <div class="form-group"><label>Note (optional)</label><textarea name="admin_note" class="form-control" rows="2"></textarea></div>
-                                    </div>
-                                    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button><button type="submit" class="btn btn-success js-submit-action-btn">Approve</button></div>
-                                </form>
-                            </div></div>
-                        </div>
-
-                        <!-- Reject Modal -->
-                        <div class="modal fade" id="rejectModal<?= $e['id'] ?>" tabindex="-1">
-                            <div class="modal-dialog"><div class="modal-content">
-                                <form method="POST" class="js-enrol-action-form">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="action" value="reject">
-                                    <input type="hidden" name="enrolment_id" value="<?= $e['id'] ?>">
-                                    <div class="modal-header bg-danger text-white"><h5 class="modal-title">Reject Enrolment</h5><button type="button" class="close text-white" data-dismiss="modal">&times;</button></div>
-                                    <div class="modal-body">
-                                        <p>Reject enrolment for <strong><?= h($e['student_name']) ?></strong>?</p>
-                                        <div class="form-group"><label>Reason / Note</label><textarea name="admin_note" class="form-control" rows="2" required></textarea></div>
-                                    </div>
-                                    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button><button type="submit" class="btn btn-danger js-submit-action-btn">Reject</button></div>
-                                </form>
-                            </div></div>
-                        </div>
-
-                        <!-- Request Changes Modal -->
-                        <div class="modal fade" id="changesModal<?= $e['id'] ?>" tabindex="-1">
-                            <div class="modal-dialog"><div class="modal-content">
-                                <form method="POST" class="js-enrol-action-form">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="action" value="request_changes">
-                                    <input type="hidden" name="enrolment_id" value="<?= $e['id'] ?>">
-                                    <div class="modal-header bg-warning text-dark"><h5 class="modal-title">Request Changes</h5><button type="button" class="close" data-dismiss="modal">&times;</button></div>
-                                    <div class="modal-body">
-                                        <p>Ask parent to update submission for <strong><?= h($e['student_name']) ?></strong>.</p>
-                                        <div class="form-group"><label>Required update note</label><textarea name="admin_note" class="form-control" rows="2" required placeholder="e.g. Please upload clearer payment proof"></textarea></div>
-                                    </div>
-                                    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button><button type="submit" class="btn btn-warning js-submit-action-btn">Send Request</button></div>
-                                </form>
-                            </div></div>
-                        </div>
+                        <button type="button" class="btn btn-success btn-sm js-approve-enrol-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>"><i class="fas fa-check mr-1"></i>Approve</button>
+                        <button type="button" class="btn btn-danger btn-sm js-reject-enrol-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>"><i class="fas fa-times mr-1"></i>Reject</button>
+                        <button type="button" class="btn btn-warning btn-sm js-changes-enrol-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>"><i class="fas fa-edit mr-1"></i>Request Changes</button>
                         <?php else: ?>
                             <span class="text-muted small"><?= h($e['reviewed_by'] ?? '') ?></span>
                         <?php endif; ?>
@@ -1090,7 +1030,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                             $historyItems = $auditByEnrolment[(int)$e['id']] ?? [];
                             $historyCount = count($historyItems);
                         ?>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" data-toggle="modal" data-target="#historyModal<?= (int)$e['id'] ?>">
+                        <button type="button" class="btn btn-sm btn-outline-secondary js-history-btn" data-enrolment-id="<?= (int)$e['id'] ?>" data-student-name="<?= h($e['student_name']) ?>">
                             View (<?= $historyCount ?>)
                         </button>
                     </td>
@@ -1102,46 +1042,102 @@ document.addEventListener('DOMContentLoaded',()=>{
     </div>
 </div>
 
-<?php foreach ($all as $e): ?>
-<?php $historyItems = $auditByEnrolment[(int)$e['id']] ?? []; ?>
-<div class="modal fade" id="historyModal<?= (int)$e['id'] ?>" tabindex="-1">
-    <div class="modal-dialog modal-lg"><div class="modal-content">
-        <div class="modal-header">
-            <h5 class="modal-title">Audit History — <?= h($e['student_name']) ?></h5>
-            <button type="button" class="close" data-dismiss="modal">&times;</button>
-        </div>
-        <div class="modal-body">
-            <?php if (count($historyItems) === 0): ?>
-                <p class="text-muted mb-0">No audit history yet.</p>
-            <?php else: ?>
-                <div class="table-responsive">
-                    <table class="table table-sm table-bordered mb-0">
-                        <thead class="thead-light">
-                            <tr><th style="width:170px">Time</th><th style="width:170px">Event</th><th style="width:160px">Actor</th><th>Details</th></tr>
-                        </thead>
-                        <tbody>
-                        <?php foreach ($historyItems as $h): ?>
-                            <tr>
-                                <td><?= date('d M Y H:i', strtotime((string)$h['created_at'])) ?></td>
-                                <td><?= h((string)$h['event_type']) ?></td>
-                                <td><?= h((string)($h['actor'] ?? '')) ?></td>
-                                <td><?= h((string)($h['details'] ?? '')) ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
-        </div>
-    </div></div>
-</div>
-<?php endforeach; ?>
 
 </div>
 </div>
 <?php include 'include/admin-footer.php'; ?>
 </div>
 </div>
+
+<!-- Shared Approve/Reject/Request Changes/History modals (populated via JS -- see script below) -->
+<div class="modal fade" id="approveModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <form method="POST" class="js-enrol-action-form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="approve">
+            <input type="hidden" name="enrolment_id" id="approveEnrolmentId" value="">
+            <div class="modal-header bg-success text-white"><h5 class="modal-title">Approve Enrolment</h5><button type="button" class="close text-white" data-dismiss="modal">&times;</button></div>
+            <div class="modal-body">
+                <p>Approve enrolment for <strong id="approveStudentName"></strong>?</p>
+                <p class="small text-muted">This will also create fee instalment records and approve the first payment if proof is attached.</p>
+                <div class="form-group"><label>Note (optional)</label><textarea name="admin_note" class="form-control" rows="2"></textarea></div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button><button type="submit" class="btn btn-success js-submit-action-btn">Approve</button></div>
+        </form>
+    </div></div>
+</div>
+
+<div class="modal fade" id="rejectModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <form method="POST" class="js-enrol-action-form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="reject">
+            <input type="hidden" name="enrolment_id" id="rejectEnrolmentId" value="">
+            <div class="modal-header bg-danger text-white"><h5 class="modal-title">Reject Enrolment</h5><button type="button" class="close text-white" data-dismiss="modal">&times;</button></div>
+            <div class="modal-body">
+                <p>Reject enrolment for <strong id="rejectStudentName"></strong>?</p>
+                <div class="form-group"><label>Reason / Note</label><textarea name="admin_note" class="form-control" rows="2" required></textarea></div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button><button type="submit" class="btn btn-danger js-submit-action-btn">Reject</button></div>
+        </form>
+    </div></div>
+</div>
+
+<div class="modal fade" id="changesModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <form method="POST" class="js-enrol-action-form">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="request_changes">
+            <input type="hidden" name="enrolment_id" id="changesEnrolmentId" value="">
+            <div class="modal-header bg-warning text-dark"><h5 class="modal-title">Request Changes</h5><button type="button" class="close" data-dismiss="modal">&times;</button></div>
+            <div class="modal-body">
+                <p>Ask parent to update submission for <strong id="changesStudentName"></strong>.</p>
+                <div class="form-group"><label>Required update note</label><textarea name="admin_note" class="form-control" rows="2" required placeholder="e.g. Please upload clearer payment proof"></textarea></div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button><button type="submit" class="btn btn-warning js-submit-action-btn">Send Request</button></div>
+        </form>
+    </div></div>
+</div>
+
+<div class="modal fade" id="historyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg"><div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">Audit History — <span id="historyStudentName"></span></h5>
+            <button type="button" class="close" data-dismiss="modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="historyEmptyMsg" class="text-muted mb-0" style="display:none;">No audit history yet.</div>
+            <div id="historyTableWrap" class="table-responsive" style="display:none;">
+                <table class="table table-sm table-bordered mb-0">
+                    <thead class="thead-light">
+                        <tr><th style="width:170px">Time</th><th style="width:170px">Event</th><th style="width:160px">Actor</th><th>Details</th></tr>
+                    </thead>
+                    <tbody id="historyTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div></div>
+</div>
+
+<div class="modal fade" id="rejectRegModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <form method="POST">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="reject_registration">
+            <input type="hidden" name="student_id" id="rejectRegStudentId" value="">
+            <div class="modal-header bg-danger text-white"><h5 class="modal-title">Reject Registration</h5><button type="button" class="close text-white" data-dismiss="modal">&times;</button></div>
+            <div class="modal-body">
+                <p>Reject registration for <strong id="rejectRegStudentName"></strong>? This does not create or affect any enrollment.</p>
+                <div class="form-group"><label>Reason / Note</label><textarea name="admin_note" class="form-control" rows="2" required></textarea></div>
+            </div>
+            <div class="modal-footer"><button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button><button type="submit" class="btn btn-danger">Reject</button></div>
+        </form>
+    </div></div>
+</div>
+
+<script>
+var bbccEnrolHistory = <?= json_encode($auditForJs, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
+</script>
 
 <div class="modal fade" id="registeredChildEnrolModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog" role="document">
@@ -1342,6 +1338,60 @@ $(function(){
         $('#rcStudentId').val(sid);
         $('#rcStudentName').text(sname);
         $modal.modal('show');
+    });
+
+    $(document).on('click', '.js-approve-enrol-btn', function(){
+        var $form = $('#approveModal').find('form')[0];
+        if ($form) $form.reset();
+        $('#approveEnrolmentId').val($(this).data('enrolment-id'));
+        $('#approveStudentName').text($(this).data('student-name') || '');
+        $('#approveModal').modal('show');
+    });
+
+    $(document).on('click', '.js-reject-enrol-btn', function(){
+        var $form = $('#rejectModal').find('form')[0];
+        if ($form) $form.reset();
+        $('#rejectEnrolmentId').val($(this).data('enrolment-id'));
+        $('#rejectStudentName').text($(this).data('student-name') || '');
+        $('#rejectModal').modal('show');
+    });
+
+    $(document).on('click', '.js-changes-enrol-btn', function(){
+        var $form = $('#changesModal').find('form')[0];
+        if ($form) $form.reset();
+        $('#changesEnrolmentId').val($(this).data('enrolment-id'));
+        $('#changesStudentName').text($(this).data('student-name') || '');
+        $('#changesModal').modal('show');
+    });
+
+    $(document).on('click', '.js-reject-reg-btn', function(){
+        $('#rejectRegStudentId').val($(this).data('student-id'));
+        $('#rejectRegStudentName').text($(this).data('student-name') || '');
+        $('#rejectRegModal').modal('show');
+    });
+
+    $(document).on('click', '.js-history-btn', function(){
+        var eid = $(this).data('enrolment-id');
+        var sname = $(this).data('student-name') || '';
+        var items = bbccEnrolHistory[eid] || [];
+        $('#historyStudentName').text(sname);
+        var $body = $('#historyTableBody').empty();
+        if (items.length === 0) {
+            $('#historyEmptyMsg').show();
+            $('#historyTableWrap').hide();
+        } else {
+            items.forEach(function(item){
+                var $tr = $('<tr/>');
+                $('<td/>').text(item.time).appendTo($tr);
+                $('<td/>').text(item.event).appendTo($tr);
+                $('<td/>').text(item.actor).appendTo($tr);
+                $('<td/>').text(item.details).appendTo($tr);
+                $body.append($tr);
+            });
+            $('#historyEmptyMsg').hide();
+            $('#historyTableWrap').show();
+        }
+        $('#historyModal').modal('show');
     });
 });
 </script>

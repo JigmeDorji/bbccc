@@ -585,9 +585,53 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td style="font-size:.82rem;"><?= $registered ? date('d M Y', strtotime($registered)) : '—' ?></td>
                     <td>
                         <div class="act-group">
-                            <button class="btn-act act-view toggle-detail" data-id="<?= (int)$s['id'] ?>" title="View details"><i class="fas fa-eye"></i></button>
-                            <button class="btn-act act-view" data-toggle="modal" data-target="#editChildModal<?= $s['id'] ?>" title="Edit child and parent details"><i class="fas fa-edit"></i></button>
-                            <button class="btn-act act-view" data-toggle="modal" data-target="#joinParentModal<?= $s['id'] ?>" title="Join child to another parent"><i class="fas fa-link"></i></button>
+                            <button type="button" class="btn-act act-view toggle-detail"
+                                data-id="<?= (int)$s['id'] ?>"
+                                data-student-code="<?= h((string)($s['student_id'] ?? '')) ?>"
+                                data-student-name="<?= h((string)($s['student_name'] ?? '')) ?>"
+                                data-dob="<?= !empty($s['dob']) ? h(date('d M Y', strtotime((string)$s['dob']))) : '' ?>"
+                                data-gender="<?= h((string)($s['gender'] ?? '')) ?>"
+                                data-medical="<?= h((string)($s['medical_issue'] ?? 'None')) ?>"
+                                data-registered="<?= $registered ? h(date('d M Y', strtotime((string)$registered))) : '' ?>"
+                                data-approval-status="<?= h((string)($s['approval_status'] ?? 'Pending')) ?>"
+                                data-approval-badge="<?= h(pcm_badge($s['approval_status'] ?? 'Pending')) ?>"
+                                data-parent-name="<?= h((string)($s['parent_name'] ?? '')) ?>"
+                                data-parent-email="<?= h((string)($s['parent_email'] ?? '')) ?>"
+                                data-parent-phone="<?= h((string)($s['parent_phone'] ?? '')) ?>"
+                                title="View details"><i class="fas fa-eye"></i></button>
+                            <?php
+                                $rowHasEnrolment = !empty($s['enrolment_id']);
+                                $rowStartTerm = pcm_normalize_start_term($s['enrolment_start_term'] ?? 1);
+                                $rowPlan = (string)($s['enrolment_fee_plan'] ?? '');
+                                $rowAllowedTerms = [];
+                                for ($t = 1; $t <= 4; $t++) {
+                                    if (pcm_plan_allowed_for_start_term($rowPlan, $t)) $rowAllowedTerms[] = $t;
+                                }
+                            ?>
+                            <button type="button" class="btn-act act-view js-edit-child-btn"
+                                data-id="<?= (int)$s['id'] ?>"
+                                data-student-code="<?= h((string)($s['student_id'] ?? '')) ?>"
+                                data-student-name="<?= h((string)($s['student_name'] ?? '')) ?>"
+                                data-dob="<?= h((string)($s['dob'] ?? '')) ?>"
+                                data-gender="<?= h((string)($s['gender'] ?? '')) ?>"
+                                data-medical="<?= h((string)($s['medical_issue'] ?? '')) ?>"
+                                data-has-enrolment="<?= $rowHasEnrolment ? '1' : '0' ?>"
+                                data-plan="<?= h($rowPlan) ?>"
+                                data-start-term="<?= $rowStartTerm ?>"
+                                data-allowed-terms="<?= h(implode(',', $rowAllowedTerms)) ?>"
+                                data-parent-name="<?= h((string)($s['parent_name'] ?? '')) ?>"
+                                data-parent-email="<?= h((string)($s['parent_email'] ?? '')) ?>"
+                                data-parent-phone="<?= h((string)($s['parent_phone'] ?? '')) ?>"
+                                data-parent-address="<?= h((string)($s['parent_address'] ?? '')) ?>"
+                                title="Edit child and parent details"><i class="fas fa-edit"></i></button>
+                            <button type="button" class="btn-act act-view js-join-parent-btn"
+                                data-id="<?= (int)$s['id'] ?>"
+                                data-student-code="<?= h((string)($s['student_id'] ?? '')) ?>"
+                                data-student-name="<?= h((string)($s['student_name'] ?? '')) ?>"
+                                data-current-parent-id="<?= (int)($s['linked_parent_id'] ?? 0) ?>"
+                                data-current-parent-name="<?= h((string)($s['parent_name'] ?? '—')) ?>"
+                                data-current-parent-email="<?= h((string)($s['parent_email'] ?? '')) ?>"
+                                title="Join child to another parent"><i class="fas fa-link"></i></button>
                             <a href="admin-enrolments" class="btn-mini-label" title="Review registration or enrollment on the Enrollment page">
                                 <i class="fas fa-file-signature mr-1"></i> Enrollment
                             </a>
@@ -608,43 +652,13 @@ document.addEventListener('DOMContentLoaded', () => {
     </div>
 </div>
 
-<!-- ─── Detail Panels (hidden, injected via JS child rows) ─── -->
-<?php foreach ($students as $i => $s):
-    $st = strtolower($s['approval_status'] ?? '');
-?>
-<div id="detailHtml-<?= (int)$s['id'] ?>" style="display:none;">
-    <div class="detail-panel" style="display:block;">
-        <div class="row">
-            <div class="col-md-6">
-                <h6 class="font-weight-bold mb-3" style="color:var(--brand);"><i class="fas fa-user-graduate mr-1"></i> Student Info</h6>
-                <div class="dl-row"><div class="dl-label">Student ID</div><div class="dl-value"><?= h($s['student_id'] ?? '—') ?></div></div>
-                <div class="dl-row"><div class="dl-label">Full Name</div><div class="dl-value"><?= h($s['student_name'] ?? '—') ?></div></div>
-                <div class="dl-row"><div class="dl-label">Date of Birth</div><div class="dl-value"><?= h($s['dob'] ?? '—') ?></div></div>
-                <div class="dl-row"><div class="dl-label">Gender</div><div class="dl-value"><?= h($s['gender'] ?? '—') ?></div></div>
-                <div class="dl-row"><div class="dl-label">Medical</div><div class="dl-value"><?= h($s['medical_issue'] ?? 'None') ?></div></div>
-                <div class="dl-row"><div class="dl-label">Registered</div><div class="dl-value"><?= !empty($s['registration_date']) ? date('d M Y', strtotime($s['registration_date'])) : '—' ?></div></div>
-                <div class="dl-row"><div class="dl-label">Status</div><div class="dl-value"><span class="badge badge-<?= pcm_badge($s['approval_status'] ?? '') ?>"><?= h($s['approval_status'] ?? '—') ?></span></div></div>
-            </div>
-            <div class="col-md-6">
-                <h6 class="font-weight-bold mb-3" style="color:var(--brand);"><i class="fas fa-user-friends mr-1"></i> Parent Info</h6>
-                <div class="dl-row"><div class="dl-label">Name</div><div class="dl-value"><?= h($s['parent_name'] ?? '—') ?></div></div>
-                <div class="dl-row"><div class="dl-label">Email</div><div class="dl-value"><?= h($s['parent_email'] ?? '—') ?></div></div>
-                <div class="dl-row"><div class="dl-label">Phone</div><div class="dl-value"><?= h($s['parent_phone'] ?? '—') ?></div></div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<?php endforeach; ?>
-
-<?php foreach ($students as $s): ?>
-<div class="modal fade" id="editChildModal<?= (int)$s['id'] ?>" tabindex="-1">
+<div class="modal fade" id="editChildModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="POST" class="js-enrol-action-form">
+            <form method="POST" id="editChildForm" class="js-enrol-action-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="admin_update_child_details">
-                <input type="hidden" name="student_id" value="<?= (int)$s['id'] ?>">
+                <input type="hidden" name="student_id" id="editChildStudentId" value="">
                 <div class="modal-header">
                     <div>
                         <h5 class="modal-title font-weight-bold"><i class="fas fa-user-edit text-primary mr-2"></i>Edit Child Details</h5>
@@ -657,76 +671,70 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="form-row">
                         <div class="form-group col-md-6">
                             <label>Student ID</label>
-                            <input type="text" class="form-control" value="<?= h((string)($s['student_id'] ?? '')) ?>" readonly>
+                            <input type="text" class="form-control" id="editChildStudentCode" readonly>
                         </div>
                         <div class="form-group col-md-6">
                             <label>Child Name</label>
-                            <input type="text" class="form-control" name="student_name" value="<?= h((string)($s['student_name'] ?? '')) ?>" required>
+                            <input type="text" class="form-control" name="student_name" id="editChildName" required>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group col-md-4">
                             <label>Date of Birth</label>
-                            <input type="date" class="form-control" name="dob" value="<?= h((string)($s['dob'] ?? '')) ?>">
+                            <input type="date" class="form-control" name="dob" id="editChildDob">
                         </div>
                         <div class="form-group col-md-4">
                             <label>Gender</label>
-                            <?php $genderVal = (string)($s['gender'] ?? ''); ?>
-                            <select class="form-control" name="gender">
-                                <option value="" <?= $genderVal === '' ? 'selected' : '' ?>>--</option>
-                                <option value="Male" <?= $genderVal === 'Male' ? 'selected' : '' ?>>Male</option>
-                                <option value="Female" <?= $genderVal === 'Female' ? 'selected' : '' ?>>Female</option>
-                                <option value="Other" <?= $genderVal === 'Other' ? 'selected' : '' ?>>Other</option>
+                            <select class="form-control" name="gender" id="editChildGender">
+                                <option value="">--</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
                             </select>
                         </div>
                         <div class="form-group col-md-4">
                             <label>Medical</label>
-                            <input type="text" class="form-control" name="medical_issue" value="<?= h((string)($s['medical_issue'] ?? '')) ?>" maxlength="500">
+                            <input type="text" class="form-control" name="medical_issue" id="editChildMedical" maxlength="500">
                         </div>
                     </div>
 
-                    <?php if (!empty($s['enrolment_id'])): ?>
-                    <hr>
-                    <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-file-signature mr-1"></i>Enrollment</h6>
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label>Starting Term</label>
-                            <?php
-                                $curStartTerm = pcm_normalize_start_term($s['enrolment_start_term'] ?? 1);
-                                $curPlan = (string)($s['enrolment_fee_plan'] ?? '');
-                            ?>
-                            <select class="form-control" name="start_term">
-                                <?php for ($termNo = 1; $termNo <= 4; $termNo++): ?>
-                                    <?php if (pcm_plan_allowed_for_start_term($curPlan, $termNo)): ?>
-                                    <option value="<?= $termNo ?>" <?= $curStartTerm === $termNo ? 'selected' : '' ?>>Term <?= $termNo ?></option>
-                                    <?php endif; ?>
-                                <?php endfor; ?>
-                            </select>
-                            <small class="form-text text-muted">Only terms valid for the <?= h($curPlan) ?> plan are shown. Changing this recalculates the fee amount and instalment schedule if no instalments have been paid or reviewed yet.</small>
+                    <div id="editChildEnrolmentSection" style="display:none;">
+                        <hr>
+                        <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-file-signature mr-1"></i>Enrollment</h6>
+                        <div class="form-row">
+                            <div class="form-group col-md-6">
+                                <label>Starting Term</label>
+                                <select class="form-control" name="start_term" id="editChildStartTerm">
+                                    <option value="1">Term 1</option>
+                                    <option value="2">Term 2</option>
+                                    <option value="3">Term 3</option>
+                                    <option value="4">Term 4</option>
+                                </select>
+                                <small class="form-text text-muted">Only terms valid for the current plan are shown. Changing this recalculates the fee amount and instalment schedule if no instalments have been paid or reviewed yet.</small>
+                            </div>
                         </div>
                     </div>
-                    <?php endif; ?>
 
                     <hr>
                     <h6 class="font-weight-bold text-primary mb-2"><i class="fas fa-user-friends mr-1"></i>Parent Contact Details</h6>
                     <div class="form-row">
                         <div class="form-group col-md-6">
                             <label>Parent Name</label>
-                            <input type="text" class="form-control" name="parent_name" value="<?= h((string)($s['parent_name'] ?? '')) ?>" required>
+                            <input type="text" class="form-control" name="parent_name" id="editChildParentName" required>
                         </div>
                         <div class="form-group col-md-6">
                             <label>Parent Phone</label>
-                            <input type="text" class="form-control" name="parent_phone" value="<?= h((string)($s['parent_phone'] ?? '')) ?>">
+                            <input type="text" class="form-control" name="parent_phone" id="editChildParentPhone">
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group col-md-6">
                             <label>Parent Email</label>
-                            <input type="email" class="form-control" name="parent_email" value="<?= h((string)($s['parent_email'] ?? '')) ?>">
+                            <input type="email" class="form-control" name="parent_email" id="editChildParentEmail">
                         </div>
                         <div class="form-group col-md-6">
                             <label>Parent Address</label>
-                            <input type="text" class="form-control" name="parent_address" value="<?= h((string)($s['parent_address'] ?? '')) ?>">
+                            <input type="text" class="form-control" name="parent_address" id="editChildParentAddress">
                         </div>
                     </div>
                 </div>
@@ -738,16 +746,14 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     </div>
 </div>
-<?php endforeach; ?>
 
-<?php foreach ($students as $s): ?>
-<div class="modal fade" id="joinParentModal<?= (int)$s['id'] ?>" tabindex="-1">
+<div class="modal fade" id="joinParentModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
-            <form method="POST" class="js-enrol-action-form">
+            <form method="POST" id="joinParentForm" class="js-enrol-action-form">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="admin_reassign_parent">
-                <input type="hidden" name="student_id" value="<?= (int)$s['id'] ?>">
+                <input type="hidden" name="student_id" id="joinParentStudentId" value="">
                 <div class="modal-header">
                     <div>
                         <h5 class="modal-title font-weight-bold"><i class="fas fa-link text-primary mr-2"></i>Join Child to Parent</h5>
@@ -756,21 +762,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button type="button" class="close" data-dismiss="modal">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <div class="alert alert-light border mb-3">
-                        <strong>Child:</strong> <?= h((string)($s['student_name'] ?? '')) ?> (<?= h((string)($s['student_id'] ?? '')) ?>)<br>
-                        <strong>Current Parent:</strong> <?= h((string)($s['parent_name'] ?? '—')) ?><?= !empty($s['parent_email']) ? ' - ' . h((string)$s['parent_email']) : '' ?>
-                    </div>
+                    <div class="alert alert-light border mb-3" id="joinParentInfo"></div>
                     <div class="form-group mb-0">
                         <label>Select New Parent</label>
-                        <select name="target_parent_id" class="form-control" required>
+                        <select name="target_parent_id" class="form-control" id="joinParentSelect" required>
                             <option value="">Choose parent account</option>
                             <?php foreach ($parentList as $p): ?>
-                                <?php
-                                    $currentPid = (int)($s['linked_parent_id'] ?? 0);
-                                    $candidatePid = (int)($p['id'] ?? 0);
-                                    if ($candidatePid <= 0 || $candidatePid === $currentPid) continue;
-                                ?>
-                                <option value="<?= $candidatePid ?>">
+                                <?php $candidatePid = (int)($p['id'] ?? 0); if ($candidatePid <= 0) continue; ?>
+                                <option value="<?= $candidatePid ?>" data-parent-id="<?= $candidatePid ?>">
                                     <?= h((string)($p['full_name'] ?? 'Parent')) ?><?= !empty($p['email']) ? ' - ' . h((string)$p['email']) : '' ?><?= !empty($p['phone']) ? ' (' . h((string)$p['phone']) . ')' : '' ?>
                                 </option>
                             <?php endforeach; ?>
@@ -785,7 +784,6 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
     </div>
 </div>
-<?php endforeach; ?>
 
 
 </div><!-- container-fluid -->
@@ -885,18 +883,45 @@ $(function(){
         dt.search('').columns().search('').draw();
     });
 
-    // Toggle detail via DataTables child row
+    // Toggle detail via DataTables child row -- content built from the
+    // button's own data-* attributes rather than a pre-rendered per-row
+    // hidden block, so the page doesn't ship a detail panel for every
+    // student whether or not it's ever opened.
+    function bbccEscape(v) {
+        return $('<div/>').text(v == null ? '' : v).html();
+    }
     $(document).on('click', '.toggle-detail', function(){
-        var id = $(this).data('id');
-        var tr = $(this).closest('tr');
+        var $btn = $(this);
+        var tr = $btn.closest('tr');
         var row = dt.row(tr);
         if (row.child.isShown()) {
             row.child.hide();
-            $(this).find('i').removeClass('fa-eye-slash').addClass('fa-eye');
+            $btn.find('i').removeClass('fa-eye-slash').addClass('fa-eye');
         } else {
-            var html = $('#detailHtml-' + id).html();
+            var d = $btn.data();
+            var html = '' +
+                '<div class="detail-panel" style="display:block;">' +
+                '<div class="row">' +
+                '<div class="col-md-6">' +
+                '<h6 class="font-weight-bold mb-3" style="color:var(--brand);"><i class="fas fa-user-graduate mr-1"></i> Student Info</h6>' +
+                '<div class="dl-row"><div class="dl-label">Student ID</div><div class="dl-value">' + bbccEscape(d.studentCode || '—') + '</div></div>' +
+                '<div class="dl-row"><div class="dl-label">Full Name</div><div class="dl-value">' + bbccEscape(d.studentName || '—') + '</div></div>' +
+                '<div class="dl-row"><div class="dl-label">Date of Birth</div><div class="dl-value">' + bbccEscape(d.dob || '—') + '</div></div>' +
+                '<div class="dl-row"><div class="dl-label">Gender</div><div class="dl-value">' + bbccEscape(d.gender || '—') + '</div></div>' +
+                '<div class="dl-row"><div class="dl-label">Medical</div><div class="dl-value">' + bbccEscape(d.medical || 'None') + '</div></div>' +
+                '<div class="dl-row"><div class="dl-label">Registered</div><div class="dl-value">' + bbccEscape(d.registered || '—') + '</div></div>' +
+                '<div class="dl-row"><div class="dl-label">Status</div><div class="dl-value"><span class="badge badge-' + bbccEscape(d.approvalBadge || 'secondary') + '">' + bbccEscape(d.approvalStatus || '—') + '</span></div></div>' +
+                '</div>' +
+                '<div class="col-md-6">' +
+                '<h6 class="font-weight-bold mb-3" style="color:var(--brand);"><i class="fas fa-user-friends mr-1"></i> Parent Info</h6>' +
+                '<div class="dl-row"><div class="dl-label">Name</div><div class="dl-value">' + bbccEscape(d.parentName || '—') + '</div></div>' +
+                '<div class="dl-row"><div class="dl-label">Email</div><div class="dl-value">' + bbccEscape(d.parentEmail || '—') + '</div></div>' +
+                '<div class="dl-row"><div class="dl-label">Phone</div><div class="dl-value">' + bbccEscape(d.parentPhone || '—') + '</div></div>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
             row.child(html).show();
-            $(this).find('i').removeClass('fa-eye').addClass('fa-eye-slash');
+            $btn.find('i').removeClass('fa-eye').addClass('fa-eye-slash');
         }
     });
 
@@ -964,6 +989,57 @@ $(function(){
                 $('#deleteForm').submit();
             }
         });
+    });
+
+    // Edit child + parent details (shared modal, populated from the row button's data-*)
+    $(document).on('click', '.js-edit-child-btn', function(){
+        var d = $(this).data();
+        var $form = $('#editChildForm')[0];
+        if ($form) $form.reset();
+
+        $('#editChildStudentId').val(d.id);
+        $('#editChildStudentCode').val(d.studentCode || '');
+        $('#editChildName').val(d.studentName || '');
+        $('#editChildDob').val(d.dob || '');
+        $('#editChildGender').val(d.gender || '');
+        $('#editChildMedical').val(d.medical || '');
+        $('#editChildParentName').val(d.parentName || '');
+        $('#editChildParentEmail').val(d.parentEmail || '');
+        $('#editChildParentPhone').val(d.parentPhone || '');
+        $('#editChildParentAddress').val(d.parentAddress || '');
+
+        var hasEnrolment = String(d.hasEnrolment) === '1';
+        $('#editChildEnrolmentSection').toggle(hasEnrolment);
+        if (hasEnrolment) {
+            var allowed = String(d.allowedTerms || '').split(',').filter(Boolean);
+            var $termSelect = $('#editChildStartTerm');
+            $termSelect.find('option').each(function(){
+                $(this).prop('hidden', allowed.indexOf($(this).val()) === -1);
+            });
+            $termSelect.val(String(d.startTerm || '1'));
+        }
+
+        $('#editChildModal').modal('show');
+    });
+
+    // Join child to a different parent (shared modal)
+    $(document).on('click', '.js-join-parent-btn', function(){
+        var d = $(this).data();
+        $('#joinParentStudentId').val(d.id);
+
+        var infoHtml = '<strong>Child:</strong> ' + bbccEscape(d.studentName) + ' (' + bbccEscape(d.studentCode) + ')<br>' +
+            '<strong>Current Parent:</strong> ' + bbccEscape(d.currentParentName || '—') +
+            (d.currentParentEmail ? ' - ' + bbccEscape(d.currentParentEmail) : '');
+        $('#joinParentInfo').html(infoHtml);
+
+        var currentPid = String(d.currentParentId || '');
+        var $select = $('#joinParentSelect');
+        $select.find('option[data-parent-id]').each(function(){
+            $(this).prop('hidden', String($(this).data('parent-id')) === currentPid);
+        });
+        $select.val('');
+
+        $('#joinParentModal').modal('show');
     });
 
     // Close approve/reject modal immediately on submit so UI does not appear stuck
