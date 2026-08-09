@@ -537,6 +537,39 @@ $all = $pdo->query("
     ORDER BY FIELD(e.status,'Pending','Approved','Rejected'), e.submitted_at DESC
 ")->fetchAll();
 
+// Teacher per class -- lets the enrollment table double as a class roster
+// view (grouped by class) without a separate page.
+$teacherByClassId = [];
+try {
+    $teacherRows = $pdo->query("
+        SELECT
+            c.id AS class_id,
+            COALESCE(tt.teacher_names, tlegacy.full_name) AS teacher_name
+        FROM classes c
+        LEFT JOIN (
+            SELECT
+                cta.class_id,
+                GROUP_CONCAT(DISTINCT t.full_name ORDER BY cta.is_primary DESC, t.full_name SEPARATOR ', ') AS teacher_names
+            FROM class_teacher_assignments cta
+            INNER JOIN teachers t ON t.id = cta.teacher_id
+            GROUP BY cta.class_id
+        ) tt ON tt.class_id = c.id
+        LEFT JOIN teachers tlegacy ON tlegacy.id = c.teacher_id
+        WHERE c.active = 1
+    ")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($teacherRows as $tr) {
+        $teacherByClassId[(int)$tr['class_id']] = (string)($tr['teacher_name'] ?? '');
+    }
+} catch (Throwable $e) {
+    // Teacher assignment tables are optional -- roster grouping still
+    // works without teacher names if they're unavailable.
+}
+
+foreach ($all as &$row) {
+    $row['assigned_teacher_name'] = $teacherByClassId[(int)($row['assigned_class_id'] ?? 0)] ?? '';
+}
+unset($row);
+
 foreach ($all as $row) {
     $enrolmentParentId = (int)($row['parent_id'] ?? 0);
     $resolvedParentId = (int)($row['parent_db_id'] ?? 0);
@@ -599,6 +632,7 @@ $registeredChildren = $pdo->query("
 $pageScripts = [
     "https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js",
     "https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap4.min.js",
+    "https://cdn.datatables.net/rowgroup/1.4.1/js/dataTables.rowGroup.min.js",
 ];
 ?>
 <!DOCTYPE html>
@@ -610,6 +644,7 @@ $pageScripts = [
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
     <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap4.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/rowgroup/1.4.1/css/rowGroup.bootstrap4.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         :root { --brand:#881b12; --brand-light:#a82218; --brand-bg:#fef3f2; }
@@ -625,6 +660,8 @@ $pageScripts = [
         .filter-pill.active-needs-update { background:#36b9cc;color:#fff;border-color:#36b9cc; }
         .filter-pill.active-approved { background:#1cc88a;color:#fff;border-color:#1cc88a; }
         .filter-pill.active-rejected { background:#e74a3b;color:#fff;border-color:#e74a3b; }
+        tr.class-group-row > td { background: #f8f9fc; border-top: 2px solid #e3e6f0; padding: 10px 12px; }
+        tr.class-group-row .class-name { color: #881b12; font-size: .95rem; }
         .search-row { background:#f8f9fc; border:1px solid #e3e6f0; border-radius:12px; padding:16px 20px; }
         .search-row label { font-size:.72rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:#5a5c69; margin-bottom:4px; }
         .search-row .form-control { border-radius:8px; height:40px; font-size:.88rem; }
@@ -928,10 +965,11 @@ document.addEventListener('DOMContentLoaded',()=>{
                 <option value="2">Child Name</option>
                 <option value="3">Campus</option>
                 <option value="4">Class</option>
-                <option value="5">Phone</option>
-                <option value="6">Plan</option>
-                <option value="10">Parent</option>
-                <option value="11">Status</option>
+                <option value="5">Teacher</option>
+                <option value="6">Phone</option>
+                <option value="7">Plan</option>
+                <option value="11">Parent</option>
+                <option value="12">Status</option>
             </select>
         </div>
         <div class="col-md-6">
@@ -954,7 +992,7 @@ document.addEventListener('DOMContentLoaded',()=>{
             <table id="enrolTable" class="table table-bordered table-hover" style="width:100%">
                 <thead class="thead-light">
                     <tr>
-                        <th>#</th><th>Student ID</th><th>Child Name</th><th>Campus</th><th>Class</th><th>Phone</th>
+                        <th>#</th><th>Student ID</th><th>Child Name</th><th>Campus</th><th>Class</th><th>Teacher</th><th>Phone</th>
                         <th>Plan</th><th>Amount</th><th>Ref</th><th>Proof</th><th>Parent</th><th>Status</th><th>Submitted</th><th style="width:300px">Actions</th><th>History</th>
                     </tr>
                 </thead>
@@ -982,6 +1020,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                     <td><?= h($e['student_name']) ?></td>
                     <td><?= h(pcm_campus_selection_label((string)($e['campus_preference'] ?? ''))) ?></td>
                     <td><?= h($e['assigned_class_name'] ?? 'Not assigned') ?></td>
+                    <td><?= h($e['assigned_teacher_name'] ?? '') ?></td>
                     <td><?= h($e['parent_phone'] ?? '-') ?></td>
                     <td><?= h($e['fee_plan']) ?></td>
                     <td>$<?= number_format($e['fee_amount'],2) ?></td>
@@ -1221,7 +1260,35 @@ var bbccEnrolHistory = <?= json_encode($auditForJs, JSON_HEX_TAG | JSON_HEX_APOS
 
 <script>
 $(function(){
-    var dt = $('#enrolTable').DataTable({pageLength:25, order:[[12,'desc']]});
+    var dt = $('#enrolTable').DataTable({
+        pageLength: 25,
+        order: [[4, 'asc'], [13, 'desc']],
+        columnDefs: [
+            { orderable: false, targets: 0 },
+            { visible: false, targets: [5] }
+        ],
+        rowGroup: {
+            dataSrc: 4,
+            startRender: function(rows, group) {
+                var d = rows.data()[0];
+                var teacher = d[5] || '';
+                var count = rows.count();
+                var $tr = $('<tr class="class-group-row"/>');
+                var $td = $('<td colspan="15"/>').appendTo($tr);
+                var $wrap = $('<div class="d-flex flex-wrap align-items-center justify-content-between"/>').appendTo($td);
+                var $left = $('<div/>').appendTo($wrap);
+                $('<strong class="class-name"/>').text(group || 'Not assigned').appendTo($left);
+                if (teacher) {
+                    $left.append(' ');
+                    $('<i class="fas fa-chalkboard-teacher text-muted small ml-2 mr-1"></i>').appendTo($left);
+                    $('<span class="small text-muted"/>').text(teacher).appendTo($left);
+                }
+                var $right = $('<div/>').appendTo($wrap);
+                $('<span class="badge badge-info"/>').text(count + (count === 1 ? ' student' : ' students')).appendTo($right);
+                return $tr;
+            }
+        }
+    });
     var activeStatus = 'all';
     $.fn.dataTable.ext.search.push(function(settings, data, dataIndex){
         if (settings.nTable.id !== 'enrolTable') return true;
