@@ -74,8 +74,11 @@ foreach ($students as $student) {
     <link href="vendor/fontawesome-free/css/all.min.css" rel="stylesheet">
     <link href="css/sb-admin-2.min.css" rel="stylesheet">
     <link href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap4.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/rowgroup/1.4.1/css/rowGroup.bootstrap4.min.css" rel="stylesheet">
     <style>
         .child-name { font-weight: 700; color: #2f2f2f; }
+        tr.parent-group-row > td { background: #f8f9fc; border-top: 2px solid #e3e6f0; padding: 10px 12px; }
+        tr.parent-group-row .parent-name { color: #881b12; font-size: .95rem; }
     </style>
 </head>
 <body id="page-top">
@@ -136,7 +139,9 @@ foreach ($students as $student) {
                         <th>Student ID</th>
                         <th>Child</th>
                         <th>Parent</th>
-                        <th>Parent Contact</th>
+                        <th>Parent Email</th>
+                        <th>Parent Phone</th>
+                        <th>Parent Status</th>
                         <th>Registration</th>
                         <th>Enrollment</th>
                         <th>Fee Plan</th>
@@ -160,10 +165,9 @@ foreach ($students as $student) {
                         <td><code><?= h((string)($kid['student_id'] ?? '')) ?></code></td>
                         <td class="child-name"><?= h((string)($kid['student_name'] ?? '')) ?></td>
                         <td><?= h((string)($parent['full_name'] ?? 'Unnamed parent')) ?></td>
-                        <td>
-                            <?= h((string)($parent['email'] ?? '—')) ?>
-                            <?php if (!empty($parent['phone'])): ?><br><small class="text-muted"><?= h((string)$parent['phone']) ?></small><?php endif; ?>
-                        </td>
+                        <td><?= h((string)($parent['email'] ?? '')) ?></td>
+                        <td><?= h((string)($parent['phone'] ?? '')) ?></td>
+                        <td><?= h((string)($parent['status'] ?? 'Active')) ?></td>
                         <td><span class="badge badge-<?= pcm_badge($approval) ?>"><?= h($approval) ?></span></td>
                         <td>
                             <?php if ($enrolment !== ''): ?>
@@ -178,7 +182,7 @@ foreach ($students as $student) {
                     </tr>
                 <?php endforeach; ?>
                 <?php if (empty($students)): ?>
-                    <tr><td colspan="10" class="text-center text-muted">No children found.</td></tr>
+                    <tr><td colspan="12" class="text-center text-muted">No children found.</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
@@ -194,17 +198,52 @@ foreach ($students as $student) {
 
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap4.min.js"></script>
+<script src="https://cdn.datatables.net/rowgroup/1.4.1/js/dataTables.rowGroup.min.js"></script>
 <script>
 $(function(){
     var dt = $('#familyTable').DataTable({
         pageLength: 25,
-        order: [[2, 'asc']],
-        columnDefs: [{ orderable: false, targets: 0 }]
+        order: [[3, 'asc'], [2, 'asc']],
+        columnDefs: [
+            { orderable: false, targets: 0 },
+            { visible: false, targets: [3, 4, 5, 6] }
+        ],
+        rowGroup: {
+            dataSrc: 3,
+            startRender: function(rows, group) {
+                var d = rows.data()[0];
+                var email = d[4] || '';
+                var phone = d[5] || '';
+                var pStatus = d[6] || 'Active';
+                var badgeClass = pStatus.toLowerCase() === 'active' ? 'success' : 'secondary';
+                var count = rows.count();
+
+                var $tr = $('<tr class="parent-group-row"/>');
+                var $td = $('<td colspan="8"/>').appendTo($tr);
+                var $wrap = $('<div class="d-flex flex-wrap align-items-center justify-content-between"/>').appendTo($td);
+                var $left = $('<div/>').appendTo($wrap);
+                $('<strong class="parent-name"/>').text(group).appendTo($left);
+                if (email) {
+                    $left.append(' ');
+                    $('<i class="fas fa-envelope text-muted small ml-2 mr-1"></i>').appendTo($left);
+                    $('<span class="small text-muted"/>').text(email).appendTo($left);
+                }
+                if (phone) {
+                    $left.append(' ');
+                    $('<i class="fas fa-phone text-muted small ml-2 mr-1"></i>').appendTo($left);
+                    $('<span class="small text-muted"/>').text(phone).appendTo($left);
+                }
+                var $right = $('<div/>').appendTo($wrap);
+                $('<span class="badge mr-1"/>').addClass('badge-' + badgeClass).text(pStatus).appendTo($right);
+                $('<span class="badge badge-info"/>').text(count + (count === 1 ? ' child' : ' children')).appendTo($right);
+                return $tr;
+            }
+        }
     });
     $('.filter-btn').on('click', function(){
         $('.filter-btn').removeClass('active'); $(this).addClass('active');
         var status = ($(this).data('filter') || 'all').toString();
-        dt.column(9).search(status === 'all' ? '' : '^' + status + '$', true, false);
+        dt.column(11).search(status === 'all' ? '' : '^' + status + '$', true, false);
         dt.draw();
     });
 });
