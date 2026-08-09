@@ -650,6 +650,122 @@ function pcm_admin_update_child_details(PDO $pdo, int $studentDbId, array $post,
 }
 
 /**
+ * Class-wide additional fee charge (e.g. textbook fee) -- schema + apply,
+ * shared by feesManagement.php, feesSetting.php, and update-payments.php.
+ */
+function pcm_ensure_class_charge_schema(PDO $pdo): void {
+    static $done = false;
+    if ($done) return;
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS pcm_class_fee_charges (
+            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+            class_id INT NOT NULL,
+            charge_title VARCHAR(120) NOT NULL,
+            amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+            description VARCHAR(500) DEFAULT NULL,
+            due_date DATE DEFAULT NULL,
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_by VARCHAR(100) DEFAULT NULL,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            KEY idx_class_charge_class (class_id),
+            KEY idx_class_charge_active (is_active)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
+
+    $colPlan = $pdo->query("SHOW COLUMNS FROM pcm_fee_payments LIKE 'plan_type'")->fetch(PDO::FETCH_ASSOC);
+    $planType = strtolower((string)($colPlan['Type'] ?? ''));
+    if ($planType !== '' && strpos($planType, 'additional') === false) {
+        $pdo->exec("ALTER TABLE pcm_fee_payments MODIFY COLUMN plan_type ENUM('Term-wise','Half-yearly','Yearly','Additional') NOT NULL");
+    }
+
+    $colLabel = $pdo->query("SHOW COLUMNS FROM pcm_fee_payments LIKE 'instalment_label'")->fetch(PDO::FETCH_ASSOC);
+    $labelType = strtolower((string)($colLabel['Type'] ?? ''));
+    if ($labelType !== '' && preg_match('/varchar\((\d+)\)/', $labelType, $m)) {
+        if ((int)$m[1] < 120) {
+            $pdo->exec("ALTER TABLE pcm_fee_payments MODIFY COLUMN instalment_label VARCHAR(120) NOT NULL");
+        }
+    }
+
+    $hasChargeCol = $pdo->query("SHOW COLUMNS FROM pcm_fee_payments LIKE 'class_charge_id'")->fetch(PDO::FETCH_ASSOC);
+    if (!$hasChargeCol) {
+        $pdo->exec("ALTER TABLE pcm_fee_payments ADD COLUMN class_charge_id INT NULL AFTER enrolment_id");
+    }
+
+    $hasChargeIdx = $pdo->query("SHOW INDEX FROM pcm_fee_payments WHERE Key_name='idx_fee_class_charge'")->fetch(PDO::FETCH_ASSOC);
+    if (!$hasChargeIdx) {
+        $pdo->exec("CREATE INDEX idx_fee_class_charge ON pcm_fee_payments (class_charge_id)");
+    }
+
+    $done = true;
+}
+
+function pcm_apply_class_charge(PDO $pdo, int $chargeId): int {
+    $chargeStmt = $pdo->prepare("
+        SELECT cc.*, c.class_name
+        FROM pcm_class_fee_charges cc
+        LEFT JOIN classes c ON c.id = cc.class_id
+        WHERE cc.id = :id AND cc.is_active = 1
+        LIMIT 1
+    ");
+    $chargeStmt->execute([':id' => $chargeId]);
+    $charge = $chargeStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$charge) {
+        throw new Exception("Charge not found or inactive.");
+    }
+
+    $rowsStmt = $pdo->prepare("
+        SELECT e.id AS enrolment_id, e.student_id, e.parent_id
+        FROM class_assignments ca
+        INNER JOIN pcm_enrolments e ON e.student_id = ca.student_id
+        WHERE ca.class_id = :cid
+          AND e.status = 'Approved'
+        GROUP BY e.id, e.student_id, e.parent_id
+    ");
+    $rowsStmt->execute([':cid' => (int)$charge['class_id']]);
+    $targets = $rowsStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $inserted = 0;
+    $ins = $pdo->prepare("
+        INSERT INTO pcm_fee_payments
+            (enrolment_id, class_charge_id, student_id, parent_id, plan_type, instalment_label, due_amount, paid_amount, due_date, status)
+        VALUES
+            (:eid, :ccid, :sid, :pid, 'Additional', :label, :due, 0, :due_date, 'Unpaid')
+    ");
+
+    foreach ($targets as $t) {
+        $exists = $pdo->prepare("
+            SELECT id
+            FROM pcm_fee_payments
+            WHERE enrolment_id = :eid
+              AND class_charge_id = :ccid
+            LIMIT 1
+        ");
+        $exists->execute([
+            ':eid' => (int)$t['enrolment_id'],
+            ':ccid' => $chargeId
+        ]);
+        if ($exists->fetch(PDO::FETCH_ASSOC)) {
+            continue;
+        }
+
+        $ins->execute([
+            ':eid' => (int)$t['enrolment_id'],
+            ':ccid' => $chargeId,
+            ':sid' => (int)$t['student_id'],
+            ':pid' => (int)$t['parent_id'],
+            ':label' => (string)$charge['charge_title'],
+            ':due' => (float)$charge['amount'],
+            ':due_date' => !empty($charge['due_date']) ? $charge['due_date'] : null,
+        ]);
+        $inserted++;
+    }
+
+    return $inserted;
+}
+
+/**
  * Manually edit one fee instalment row (due/paid amount, reference,
  * status) -- same rules as feesManagement.php's manual override, shared
  * so both places use identical validation and audit logging.
@@ -705,6 +821,54 @@ function pcm_admin_update_fee_row(PDO $pdo, int $paymentId, array $post, string 
 
     return [
         'flash' => 'Fee instalment updated successfully.',
+        'ok' => true,
+    ];
+}
+
+/**
+ * Quick status-only change on one fee instalment row (the "update_fee_id"
+ * action shared by feesManagement.php and update-payments.php).
+ */
+function pcm_admin_update_fee_status(PDO $pdo, int $paymentId, string $newStatus, string $reviewer): array {
+    $allowed = ['Unpaid', 'Pending', 'Verified', 'Rejected', 'Approved'];
+
+    if ($paymentId <= 0) {
+        throw new Exception("Invalid fee ID.");
+    }
+    if (!in_array($newStatus, $allowed, true)) {
+        throw new Exception("Invalid status.");
+    }
+
+    $pcmStatus = ($newStatus === 'Approved') ? 'Verified' : $newStatus;
+    $before = bbcc_fee_payment_snapshot($pdo, $paymentId);
+    if (!$before) {
+        throw new Exception("Payment record not found.");
+    }
+
+    if (in_array($pcmStatus, ['Unpaid', 'Pending'], true)) {
+        $stmt = $pdo->prepare("
+            UPDATE pcm_fee_payments
+            SET status = :st, verified_by = NULL, verified_at = NULL
+            WHERE id = :id
+        ");
+        $stmt->execute([':st' => $pcmStatus, ':id' => $paymentId]);
+    } else {
+        $stmt = $pdo->prepare("
+            UPDATE pcm_fee_payments
+            SET status = :st,
+                paid_amount = CASE WHEN :st_paid = 'Verified' AND paid_amount <= 0 THEN due_amount ELSE paid_amount END,
+                verified_by = :vb,
+                verified_at = NOW()
+            WHERE id = :id
+        ");
+        $stmt->execute([':st' => $pcmStatus, ':st_paid' => $pcmStatus, ':vb' => $reviewer, ':id' => $paymentId]);
+    }
+
+    $after = bbcc_fee_payment_snapshot($pdo, $paymentId);
+    bbcc_audit_fee_payment_change($pdo, $paymentId, 'status_update', $before, $after);
+
+    return [
+        'flash' => 'Installment updated successfully.',
         'ok' => true,
     ];
 }

@@ -2,6 +2,7 @@
 require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/pcm_helpers.php";
+require_once "include/csrf.php";
 require_login();
 
 /**
@@ -52,83 +53,12 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
     $done = true;
 }
 
-function fs_ensure_class_charge_schema(PDO $pdo): void {
-    static $done = false;
-    if ($done) return;
-
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS pcm_class_fee_charges (
-            id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            class_id INT NOT NULL,
-            charge_title VARCHAR(120) NOT NULL,
-            amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
-            description VARCHAR(500) DEFAULT NULL,
-            due_date DATE DEFAULT NULL,
-            is_active TINYINT(1) NOT NULL DEFAULT 1,
-            created_by VARCHAR(100) DEFAULT NULL,
-            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            KEY idx_class_charge_class (class_id),
-            KEY idx_class_charge_active (is_active)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-
-    $hasChargeCol = $pdo->query("SHOW COLUMNS FROM pcm_fee_payments LIKE 'class_charge_id'")->fetch(PDO::FETCH_ASSOC);
-    if (!$hasChargeCol) {
-        $pdo->exec("ALTER TABLE pcm_fee_payments ADD COLUMN class_charge_id INT NULL AFTER enrolment_id");
-    }
-    $hasChargeIdx = $pdo->query("SHOW INDEX FROM pcm_fee_payments WHERE Key_name='idx_fee_class_charge'")->fetch(PDO::FETCH_ASSOC);
-    if (!$hasChargeIdx) {
-        $pdo->exec("CREATE INDEX idx_fee_class_charge ON pcm_fee_payments (class_charge_id)");
-    }
-    $done = true;
-}
-
-function fs_apply_class_charge(PDO $pdo, int $chargeId): int {
-    $chargeStmt = $pdo->prepare("SELECT * FROM pcm_class_fee_charges WHERE id=:id AND is_active=1 LIMIT 1");
-    $chargeStmt->execute([':id' => $chargeId]);
-    $charge = $chargeStmt->fetch(PDO::FETCH_ASSOC);
-    if (!$charge) throw new Exception("Charge not found or inactive.");
-
-    $rowsStmt = $pdo->prepare("
-        SELECT e.id AS enrolment_id, e.student_id, e.parent_id
-        FROM class_assignments ca
-        INNER JOIN pcm_enrolments e ON e.student_id = ca.student_id
-        WHERE ca.class_id = :cid AND e.status = 'Approved'
-        GROUP BY e.id, e.student_id, e.parent_id
-    ");
-    $rowsStmt->execute([':cid' => (int)$charge['class_id']]);
-    $targets = $rowsStmt->fetchAll(PDO::FETCH_ASSOC);
-
-    $inserted = 0;
-    $ins = $pdo->prepare("
-        INSERT INTO pcm_fee_payments
-            (enrolment_id, class_charge_id, student_id, parent_id, plan_type, instalment_label, due_amount, paid_amount, due_date, status)
-        VALUES
-            (:eid, :ccid, :sid, :pid, 'Additional', :label, :due, 0, :due_date, 'Unpaid')
-    ");
-    foreach ($targets as $t) {
-        $exists = $pdo->prepare("SELECT id FROM pcm_fee_payments WHERE enrolment_id=:eid AND class_charge_id=:ccid LIMIT 1");
-        $exists->execute([':eid' => (int)$t['enrolment_id'], ':ccid' => $chargeId]);
-        if ($exists->fetch(PDO::FETCH_ASSOC)) continue;
-        $ins->execute([
-            ':eid' => (int)$t['enrolment_id'],
-            ':ccid' => $chargeId,
-            ':sid' => (int)$t['student_id'],
-            ':pid' => (int)$t['parent_id'],
-            ':label' => (string)$charge['charge_title'],
-            ':due' => (float)$charge['amount'],
-            ':due_date' => !empty($charge['due_date']) ? $charge['due_date'] : null,
-        ]);
-        $inserted++;
-    }
-    return $inserted;
-}
+// pcm_ensure_class_charge_schema() / pcm_apply_class_charge() come from include/pcm_helpers.php
 
 // Load settings
 pcm_ensure_fees_campus_columns($pdo);
 bbcc_ensure_term_class_total_columns($pdo);
-fs_ensure_class_charge_schema($pdo);
+pcm_ensure_class_charge_schema($pdo);
 $stmt = $pdo->query("SELECT * FROM fees_settings WHERE id = 1 LIMIT 1");
 $settings = $stmt->fetch();
 
@@ -141,6 +71,7 @@ if (!$settings) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['class_charge_action'])) {
     try {
+        verify_csrf();
         $act = trim((string)($_POST['class_charge_action'] ?? ''));
         if ($act === 'add') {
             $classId = (int)($_POST['charge_class_id'] ?? 0);
@@ -165,14 +96,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['class_charge_action']
                 ':by' => (string)($_SESSION['username'] ?? 'admin'),
             ]);
             $newChargeId = (int)$pdo->lastInsertId();
-            $applied = fs_apply_class_charge($pdo, $newChargeId);
+            $applied = pcm_apply_class_charge($pdo, $newChargeId);
             $pdo->commit();
             $message = "New class charge created and applied to {$applied} student(s).";
             $success = true; $reload = true;
         } elseif ($act === 'apply') {
             $chargeId = (int)($_POST['charge_id'] ?? 0);
             if ($chargeId <= 0) throw new Exception("Invalid charge.");
-            $applied = fs_apply_class_charge($pdo, $chargeId);
+            $applied = pcm_apply_class_charge($pdo, $chargeId);
             $message = "Charge applied to {$applied} missing student(s).";
             $success = true; $reload = true;
         } elseif ($act === 'toggle') {
@@ -510,6 +441,7 @@ $classCharges = $pdo->query("
                     </div>
                     <div class="card-body">
                         <form method="POST" class="mb-3">
+                            <?= csrf_field() ?>
                             <input type="hidden" name="class_charge_action" value="add">
                             <div class="form-row">
                                 <div class="form-group col-lg-3">
@@ -564,11 +496,13 @@ $classCharges = $pdo->query("
                                         <td><span class="badge badge-<?php echo ((int)$cc['is_active'] === 1) ? 'success' : 'secondary'; ?>"><?php echo ((int)$cc['is_active'] === 1) ? 'Active' : 'Inactive'; ?></span></td>
                                         <td class="nowrap">
                                             <form method="POST" class="d-inline">
+                                                <?= csrf_field() ?>
                                                 <input type="hidden" name="class_charge_action" value="apply">
                                                 <input type="hidden" name="charge_id" value="<?php echo (int)$cc['id']; ?>">
                                                 <button type="submit" class="btn btn-sm btn-outline-primary">Apply Missing</button>
                                             </form>
                                             <form method="POST" class="d-inline">
+                                                <?= csrf_field() ?>
                                                 <input type="hidden" name="class_charge_action" value="toggle">
                                                 <input type="hidden" name="charge_id" value="<?php echo (int)$cc['id']; ?>">
                                                 <button type="submit" class="btn btn-sm btn-outline-secondary"><?php echo ((int)$cc['is_active'] === 1) ? 'Deactivate' : 'Activate'; ?></button>
