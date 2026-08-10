@@ -137,6 +137,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .bk-detail__body td i { color: var(--brand); margin-right: 6px; font-size: .8rem; }
         .bk-detail__body .desc { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--gray-200); font-size: .92rem; color: var(--gray-600); line-height: 1.7; }
         .bk-detail__body .copy-btn { cursor: pointer; color: var(--brand); font-size: .78rem; }
+        .bk-detail__body .copy-field-btn { cursor: pointer; margin-left: 8px; opacity: .7; transition: opacity .15s, color .15s; }
+        .bk-detail__body .copy-field-btn:hover { opacity: 1; }
+        .bk-detail__body .copy-field-btn.copied { color: #1cc88a !important; opacity: 1; }
 
         .bk-form { background: var(--gray-100); border-radius: var(--radius-lg); padding: 32px; }
         .bk-form h4 { font-size: 1.15rem; font-weight: 700; margin-bottom: 24px; }
@@ -197,16 +200,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <?php if ($hasBankDetails): ?>
                         <table>
                             <?php if (!empty($settings['bank_name'])): ?>
-                            <tr><td><i class="fa-solid fa-building-columns"></i> Bank</td><td><?= htmlspecialchars($settings['bank_name']) ?></td></tr>
+                            <tr><td><i class="fa-solid fa-building-columns"></i> Bank</td><td><?= htmlspecialchars($settings['bank_name']) ?> <i class="fa-solid fa-copy copy-field-btn" title="Copy" data-copy="<?= htmlspecialchars($settings['bank_name']) ?>"></i></td></tr>
                             <?php endif; ?>
                             <?php if (!empty($settings['account_name'])): ?>
-                            <tr><td><i class="fa-solid fa-user"></i> Account Name</td><td><?= htmlspecialchars($settings['account_name']) ?></td></tr>
+                            <tr><td><i class="fa-solid fa-user"></i> Account Name</td><td><?= htmlspecialchars($settings['account_name']) ?> <i class="fa-solid fa-copy copy-field-btn" title="Copy" data-copy="<?= htmlspecialchars($settings['account_name']) ?>"></i></td></tr>
                             <?php endif; ?>
                             <?php if (!empty($settings['bsb'])): ?>
-                            <tr><td><i class="fa-solid fa-hashtag"></i> BSB</td><td><?= htmlspecialchars($settings['bsb']) ?></td></tr>
+                            <tr><td><i class="fa-solid fa-hashtag"></i> BSB</td><td><?= htmlspecialchars($settings['bsb']) ?> <i class="fa-solid fa-copy copy-field-btn" title="Copy" data-copy="<?= htmlspecialchars($settings['bsb']) ?>"></i></td></tr>
                             <?php endif; ?>
                             <?php if (!empty($settings['account_number'])): ?>
-                            <tr><td><i class="fa-solid fa-credit-card"></i> Account #</td><td><?= htmlspecialchars($settings['account_number']) ?></td></tr>
+                            <tr><td><i class="fa-solid fa-credit-card"></i> Account #</td><td><?= htmlspecialchars($settings['account_number']) ?> <i class="fa-solid fa-copy copy-field-btn" title="Copy" data-copy="<?= htmlspecialchars($settings['account_number']) ?>"></i></td></tr>
                             <?php endif; ?>
                         </table>
                         <?php if (!empty($settings['bank_notes'])): ?>
@@ -306,6 +309,21 @@ if (donateForm) {
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Submitting...';
     });
 }
+
+document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.copy-field-btn');
+    if (!btn) return;
+    var value = btn.getAttribute('data-copy') || '';
+    if (!value) return;
+    navigator.clipboard.writeText(value).then(function () {
+        btn.classList.remove('fa-copy');
+        btn.classList.add('fa-check', 'copied');
+        setTimeout(function () {
+            btn.classList.remove('fa-check', 'copied');
+            btn.classList.add('fa-copy');
+        }, 1200);
+    });
+});
 </script>
 
 </body>
