@@ -29,6 +29,14 @@ $flash = '';
 $ok = false;
 $submitted = false;
 
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && isset($_SESSION['donate_flash'])) {
+    $saved = (array)$_SESSION['donate_flash'];
+    unset($_SESSION['donate_flash']);
+    $flash = (string)($saved['message'] ?? '');
+    $ok = !empty($saved['ok']);
+    $submitted = !empty($saved['submitted']);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
 
@@ -91,9 +99,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ");
                 bbcc_queue_mail($donorEmail, $donorName, 'Thank You for Your Donation', $donorHtml);
 
-                $submitted = true;
-                $ok = true;
-                $flash = 'Thank you so much for your generous donation!';
+                $_SESSION['donate_flash'] = [
+                    'message' => 'Thank you so much for your generous donation!',
+                    'ok' => true,
+                    'submitted' => true,
+                ];
+                header('Location: donate');
+                exit;
             } catch (Throwable $e) {
                 error_log('[BBCC] donation submit error: ' . $e->getMessage());
                 $flash = 'Something went wrong saving your donation. Please try again or contact us directly.';
