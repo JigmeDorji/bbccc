@@ -86,14 +86,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $donorHtml = pcm_email_wrap('Thank You for Your Donation', "
                     <p style='margin:0 0 14px;'>Dear " . htmlspecialchars($donorName) . ",</p>
-                    <p style='margin:0 0 14px;'>Thank you for your donation of <strong>\$" . number_format($amount, 2) . "</strong> to the Bhutanese Buddhist and Cultural Centre.</p>
-                    <p style='margin:0 0 14px;'>Your donation is now <strong>pending verification</strong>. We will notify you by email once it has been reviewed.</p>
+                    <p style='margin:0 0 14px;'>Thank you so much for your donation to the Bhutanese Buddhist and Cultural Centre. We are truly grateful for your kindness and support.</p>
+                    <p style='margin:0;'>We will follow up shortly to confirm the amount received.</p>
                 ");
                 bbcc_queue_mail($donorEmail, $donorName, 'Thank You for Your Donation', $donorHtml);
 
                 $submitted = true;
                 $ok = true;
-                $flash = 'Thank you! Your donation has been submitted and is now pending verification.';
+                $flash = 'Thank you so much for your generous donation!';
             } catch (Throwable $e) {
                 error_log('[BBCC] donation submit error: ' . $e->getMessage());
                 $flash = 'Something went wrong saving your donation. Please try again or contact us directly.';
