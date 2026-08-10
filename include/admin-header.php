@@ -56,6 +56,7 @@ $_pageTitles = [
     'dzo-dashboard'        => 'Dzo Class Dashboard',
     'dzoClassManagement'   => 'Child Registration',
     'dzongkha-classroom'   => 'Dzongkha Classroom',
+    'admin-parent-email-log' => 'Parent Email History',
     'feesManagement'       => 'Fees Management',
     'manual-payments'      => 'Manual Payments',
     'feesSetting'          => 'Fees Settings',

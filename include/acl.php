@@ -201,6 +201,7 @@ function bbcc_acl_page_rules(): array {
         'admin-teacher-setup' => ['admin'],
         'process-mail-queue' => ['admin'],
         'parent-email' => ['admin', 'teacher'],
+        'admin-parent-email-log' => ['admin'],
         'dzongkha-classroom' => ['admin', 'teacher', 'parent'],
         'exportbookings' => ['admin'],
         'acl-debug' => ['admin'],
@@ -292,6 +293,7 @@ function bbcc_acl_route_module_rules(): array {
 
         // Communication
         'parent-email' => ['communication', 'send'],
+        'admin-parent-email-log' => ['communication', 'view'],
         'dzongkha-classroom' => ['communication', 'view'],
         'mail-test' => ['communication', 'manage'],
         'process-mail-queue' => ['communication', 'manage'],

@@ -351,7 +351,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
     <?php if (!isParent() && !isTeacher() && !isPatron()) { ?>
         <?php
             $websiteActive = in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','schoolContentSetup.php','taraContentSetup.php','chedTshogContentSetup.php','serviceProgramsSetup.php','sponsorSetup.php','ProgramDetailsSetup.php','sponsorProgramDetailEdit.php','downloadFileSetup.php','serviceSetup.php','ourTeamSetup.php','viewFeedback.php'], true);
-            $dzoActive = in_array($currentPage, ['dzo-dashboard.php','dzoClassManagement.php','admin-enrolments.php','admin-parents-children.php','feesManagement.php','update-payments.php','manual-payments.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php','admin-class-students.php'], true);
+            $dzoActive = in_array($currentPage, ['dzo-dashboard.php','dzoClassManagement.php','admin-enrolments.php','admin-parents-children.php','feesManagement.php','update-payments.php','manual-payments.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-parent-email-log.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php','admin-class-students.php'], true);
             $eventsActive = in_array($currentPage, ['eventManagement.php','bookingManagement.php'], true);
             $adminSettingsActive = in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php','audit-logs.php','run-migration.php','module-access.php'], true);
             $canWebsiteManage = function_exists('bbcc_can') ? bbcc_can('website', 'manage') : false;
@@ -419,7 +419,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                         $dzoDashboardActive = ($currentPage === 'dzo-dashboard.php');
                         $dzoEnrollActive = in_array($currentPage, ['dzoClassManagement.php','admin-enrolments.php','admin-parents-children.php','admin-assign-class.php'], true);
                         $dzoFeesActive = in_array($currentPage, ['feesManagement.php','update-payments.php','manual-payments.php','admin-fee-verification.php','feesSetting.php'], true);
-                        $dzoOpsActive = in_array($currentPage, ['dzongkha-classroom.php','parent-email.php','admin-attendance.php'], true);
+                        $dzoOpsActive = in_array($currentPage, ['dzongkha-classroom.php','parent-email.php','admin-parent-email-log.php','admin-attendance.php'], true);
                         $dzoAttendanceActive = in_array($currentPage, ['attendanceManagement.php','attendance-records.php'], true);
                         $dzoConfigActive = in_array($currentPage, ['admin-class-setup.php','feesSetting.php','admin-parent-pins.php'], true);
                     ?>
@@ -448,6 +448,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                     <div id="collapseDzoOps" class="collapse dzo-subgroup-links <?= $dzoOpsActive ? 'show' : '' ?>" data-parent="#collapseOrders">
                         <a class="collapse-item <?= ($currentPage == 'dzongkha-classroom.php') ? 'active' : '' ?>" href="dzongkha-classroom"><i class="fas fa-bullhorn fa-sm mr-1 text-muted"></i> Dzongkha Classroom</a>
                         <a class="collapse-item <?= ($currentPage == 'parent-email.php') ? 'active' : '' ?>" href="parent-email"><i class="fas fa-envelope-open-text fa-sm mr-1 text-muted"></i> Send Parent Email</a>
+                        <a class="collapse-item <?= ($currentPage == 'admin-parent-email-log.php') ? 'active' : '' ?>" href="admin-parent-email-log"><i class="fas fa-history fa-sm mr-1 text-muted"></i> Parent Email History</a>
                         <a class="collapse-item <?= ($currentPage == 'admin-attendance.php') ? 'active' : '' ?>" href="admin-attendance"><i class="fas fa-door-open fa-sm mr-1 text-muted"></i> Kiosk Sign In/Out</a>
                     </div>
 
