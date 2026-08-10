@@ -140,10 +140,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_
         $bodyEscaped = htmlspecialchars($bodyText, ENT_QUOTES, 'UTF-8');
         $bodyLinked = preg_replace('~(https?://[^\s<]+)~', '<a href="$1" style="color:#881b12;">$1</a>', $bodyEscaped);
         $html = pcm_email_wrap($subject, '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;">' . nl2br($bodyLinked) . '</div>');
-        $queued = bbcc_queue_mail($toEmail, (string)($donation['donor_name'] ?? 'Donor'), $subject, $html);
-        if (!$queued) throw new Exception('Email could not be queued.');
+        // Sent synchronously, not queued: this is a single admin-initiated
+        // send where the admin is actively waiting to know it worked, unlike
+        // the public/bulk flows where queuing keeps the requester's browser
+        // from blocking on a slow SMTP call.
+        $sent = send_mail($toEmail, (string)($donation['donor_name'] ?? 'Donor'), $subject, $html);
+        if (!$sent) throw new Exception('Email failed to send: ' . bbcc_last_mail_error());
 
-        $flash = 'Email queued successfully to ' . h($toEmail) . '.';
+        $flash = 'Email sent to ' . h($toEmail) . '.';
         $ok = true;
     } catch (Throwable $e) {
         $flash = 'Error: ' . $e->getMessage();
