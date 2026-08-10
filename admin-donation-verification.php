@@ -20,6 +20,41 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' && isset($_SESSION['donation_verificat
     $ok = !empty($saved['ok']);
 }
 
+/**
+ * Tax-deductible donation receipt sent to a donor once verified. ABN/ACNC
+ * details are legally required on the receipt, not just marketing copy.
+ */
+function donation_receipt_body(string $donorName, float $amount, int $donationId, string $verifiedAt): string {
+    $name = htmlspecialchars($donorName, ENT_QUOTES, 'UTF-8');
+    $amountFmt = number_format($amount, 2);
+    $receiptNo = 'BBCC-DON-' . str_pad((string)$donationId, 5, '0', STR_PAD_LEFT);
+    $dateFmt = htmlspecialchars(date('d M Y', strtotime($verifiedAt) ?: time()), ENT_QUOTES, 'UTF-8');
+
+    return "
+        <p style='margin:0 0 14px;'>Dear {$name},</p>
+        <p style='margin:0 0 14px;'>Thank you so much for your generous donation of <strong>\${$amountFmt}</strong>. We are truly grateful for your kindness and support — gifts like yours make a real difference to our community, and we don't take that for granted.</p>
+
+        <table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='margin:20px 0;background:#faf7ef;border:1px solid #e7dcc0;border-radius:8px;'>
+            <tr><td style='padding:18px 20px;'>
+                <p style='margin:0 0 4px;font-weight:700;color:#881b12;'>The Bhutanese Buddhist and Cultural Centre, Canberra Incorporated</p>
+                <p style='margin:0 0 4px;font-size:13px;color:#555;'>ABN 95 478 448 686</p>
+                <p style='margin:0;font-size:13px;color:#555;'>Registered with the Australian Charities and Not-for-profits Commission (ACNC) — <a href='https://abr.business.gov.au/abn/view/95478448686' style='color:#881b12;'>view on the Australian Business Register</a></p>
+            </td></tr>
+        </table>
+
+        <table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='margin:0 0 20px;font-size:14px;'>
+            <tr><td style='padding:4px 0;color:#666;'>Receipt No.</td><td style='padding:4px 0;text-align:right;font-weight:600;'>{$receiptNo}</td></tr>
+            <tr><td style='padding:4px 0;color:#666;'>Date</td><td style='padding:4px 0;text-align:right;font-weight:600;'>{$dateFmt}</td></tr>
+            <tr><td style='padding:4px 0;color:#666;'>Donor</td><td style='padding:4px 0;text-align:right;font-weight:600;'>{$name}</td></tr>
+            <tr><td style='padding:4px 0;color:#666;'>Amount</td><td style='padding:4px 0;text-align:right;font-weight:600;'>\${$amountFmt}</td></tr>
+        </table>
+
+        <p style='margin:0 0 14px;font-size:13px;color:#666;'>This letter serves as your official receipt for tax purposes. No goods or services were provided in exchange for this donation.</p>
+
+        <p style='margin:0;'>With heartfelt gratitude,<br>The Bhutanese Buddhist and Cultural Centre, Canberra</p>
+    ";
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['verify', 'reject'], true)) {
     verify_csrf();
     $did    = (int)($_POST['donation_id'] ?? 0);
@@ -51,16 +86,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
         ]);
 
         if (!empty($donation['donor_email'])) {
-            $bodyExtra = ($newStatus === 'Rejected' && $reason !== '')
-                ? "<p style='margin:0 0 14px;'>Reason: " . htmlspecialchars($reason) . "</p>"
-                : "";
-            $html = pcm_email_wrap('Donation ' . $newStatus, "
-                <p style='margin:0 0 14px;'>Dear " . htmlspecialchars($donation['donor_name']) . ",</p>
-                <p style='margin:0 0 14px;'>Your donation of <strong>\$" . number_format((float)$donation['amount'], 2) . "</strong> has been <strong>{$newStatus}</strong>.</p>
-                {$bodyExtra}
-                <p style='margin:0;'>Thank you for supporting the Bhutanese Buddhist and Cultural Centre.</p>
-            ");
-            bbcc_queue_mail($donation['donor_email'], $donation['donor_name'], 'Donation ' . $newStatus, $html);
+            if ($newStatus === 'Verified') {
+                $subject = 'Your Donation Receipt — Thank You!';
+                $html = pcm_email_wrap($subject, donation_receipt_body(
+                    (string)$donation['donor_name'],
+                    (float)$donation['amount'],
+                    (int)$donation['id'],
+                    date('Y-m-d H:i:s')
+                ));
+            } else {
+                $subject = 'Donation Update';
+                $reasonHtml = $reason !== '' ? "<p style='margin:0 0 14px;'>Reason: " . htmlspecialchars($reason) . "</p>" : "";
+                $html = pcm_email_wrap($subject, "
+                    <p style='margin:0 0 14px;'>Dear " . htmlspecialchars($donation['donor_name']) . ",</p>
+                    <p style='margin:0 0 14px;'>We were unable to verify your donation of <strong>\$" . number_format((float)$donation['amount'], 2) . "</strong> at this time.</p>
+                    {$reasonHtml}
+                    <p style='margin:0;'>If you believe this is a mistake, please reply to this email or contact us and we'll be happy to help.</p>
+                ");
+            }
+            bbcc_queue_mail($donation['donor_email'], $donation['donor_name'], $subject, $html);
         }
 
         $flash = "Donation <strong>{$newStatus}</strong> — " . h($donation['donor_name']) . " (\$" . number_format((float)$donation['amount'], 2) . ").";
@@ -93,7 +137,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_
         ];
         $subject = strtr($subjectTpl, $vars);
         $bodyText = strtr($bodyTpl, $vars);
-        $html = pcm_email_wrap($subject, '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;">' . nl2br(htmlspecialchars($bodyText, ENT_QUOTES, 'UTF-8')) . '</div>');
+        $bodyEscaped = htmlspecialchars($bodyText, ENT_QUOTES, 'UTF-8');
+        $bodyLinked = preg_replace('~(https?://[^\s<]+)~', '<a href="$1" style="color:#881b12;">$1</a>', $bodyEscaped);
+        $html = pcm_email_wrap($subject, '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;">' . nl2br($bodyLinked) . '</div>');
         $queued = bbcc_queue_mail($toEmail, (string)($donation['donor_name'] ?? 'Donor'), $subject, $html);
         if (!$queued) throw new Exception('Email could not be queued.');
 
@@ -290,12 +336,16 @@ document.addEventListener('DOMContentLoaded',()=>{
                     </div>
                     <div class="form-group mb-0">
                         <label>Message</label>
-                        <textarea name="email_body" class="form-control" rows="8" required>Dear {donor_name},
+                        <textarea name="email_body" class="form-control" rows="12" required>Dear {donor_name},
 
-Thank you for your generous donation of ${amount} to the Bhutanese Buddhist and Cultural Centre. Your donation has been {status}.
+Thank you so much for your generous donation of ${amount}. We are truly grateful for your kindness and support — gifts like yours make a real difference to our community.
 
-With gratitude,
-BBCC</textarea>
+The Bhutanese Buddhist and Cultural Centre, Canberra Incorporated
+ABN 95 478 448 686
+Registered with the Australian Charities and Not-for-profits Commission (ACNC) — https://abr.business.gov.au/abn/view/95478448686
+
+With heartfelt gratitude,
+The Bhutanese Buddhist and Cultural Centre, Canberra</textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
