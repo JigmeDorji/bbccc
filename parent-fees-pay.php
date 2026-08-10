@@ -5,6 +5,7 @@ require_once "include/role_helpers.php";
 require_once "include/csrf.php";
 require_once "include/fee_audit.php";
 require_once "include/pcm_helpers.php";
+require_once "include/notifications.php";
 require_login();
 
 if (!is_parent_role()) { header("Location: unauthorized"); exit; }
@@ -120,6 +121,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'submi
                 ]);
                 $after = bbcc_fee_payment_snapshot($pdo, $feeId);
                 bbcc_audit_fee_payment_change($pdo, $feeId, 'proof_submitted', $before, $after);
+
+                bbcc_notify_admins(
+                    $pdo,
+                    'Fee payment submitted — ' . (string)$fee['student_name'],
+                    (string)$fee['student_name'] . ' (' . (string)$fee['student_code'] . ') — ' . (string)$fee['instalment_label']
+                        . ', $' . number_format((float)$fee['due_amount'], 2) . ' (' . $plan . '). Awaiting verification.',
+                    'update-payments'
+                );
 
                 $ok = true;
                 $flash = 'Payment proof uploaded. Awaiting admin verification.';
