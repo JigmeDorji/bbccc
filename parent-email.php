@@ -535,20 +535,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $recentDeliveries = [];
-try {
-    bbcc_mail_queue_ensure_table();
-    $recentStmt = $pdo->prepare("
-        SELECT to_email, to_name, subject, status, attempts, max_attempts, last_error, created_at, sent_at, attachment_name
-        FROM mail_queue
-        WHERE source = 'parent-email'
-          AND created_by = :created_by
-        ORDER BY id DESC
-        LIMIT 100
-    ");
-    $recentStmt->execute([':created_by' => $sessionUserId]);
-    $recentDeliveries = $recentStmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (Throwable $e) {
-    $recentDeliveries = [];
+if (!$isAdmin) {
+    // Admins have the full cross-sender history page instead (see the
+    // "View Full History" link below) -- no need to also show their own
+    // scoped panel here. Teachers don't have access to that page, so they
+    // keep this personal recent-sends view.
+    try {
+        bbcc_mail_queue_ensure_table();
+        $recentStmt = $pdo->prepare("
+            SELECT to_email, to_name, subject, status, attempts, max_attempts, last_error, created_at, sent_at, attachment_name
+            FROM mail_queue
+            WHERE source = 'parent-email'
+              AND created_by = :created_by
+            ORDER BY id DESC
+            LIMIT 100
+        ");
+        $recentStmt->execute([':created_by' => $sessionUserId]);
+        $recentDeliveries = $recentStmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        $recentDeliveries = [];
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -775,6 +781,19 @@ try {
                         </div>
                     </div>
 
+                <?php if ($isAdmin): ?>
+                <div class="card shadow mt-3">
+                    <div class="card-body d-flex align-items-center justify-content-between flex-wrap" style="gap:12px;">
+                        <div>
+                            <h6 class="m-0 font-weight-bold text-primary">Delivery Status</h6>
+                            <small class="text-muted">See every parent email sent by any admin or teacher, with filters by status and sender.</small>
+                        </div>
+                        <a href="admin-parent-email-log" class="btn btn-outline-primary">
+                            <i class="fas fa-history mr-1"></i> View Full History
+                        </a>
+                    </div>
+                </div>
+                <?php else: ?>
                 <div class="card shadow mt-3">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center">
                         <h6 class="m-0 font-weight-bold text-primary">Recent Delivery Status</h6>
@@ -820,6 +839,7 @@ try {
                         </div>
                     </div>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
         <?php include 'include/admin-footer.php'; ?>
