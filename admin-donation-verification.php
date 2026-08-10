@@ -13,6 +13,17 @@ $pdo   = pcm_pdo();
 $flash = '';
 $ok    = false;
 
+function donation_ensure_email_sent_column(PDO $pdo): void {
+    static $done = false;
+    if ($done) return;
+    $stmt = $pdo->query("SHOW COLUMNS FROM donations LIKE 'last_emailed_at'");
+    if (!$stmt || !$stmt->fetch(PDO::FETCH_ASSOC)) {
+        $pdo->exec("ALTER TABLE donations ADD COLUMN last_emailed_at DATETIME NULL AFTER verified_at");
+    }
+    $done = true;
+}
+donation_ensure_email_sent_column($pdo);
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' && isset($_SESSION['donation_verification_flash'])) {
     $saved = (array)$_SESSION['donation_verification_flash'];
     unset($_SESSION['donation_verification_flash']);
@@ -147,6 +158,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_
         $sent = send_mail($toEmail, (string)($donation['donor_name'] ?? 'Donor'), $subject, $html);
         if (!$sent) throw new Exception('Email failed to send: ' . bbcc_last_mail_error());
 
+        $pdo->prepare("UPDATE donations SET last_emailed_at = NOW() WHERE id = :id")->execute([':id' => $did]);
+
         $flash = 'Email sent to ' . h($toEmail) . '.';
         $ok = true;
     } catch (Throwable $e) {
@@ -239,7 +252,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     <div class="table-responsive">
         <table id="donationTable" class="table table-bordered table-hover" style="width:100%">
             <thead class="thead-light">
-                <tr><th>#</th><th>Donor</th><th>Email</th><th>Phone</th><th>Amount</th><th>Ref</th><th>Proof</th><th>Status</th><th>Submitted</th><th style="width:130px">Actions</th></tr>
+                <tr><th>#</th><th>Donor</th><th>Email</th><th>Phone</th><th>Amount</th><th>Ref</th><th>Proof</th><th>Status</th><th>Submitted</th><th>Email Sent</th><th style="width:130px">Actions</th></tr>
             </thead>
             <tbody>
             <?php foreach ($donations as $i => $d): ?>
@@ -262,6 +275,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                     <?php if ($d['reject_reason']): ?><br><small class="text-danger"><?= h($d['reject_reason']) ?></small><?php endif; ?>
                 </td>
                 <td><?= $d['submitted_at'] ? date('d M Y', strtotime($d['submitted_at'])) : '—' ?></td>
+                <td class="nowrap"><?= !empty($d['last_emailed_at']) ? date('d M Y, g:i A', strtotime($d['last_emailed_at'])) : '—' ?></td>
                 <td class="nowrap">
                     <?php if ($d['status'] === 'Pending'): ?>
                     <form method="POST" class="d-inline" data-confirm="Verify this donation?">
