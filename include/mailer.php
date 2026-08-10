@@ -93,6 +93,8 @@ function send_mail(string $toEmail, string $toName, string $subject, string $htm
         $mail->setFrom($cfg['from_email'], $cfg['from_name']);
         $mail->addAddress($toEmail, $toName ?: $toEmail);
 
+        $mail->CharSet = 'UTF-8';
+        $mail->Encoding = 'base64';
         $mail->isHTML(true);
         $mail->Subject = $subject;
         $mail->Body    = $htmlBody;
