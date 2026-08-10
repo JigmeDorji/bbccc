@@ -179,7 +179,10 @@ if ($viewMode === 'none' || is_patron_role()) {
 }
 
 $tab = trim((string)($_GET['tab'] ?? 'announcements'));
-if (!in_array($tab, ['announcements', 'reports'], true)) {
+if (!in_array($tab, ['announcements', 'reports', 'roster'], true)) {
+    $tab = 'announcements';
+}
+if ($tab === 'roster' && !in_array($viewMode, ['admin', 'teacher'], true)) {
     $tab = 'announcements';
 }
 
@@ -214,6 +217,75 @@ if ($teacherId > 0) {
     $stmtTs = $pdo->prepare("\n        SELECT DISTINCT\n            s.id AS student_id_pk,\n            s.student_id,\n            s.student_name,\n            c.id AS class_id,\n            c.class_name\n        FROM class_assignments ca\n        INNER JOIN classes c ON c.id = ca.class_id\n        INNER JOIN class_teacher_assignments cta ON cta.class_id = c.id\n        INNER JOIN students s ON s.id = ca.student_id\n        WHERE cta.teacher_id = :tid\n        ORDER BY c.class_name ASC, s.student_name ASC\n    ");
     $stmtTs->execute([':tid' => $teacherId]);
     $teacherStudents = $stmtTs->fetchAll();
+}
+
+// ---------------- Roster (teacher: own classes; admin: all/filtered) ----------------
+$rosterStudents = [];
+$rosterClassId = (int)($_GET['roster_class_id'] ?? 0);
+if ($tab === 'roster' && $viewMode === 'teacher') {
+    $rosterStudents = $teacherStudents;
+    if ($rosterClassId > 0) {
+        $rosterStudents = array_values(array_filter($rosterStudents, static function (array $r) use ($rosterClassId): bool {
+            return (int)($r['class_id'] ?? 0) === $rosterClassId;
+        }));
+    }
+} elseif ($tab === 'roster' && $viewMode === 'admin') {
+    $sqlRoster = "\n        SELECT DISTINCT\n            s.id AS student_id_pk,\n            s.student_id,\n            s.student_name,\n            c.id AS class_id,\n            c.class_name\n        FROM class_assignments ca\n        INNER JOIN classes c ON c.id = ca.class_id\n        INNER JOIN students s ON s.id = ca.student_id\n    ";
+    $paramsRoster = [];
+    if ($rosterClassId > 0) {
+        $sqlRoster .= " WHERE c.id = :cid";
+        $paramsRoster[':cid'] = $rosterClassId;
+    }
+    $sqlRoster .= " ORDER BY c.class_name ASC, s.student_name ASC";
+    $stmtRoster = $pdo->prepare($sqlRoster);
+    $stmtRoster->execute($paramsRoster);
+    $rosterStudents = $stmtRoster->fetchAll();
+}
+
+$rosterAttendanceCounts = [];
+$rosterReportCounts = [];
+if ($rosterStudents) {
+    $rosterStudentIds = array_map(static fn(array $r): int => (int)$r['student_id_pk'], $rosterStudents);
+    $inRosterIds = implode(',', $rosterStudentIds);
+
+    $stmtAtt = $pdo->query("\n        SELECT student_id, COUNT(*) AS present_count\n        FROM attendance\n        WHERE student_id IN ({$inRosterIds})\n          AND LOWER(COALESCE(status, '')) = 'present'\n        GROUP BY student_id\n    ");
+    foreach ($stmtAtt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $rosterAttendanceCounts[(int)$row['student_id']] = (int)$row['present_count'];
+    }
+
+    $reportScope = $viewMode === 'teacher' && $teacherClassIds
+        ? ' AND class_id IN (' . implode(',', $teacherClassIds) . ')'
+        : '';
+    $stmtRep = $pdo->query("\n        SELECT student_id, COUNT(*) AS report_count\n        FROM classroom_reports\n        WHERE student_id IN ({$inRosterIds}){$reportScope}\n        GROUP BY student_id\n    ");
+    foreach ($stmtRep->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $rosterReportCounts[(int)$row['student_id']] = (int)$row['report_count'];
+    }
+}
+
+// ---------------- Optional student_id filter on the Reports tab ----------------
+$reportsFilterStudentId = (int)($_GET['student_id'] ?? 0);
+$reportsFilterStudentName = '';
+$reportsFilterClassId = 0;
+if ($reportsFilterStudentId > 0 && in_array($viewMode, ['admin', 'teacher'], true)) {
+    if ($viewMode === 'teacher') {
+        foreach ($teacherStudents as $ts) {
+            if ((int)$ts['student_id_pk'] === $reportsFilterStudentId) {
+                $reportsFilterStudentName = (string)$ts['student_name'];
+                $reportsFilterClassId = (int)$ts['class_id'];
+                break;
+            }
+        }
+        if ($reportsFilterStudentName === '') {
+            $reportsFilterStudentId = 0; // not one of this teacher's students -- ignore the filter
+        }
+    } else {
+        $stmtFilterName = $pdo->prepare("SELECT student_name FROM students WHERE id = :id LIMIT 1");
+        $stmtFilterName->execute([':id' => $reportsFilterStudentId]);
+        $reportsFilterStudentName = (string)($stmtFilterName->fetchColumn() ?: '');
+        if ($reportsFilterStudentName === '') {
+            $reportsFilterStudentId = 0;
+        }
+    }
 }
 
 $flashType = '';
@@ -774,6 +846,11 @@ if ($viewMode === 'admin') {
     $paramsR[':pid'] = $parentId;
 }
 
+if ($reportsFilterStudentId > 0 && in_array($viewMode, ['admin', 'teacher'], true)) {
+    $whereR[] = 'r.student_id = :filter_student_id';
+    $paramsR[':filter_student_id'] = $reportsFilterStudentId;
+}
+
 $sqlR .= " WHERE " . implode(' AND ', $whereR) . " ORDER BY r.created_at DESC, r.id DESC LIMIT 400";
 $stmtR = $pdo->prepare($sqlR);
 $stmtR->execute($paramsR);
@@ -818,7 +895,13 @@ if ($reportIds) {
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h1 class="h4 mb-0">Dzongkha Classroom</h1>
                     <span class="badge badge-light">
-                        <?= $tab === 'announcements' ? count($announcements) . ' announcement(s)' : count($reports) . ' report(s)' ?>
+                        <?php if ($tab === 'announcements'): ?>
+                            <?= count($announcements) ?> announcement(s)
+                        <?php elseif ($tab === 'roster'): ?>
+                            <?= count($rosterStudents) ?> student(s)
+                        <?php else: ?>
+                            <?= count($reports) ?> report(s)
+                        <?php endif; ?>
                     </span>
                 </div>
 
@@ -832,6 +915,13 @@ if ($reportIds) {
                             <i class="fas fa-bullhorn mr-1"></i> Announcements
                         </a>
                     </li>
+                    <?php if (in_array($viewMode, ['admin', 'teacher'], true)): ?>
+                    <li class="nav-item">
+                        <a class="nav-link <?= $tab === 'roster' ? 'active' : '' ?>" href="dzongkha-classroom?tab=roster<?= dc_h($modeQuery) ?>">
+                            <i class="fas fa-users mr-1"></i> <?= $viewMode === 'teacher' ? 'My Class' : 'Class Roster' ?>
+                        </a>
+                    </li>
+                    <?php endif; ?>
                     <li class="nav-item">
                         <a class="nav-link <?= $tab === 'reports' ? 'active' : '' ?>" href="dzongkha-classroom?tab=reports<?= dc_h($modeQuery) ?>">
                             <i class="fas fa-file-alt mr-1"></i> Student Progress Notes
@@ -969,9 +1059,65 @@ if ($reportIds) {
                             <?php endif; ?>
                         </div>
                     </div>
+                <?php elseif ($tab === 'roster'): ?>
+                    <?php if ($viewMode === 'admin'): ?>
+                        <div class="form-group" style="max-width:280px;">
+                            <label class="small text-muted mb-1">Filter by Class</label>
+                            <select id="rosterClassFilter" class="form-control form-control-sm" onchange="window.location.href='dzongkha-classroom?tab=roster' + (this.value ? '&roster_class_id=' + this.value : '');">
+                                <option value="">All Classes</option>
+                                <?php foreach ($allClasses as $cl): ?>
+                                    <option value="<?= (int)$cl['id'] ?>" <?= $rosterClassId === (int)$cl['id'] ? 'selected' : '' ?>><?= dc_h((string)$cl['class_name']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if (empty($rosterStudents)): ?>
+                        <div class="card shadow">
+                            <div class="card-body text-muted">No students found in your scope.</div>
+                        </div>
+                    <?php else: ?>
+                        <?php
+                            $rosterByClass = [];
+                            foreach ($rosterStudents as $rs) {
+                                $rosterByClass[(string)$rs['class_name']][] = $rs;
+                            }
+                        ?>
+                        <?php foreach ($rosterByClass as $className => $classStudents): ?>
+                            <div class="card shadow mb-3">
+                                <div class="card-header py-3">
+                                    <h6 class="m-0 font-weight-bold text-primary"><?= dc_h($className) ?> <span class="text-muted font-weight-normal">(<?= count($classStudents) ?>)</span></h6>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered table-hover mb-0">
+                                        <thead class="thead-light">
+                                            <tr><th>Student</th><th>Student ID</th><th class="text-center">Present</th><th class="text-center">Reports</th><th style="width:220px;">Actions</th></tr>
+                                        </thead>
+                                        <tbody>
+                                        <?php foreach ($classStudents as $rs): ?>
+                                            <?php $rsid = (int)$rs['student_id_pk']; ?>
+                                            <tr>
+                                                <td><?= dc_h((string)$rs['student_name']) ?></td>
+                                                <td><?= dc_h((string)$rs['student_id']) ?></td>
+                                                <td class="text-center"><?= (int)($rosterAttendanceCounts[$rsid] ?? 0) ?></td>
+                                                <td class="text-center"><?= (int)($rosterReportCounts[$rsid] ?? 0) ?></td>
+                                                <td class="nowrap">
+                                                    <a href="dzongkha-classroom?tab=reports<?= dc_h($modeQuery) ?>&student_id=<?= $rsid ?>" class="btn btn-sm btn-outline-primary">View Reports</a>
+                                                    <?php if ($viewMode === 'teacher'): ?>
+                                                        <a href="dzongkha-classroom?tab=reports<?= dc_h($modeQuery) ?>&student_id=<?= $rsid ?>#create-report" class="btn btn-sm btn-outline-success">Add Report</a>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 <?php else: ?>
                     <?php if ($viewMode === 'teacher'): ?>
-                        <div class="card shadow mb-3">
+                        <div class="card shadow mb-3" id="create-report">
                             <div class="card-header py-3">
                                 <h6 class="m-0 font-weight-bold text-primary">Create Student Progress Note / Feedback</h6>
                             </div>
@@ -986,7 +1132,7 @@ if ($reportIds) {
                                             <select name="class_id" id="reportClass" class="form-control" required>
                                                 <option value="">-- Select Class --</option>
                                                 <?php foreach ($teacherClasses as $cl): ?>
-                                                    <option value="<?= (int)$cl['id'] ?>"><?= dc_h((string)$cl['class_name']) ?></option>
+                                                    <option value="<?= (int)$cl['id'] ?>" <?= $reportsFilterClassId === (int)$cl['id'] ? 'selected' : '' ?>><?= dc_h((string)$cl['class_name']) ?></option>
                                                 <?php endforeach; ?>
                                             </select>
                                         </div>
@@ -995,7 +1141,7 @@ if ($reportIds) {
                                             <select name="student_id" id="reportStudent" class="form-control" required>
                                                 <option value="">-- Select Student --</option>
                                                 <?php foreach ($teacherStudents as $st): ?>
-                                                    <option value="<?= (int)$st['student_id_pk'] ?>" data-class-id="<?= (int)$st['class_id'] ?>">
+                                                    <option value="<?= (int)$st['student_id_pk'] ?>" data-class-id="<?= (int)$st['class_id'] ?>" <?= $reportsFilterStudentId === (int)$st['student_id_pk'] ? 'selected' : '' ?>>
                                                         <?= dc_h((string)$st['student_name']) ?> (<?= dc_h((string)$st['student_id']) ?>)
                                                     </option>
                                                 <?php endforeach; ?>
@@ -1034,6 +1180,12 @@ if ($reportIds) {
                             <h6 class="m-0 font-weight-bold text-primary">Student Progress Notes</h6>
                         </div>
                         <div class="card-body">
+                            <?php if ($reportsFilterStudentId > 0): ?>
+                                <div class="alert alert-info d-flex justify-content-between align-items-center py-2">
+                                    <span>Filtering by: <strong><?= dc_h($reportsFilterStudentName) ?></strong></span>
+                                    <a href="dzongkha-classroom?tab=reports<?= dc_h($modeQuery) ?>" class="btn btn-sm btn-outline-secondary">Clear</a>
+                                </div>
+                            <?php endif; ?>
                             <?php if (empty($reports)): ?>
                                 <div class="text-muted">No progress notes available in your scope.</div>
                             <?php else: ?>
