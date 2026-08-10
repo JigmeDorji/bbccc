@@ -68,10 +68,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_custom_email') {
+    verify_csrf();
+    $did = (int)($_POST['donation_id'] ?? 0);
+    $subjectTpl = trim((string)($_POST['email_subject'] ?? 'Thank you for your donation, {donor_name}'));
+    $bodyTpl = trim((string)($_POST['email_body'] ?? 'Dear {donor_name},'));
+    try {
+        if ($did <= 0) throw new Exception('Invalid donation record.');
+        if ($subjectTpl === '' || $bodyTpl === '') throw new Exception('Subject and message are required.');
+
+        $row = $pdo->prepare("SELECT * FROM donations WHERE id = :id LIMIT 1");
+        $row->execute([':id' => $did]);
+        $donation = $row->fetch(PDO::FETCH_ASSOC);
+        if (!$donation) throw new Exception('Record not found.');
+        $toEmail = trim((string)($donation['donor_email'] ?? ''));
+        if ($toEmail === '') throw new Exception('Donor email not available.');
+
+        $vars = [
+            '{donor_name}' => (string)($donation['donor_name'] ?? 'Donor'),
+            '{amount}' => number_format((float)($donation['amount'] ?? 0), 2),
+            '{status}' => (string)($donation['status'] ?? ''),
+            '{payment_ref}' => (string)($donation['payment_ref'] ?? ''),
+            '{message}' => (string)($donation['message'] ?? ''),
+        ];
+        $subject = strtr($subjectTpl, $vars);
+        $bodyText = strtr($bodyTpl, $vars);
+        $html = pcm_email_wrap($subject, '<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.6;">' . nl2br(htmlspecialchars($bodyText, ENT_QUOTES, 'UTF-8')) . '</div>');
+        $queued = bbcc_queue_mail($toEmail, (string)($donation['donor_name'] ?? 'Donor'), $subject, $html);
+        if (!$queued) throw new Exception('Email could not be queued.');
+
+        $flash = 'Email queued successfully to ' . h($toEmail) . '.';
+        $ok = true;
+    } catch (Throwable $e) {
+        $flash = 'Error: ' . $e->getMessage();
+        $ok = false;
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $_SESSION['donation_verification_flash'] = ['message' => $flash, 'ok' => $ok];
     header('Location: admin-donation-verification');
     exit;
+}
+
+function donation_proof_type(string $path): string {
+    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+    return ($ext === 'pdf') ? 'pdf' : 'img';
 }
 
 $donations = $pdo->query("
@@ -147,7 +189,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     <div class="table-responsive">
         <table id="donationTable" class="table table-bordered table-hover" style="width:100%">
             <thead class="thead-light">
-                <tr><th>#</th><th>Donor</th><th>Email</th><th>Phone</th><th>Amount</th><th>Ref</th><th>Proof</th><th>Status</th><th>Submitted</th><th style="width:180px">Actions</th></tr>
+                <tr><th>#</th><th>Donor</th><th>Email</th><th>Phone</th><th>Amount</th><th>Ref</th><th>Proof</th><th>Status</th><th>Submitted</th><th style="width:130px">Actions</th></tr>
             </thead>
             <tbody>
             <?php foreach ($donations as $i => $d): ?>
@@ -158,39 +200,36 @@ document.addEventListener('DOMContentLoaded',()=>{
                 <td><?= h($d['donor_phone'] ?? '—') ?></td>
                 <td class="font-weight-bold">$<?= number_format((float)$d['amount'], 2) ?></td>
                 <td><?= h($d['payment_ref'] ?? '—') ?></td>
-                <td><?= $d['proof_path'] ? '<a href="' . h($d['proof_path']) . '" target="_blank">View</a>' : '—' ?></td>
+                <td>
+                    <?php if ($d['proof_path']): ?>
+                        <?php $ptype = donation_proof_type((string)$d['proof_path']); ?>
+                        <a href="javascript:void(0)" class="mini proof-thumb" data-proof="<?= h((string)$d['proof_path']) ?>" data-type="<?= h($ptype) ?>" data-name="<?= h(basename((string)$d['proof_path'])) ?>"><i class="fas fa-eye"></i> View</a>
+                    <?php else: ?>
+                        —
+                    <?php endif; ?>
+                </td>
                 <td><span class="badge badge-<?= pcm_badge($d['status']) ?>"><?= h($d['status']) ?></span>
                     <?php if ($d['reject_reason']): ?><br><small class="text-danger"><?= h($d['reject_reason']) ?></small><?php endif; ?>
                 </td>
                 <td><?= $d['submitted_at'] ? date('d M Y', strtotime($d['submitted_at'])) : '—' ?></td>
-                <td>
+                <td class="nowrap">
                     <?php if ($d['status'] === 'Pending'): ?>
                     <form method="POST" class="d-inline" data-confirm="Verify this donation?">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="verify">
                         <input type="hidden" name="donation_id" value="<?= (int)$d['id'] ?>">
-                        <button class="btn btn-success btn-sm"><i class="fas fa-check mr-1"></i>Verify</button>
+                        <button class="btn btn-success btn-sm" title="Verify"><i class="fas fa-check"></i></button>
                     </form>
-                    <button class="btn btn-danger btn-sm" data-toggle="modal" data-target="#rejectDonation<?= (int)$d['id'] ?>"><i class="fas fa-times mr-1"></i>Reject</button>
-
-                    <div class="modal fade" id="rejectDonation<?= (int)$d['id'] ?>" tabindex="-1">
-                        <div class="modal-dialog"><div class="modal-content">
-                            <form method="POST">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="action" value="reject">
-                                <input type="hidden" name="donation_id" value="<?= (int)$d['id'] ?>">
-                                <div class="modal-header bg-danger text-white"><h5 class="modal-title">Reject Donation</h5><button class="close text-white" data-dismiss="modal">&times;</button></div>
-                                <div class="modal-body">
-                                    <p><?= h($d['donor_name']) ?> — $<?= number_format((float)$d['amount'], 2) ?></p>
-                                    <div class="form-group"><label>Reason</label><textarea name="reject_reason" class="form-control" rows="2" required></textarea></div>
-                                </div>
-                                <div class="modal-footer"><button class="btn btn-secondary" data-dismiss="modal">Cancel</button><button class="btn btn-danger" type="submit">Reject</button></div>
-                            </form>
-                        </div></div>
-                    </div>
+                    <button type="button" class="btn btn-danger btn-sm js-reject-donation-btn" title="Reject"
+                            data-id="<?= (int)$d['id'] ?>" data-donor="<?= h($d['donor_name']) ?>" data-amount="<?= number_format((float)$d['amount'], 2) ?>">
+                        <i class="fas fa-times"></i>
+                    </button>
                     <?php else: ?>
                         <span class="text-muted small"><?= h($d['verified_by'] ?? '') ?></span>
                     <?php endif; ?>
+                    <button type="button" class="btn btn-info btn-sm js-email-donation-btn" title="Send Email" data-id="<?= (int)$d['id'] ?>" data-donor="<?= h($d['donor_name']) ?>">
+                        <i class="fas fa-envelope"></i>
+                    </button>
                 </td>
             </tr>
             <?php endforeach; ?>
@@ -206,6 +245,76 @@ document.addEventListener('DOMContentLoaded',()=>{
 </div>
 </div>
 
+<!-- Shared modal: Reject -->
+<div class="modal fade" id="rejectDonationModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="POST">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="reject">
+                <input type="hidden" name="donation_id" id="rejectDonationId" value="">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Reject Donation</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong id="rejectDonationDonor"></strong> — $<span id="rejectDonationAmount"></span></p>
+                    <div class="form-group mb-0"><label>Reason</label><textarea name="reject_reason" class="form-control" rows="2" required></textarea></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Reject</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Shared modal: Send Email -->
+<div class="modal fade" id="emailDonationModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="POST">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="send_custom_email">
+                <input type="hidden" name="donation_id" id="emailDonationId" value="">
+                <div class="modal-header bg-info text-white">
+                    <h5 class="modal-title">Send Donor Email</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mini mb-2">Variables: {donor_name}, {amount}, {status}, {payment_ref}, {message}</div>
+                    <div class="form-group">
+                        <label>Subject</label>
+                        <input type="text" name="email_subject" class="form-control" value="Thank you for your donation, {donor_name}" required>
+                    </div>
+                    <div class="form-group mb-0">
+                        <label>Message</label>
+                        <textarea name="email_body" class="form-control" rows="8" required>Dear {donor_name},
+
+Thank you for your generous donation of ${amount} to the Bhutanese Buddhist and Cultural Centre. Your donation has been {status}.
+
+With gratitude,
+BBCC</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-info">Send Email</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+    .proof-thumb { display:inline-flex; align-items:center; gap:6px; cursor:pointer; text-decoration:none; }
+    .swal2-popup { width: 920px !important; max-width: 96vw !important; }
+    .proof-frame { width: 100%; height: 70vh; border: 1px solid #e3e6f0; border-radius: 12px; }
+    .proof-stage { width: 100%; max-height: 72vh; overflow: auto; border: 1px solid #e3e6f0; border-radius: 12px; padding: 10px; background: #fafbff; display: flex; align-items: center; justify-content: center; }
+    .proof-img { display:block; border-radius: 10px; border: 1px solid #e3e6f0; background:#fff; max-width: 100%; max-height: calc(72vh - 24px); width: auto; height: auto; }
+</style>
+
 <script>
 $(function(){
     var dt = $('#donationTable').DataTable({pageLength:25, order:[[8,'desc']]});
@@ -215,6 +324,44 @@ $(function(){
         dt.column(7).search(status === 'all' ? '' : '^' + status + '$', true, false);
         dt.draw();
     });
+});
+
+document.addEventListener('click', function (e) {
+    var rejectBtn = e.target.closest('.js-reject-donation-btn');
+    if (rejectBtn) {
+        document.getElementById('rejectDonationId').value = rejectBtn.dataset.id;
+        document.getElementById('rejectDonationDonor').textContent = rejectBtn.dataset.donor;
+        document.getElementById('rejectDonationAmount').textContent = rejectBtn.dataset.amount;
+        jQuery('#rejectDonationModal').modal('show');
+        return;
+    }
+
+    var emailBtn = e.target.closest('.js-email-donation-btn');
+    if (emailBtn) {
+        document.getElementById('emailDonationId').value = emailBtn.dataset.id;
+        jQuery('#emailDonationModal').modal('show');
+        return;
+    }
+
+    var proofEl = e.target.closest('.proof-thumb');
+    if (proofEl) {
+        var proof = proofEl.dataset.proof;
+        var type = proofEl.dataset.type;
+        var name = proofEl.dataset.name;
+        var html;
+        if (type === 'img') {
+            html = '<div class="proof-stage"><img class="proof-img" src="' + proof + '" alt="' + name + '"></div>';
+        } else {
+            html = '<iframe class="proof-frame" src="' + proof + '"></iframe>';
+        }
+        Swal.fire({
+            title: name,
+            html: html,
+            showConfirmButton: true,
+            confirmButtonText: 'Close',
+            width: 920,
+        });
+    }
 });
 </script>
 </body>
