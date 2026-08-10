@@ -12,8 +12,9 @@ if (!is_admin_role()) { header("Location: unauthorized"); exit; }
 $pdo = pcm_pdo();
 $message = '';
 $success = false;
+pcm_ensure_notify_email_columns($pdo);
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'bank_details') {
     verify_csrf();
 
     $bankName      = trim((string)($_POST['bank_name'] ?? ''));
@@ -45,7 +46,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $success = true;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['form'] ?? '') === 'notify_email') {
+    verify_csrf();
+    $notifyEmail = trim((string)($_POST['notify_email'] ?? ''));
+
+    if ($notifyEmail !== '' && !filter_var($notifyEmail, FILTER_VALIDATE_EMAIL)) {
+        $message = 'Please enter a valid email address.';
+        $success = false;
+    } else {
+        $pdo->prepare("
+            INSERT INTO fees_settings (id, website_notify_email)
+            VALUES (1, :email)
+            ON DUPLICATE KEY UPDATE website_notify_email = VALUES(website_notify_email)
+        ")->execute([':email' => $notifyEmail ?: null]);
+
+        $message = $notifyEmail !== ''
+            ? 'Donation notification email updated.'
+            : 'Donation notification email cleared — no one will be emailed when a donation is submitted.';
+        $success = true;
+    }
+}
+
 $settings = $pdo->query("SELECT * FROM donation_settings WHERE id = 1 LIMIT 1")->fetch() ?: [];
+$notifyEmailCurrent = pcm_website_notify_email();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -85,6 +108,7 @@ document.addEventListener('DOMContentLoaded',()=>{
             <div class="card-body">
                 <form method="POST">
                     <?= csrf_field() ?>
+                    <input type="hidden" name="form" value="bank_details">
 
                     <div class="form-group">
                         <label>Bank Name (optional)</label>
@@ -115,6 +139,28 @@ document.addEventListener('DOMContentLoaded',()=>{
 
                     <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i>Save Bank Details</button>
                     <a href="donate" target="_blank" class="btn btn-outline-secondary"><i class="fas fa-external-link-alt mr-1"></i>View Donate Page</a>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6 mb-3">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-bell mr-1"></i>Donation Notifications</h6>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="form" value="notify_email">
+
+                    <div class="form-group mb-4">
+                        <label>Notify Email</label>
+                        <input type="email" class="form-control" name="notify_email" value="<?= h($notifyEmailCurrent) ?>" placeholder="you@example.com">
+                        <small class="form-text text-muted">Sent an email every time someone submits a new donation, so you know to review and verify it. Leave blank to turn this off.</small>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i>Save Notify Email</button>
                 </form>
             </div>
         </div>
