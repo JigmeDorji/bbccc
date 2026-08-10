@@ -5,6 +5,7 @@
 require_once __DIR__ . '/mailer.php';
 require_once __DIR__ . '/mail_queue.php';
 require_once __DIR__ . '/fee_audit.php';
+require_once __DIR__ . '/notifications.php';
 
 /**
  * Minimum age (in whole years + months) a child must be, as of today,
@@ -1337,13 +1338,30 @@ function pcm_notify_admin_absence(string $childName, string $parentName, string 
 }
 
 function pcm_notify_admin_donation(string $donorName, float $amount): void {
+    $amountLabel = number_format($amount, 2);
+
+    // In-app bell notification for every admin -- independent of whether a
+    // notify email is configured, since this doesn't need an address at all.
+    try {
+        $pdo = pcm_pdo();
+        if (function_exists('bbcc_create_notification')) {
+            bbcc_create_notification($pdo, [
+                'target_role' => 'admin',
+                'title' => 'New Donation Submitted – ' . $donorName,
+                'body' => $donorName . ' submitted a donation of $' . $amountLabel . ', awaiting verification.',
+                'link_url' => 'admin-donation-verification',
+            ]);
+        }
+    } catch (Throwable $e) {
+        bbcc_mail_log('ADMIN NOTIFY ERROR: donation in-app notify failed for ' . $donorName . ': ' . $e->getMessage());
+    }
+
     $adminEmail = pcm_website_notify_email();
     if ($adminEmail === '') {
         bbcc_mail_log('ADMIN MAIL SKIP: empty WEBSITE_NOTIFY_EMAIL for donation from ' . $donorName);
         return;
     }
     $portalUrl = htmlspecialchars(pcm_admin_portal_url(), ENT_QUOTES, 'UTF-8');
-    $amountLabel = number_format($amount, 2);
     $html = pcm_email_wrap('New Donation Submitted', "
         <p style='margin:0 0 14px;'><strong>" . htmlspecialchars($donorName) . "</strong> submitted a donation of <strong>\${$amountLabel}</strong>, awaiting verification.</p>
         <p style='margin:16px 0 0;'>
