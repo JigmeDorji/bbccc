@@ -21,6 +21,32 @@ $capState = [];
 foreach ($capabilities as $cap) {
     $capState[$cap] = bbcc_acl_has_capability($cap);
 }
+
+// ── Unmapped-page scan ──────────────────────────────────────────
+// A route missing from bbcc_acl_page_rules() isn't blocked — it just
+// falls back to "any logged-in user" (see bbcc_acl_enforce_current_page()).
+// This scans every root-level .php file that calls require_login() and
+// flags any that the centralized ACL doesn't know about, so a forgotten
+// page doesn't silently sit open.
+$moduleRules = bbcc_acl_route_module_rules();
+$unmappedPages = [];
+$mappedNoModule = [];
+foreach (glob(__DIR__ . '/*.php') as $file) {
+    $base = basename($file, '.php');
+    $routeKey = strtolower($base);
+    $source = (string)file_get_contents($file);
+    if (strpos($source, 'require_login()') === false) {
+        continue; // Public page, not gated by login at all.
+    }
+    if (!isset($rules[$routeKey])) {
+        $hasManualCheck = (bool)preg_match('/is_admin_role\(\)|is_website_admin_role\(\)|is_teacher_role\(\)|is_parent_role\(\)/', $source);
+        $unmappedPages[] = ['file' => $base . '.php', 'route' => $routeKey, 'manual_check' => $hasManualCheck];
+    } elseif (!isset($moduleRules[$routeKey])) {
+        $mappedNoModule[] = ['file' => $base . '.php', 'route' => $routeKey];
+    }
+}
+usort($unmappedPages, fn($a, $b) => strcasecmp($a['file'], $b['file']));
+usort($mappedNoModule, fn($a, $b) => strcasecmp($a['file'], $b['file']));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -75,6 +101,66 @@ foreach ($capabilities as $cap) {
                         </div>
                     </div>
                 </div>
+
+                <div class="card shadow mb-3">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">Unmapped Pages</h6>
+                        <span class="badge <?= $unmappedPages ? 'badge-danger' : 'badge-success' ?>"><?= (int)count($unmappedPages) ?> found</span>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">
+                            Every page below calls <code>require_login()</code> but has no entry in
+                            <code>bbcc_acl_page_rules()</code>. Unmapped routes aren't blocked by the
+                            centralized ACL — they're reachable by <strong>any logged-in user</strong>
+                            regardless of role, unless the page also has its own manual role check.
+                            Add an entry to <code>include/acl.php</code> to close each one.
+                        </p>
+                        <?php if (empty($unmappedPages)): ?>
+                            <div class="text-success"><i class="fas fa-check-circle mr-1"></i> None — every gated page is registered in the ACL.</div>
+                        <?php else: ?>
+                            <table class="table table-sm table-bordered mb-0">
+                                <thead class="thead-light"><tr><th>File</th><th>Route Key</th><th>Backstop</th></tr></thead>
+                                <tbody>
+                                <?php foreach ($unmappedPages as $p): ?>
+                                    <tr>
+                                        <td><code><?= h($p['file']) ?></code></td>
+                                        <td><code><?= h($p['route']) ?></code></td>
+                                        <td>
+                                            <?php if ($p['manual_check']): ?>
+                                                <span class="badge badge-warning">Has its own role check</span>
+                                            <?php else: ?>
+                                                <span class="badge badge-danger">None — open to any logged-in user</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        <?php endif; ?>
+                    </div>
+                </div>
+
+                <?php if (!empty($mappedNoModule)): ?>
+                <div class="card shadow mb-3">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">Pages Without a Module/Action Rule</h6>
+                        <span class="badge badge-secondary"><?= (int)count($mappedNoModule) ?> found</span>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">
+                            These are registered in <code>bbcc_acl_page_rules()</code> (so role access is enforced),
+                            but have no matching entry in <code>bbcc_acl_route_module_rules()</code> — they skip the
+                            finer-grained module/action layer, so per-user grant/revoke overrides in Module Access
+                            won't apply to them. Not necessarily a bug, but worth a deliberate decision.
+                        </p>
+                        <ul class="mb-0">
+                            <?php foreach ($mappedNoModule as $p): ?>
+                                <li><code><?= h($p['file']) ?></code> (route: <code><?= h($p['route']) ?></code>)</li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <div class="card shadow">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center">
