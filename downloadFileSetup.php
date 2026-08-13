@@ -37,6 +37,55 @@ try {
         $hasOriginalName = false;
     }
 
+    $hasImagePath = true;
+    try {
+        $pdo->query("SELECT image_path FROM download_files LIMIT 1");
+    } catch (Throwable $e) {
+        $hasImagePath = false;
+    }
+
+    if ($hasImagePath && $_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'set_image') {
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id <= 0) throw new Exception("Invalid file.");
+
+        $stmtOld = $pdo->prepare("SELECT image_path FROM download_files WHERE id = :id");
+        $stmtOld->execute([':id' => $id]);
+        $oldImage = (string)($stmtOld->fetchColumn() ?: '');
+        $imagePath = $oldImage;
+
+        if (isset($_POST['remove_image'])) {
+            $imagePath = '';
+        }
+
+        if (isset($_FILES['image']) && (int)($_FILES['image']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            $imgName = (string)$_FILES['image']['name'];
+            $imgSize = (int)$_FILES['image']['size'];
+            $imgTmp = (string)$_FILES['image']['tmp_name'];
+            if ($imgSize > 5242880) throw new Exception("Image too large. Max 5MB.");
+            $ext = strtolower((string)pathinfo($imgName, PATHINFO_EXTENSION));
+            if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+                throw new Exception("Only JPG, PNG, GIF, or WEBP images are allowed.");
+            }
+            $safeImg = time() . '_' . preg_replace('/[^a-zA-Z0-9._-]/', '', $imgName);
+            $imgDirAbs = __DIR__ . '/uploads/downloads/images';
+            if (!is_dir($imgDirAbs)) @mkdir($imgDirAbs, 0775, true);
+            if (!is_dir($imgDirAbs)) throw new Exception("Image upload folder is not available.");
+            if (!move_uploaded_file($imgTmp, $imgDirAbs . '/' . $safeImg)) throw new Exception("Failed to upload image.");
+            $imagePath = 'uploads/downloads/images/' . $safeImg;
+        }
+
+        if ($imagePath !== $oldImage && $oldImage !== '' && str_starts_with($oldImage, 'uploads/downloads/images/')) {
+            $oldAbs = __DIR__ . '/' . $oldImage;
+            if (is_file($oldAbs)) @unlink($oldAbs);
+        }
+
+        $upd = $pdo->prepare("UPDATE download_files SET image_path = :image_path WHERE id = :id");
+        $upd->execute([':image_path' => $imagePath, ':id' => $id]);
+
+        $message = "Image updated successfully.";
+        $msgType = "success";
+    }
+
     if (isset($_GET['delete'])) {
         $id = (int)$_GET['delete'];
         $stmt = $pdo->prepare("SELECT file_path FROM download_files WHERE id = :id");
@@ -55,7 +104,7 @@ try {
         $msgType = "success";
     }
 
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'set_image') {
         $maxPost = bbcc_ini_bytes((string)ini_get('post_max_size'));
         $contentLen = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
         if ($contentLen > 0 && $maxPost > 0 && $contentLen > $maxPost && empty($_POST) && empty($_FILES)) {
@@ -119,6 +168,10 @@ try {
     } else {
         $files = $pdo->query("SELECT id, title, description, file_path, created_at, NULL AS original_name FROM download_files ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
     }
+    if (!$hasImagePath) {
+        foreach ($files as &$f) { $f['image_path'] = ''; }
+        unset($f);
+    }
 } catch (Exception $e) {
     $message = $e->getMessage();
     $msgType = "error";
@@ -176,23 +229,78 @@ try {
             <div class="table-responsive">
                 <table class="table table-bordered table-hover">
                     <thead class="thead-light">
-                        <tr><th>#</th><th>Title</th><th>Description</th><th>File</th><th>Action</th></tr>
+                        <tr><th>#</th><th>Image</th><th>Title</th><th>Description</th><th>File</th><th>Action</th></tr>
                     </thead>
                     <tbody>
                     <?php foreach ($files as $i => $f): ?>
+                        <?php $imagePath = (string)($f['image_path'] ?? ''); ?>
                         <tr>
                             <td><?= $i + 1 ?></td>
+                            <td>
+                                <?php if ($imagePath !== ''): ?>
+                                    <img src="<?= htmlspecialchars($imagePath) ?>" alt="" style="width:50px;height:50px;border-radius:6px;object-fit:cover;">
+                                <?php else: ?>
+                                    <span class="text-muted small">No image</span>
+                                <?php endif; ?>
+                            </td>
                             <td><?= htmlspecialchars((string)$f['title']) ?></td>
                             <td><?= htmlspecialchars((string)$f['description']) ?></td>
                             <td><a href="<?= htmlspecialchars((string)$f['file_path']) ?>" target="_blank"><?= htmlspecialchars((string)($f['original_name'] ?? basename((string)$f['file_path']))) ?></a></td>
-                            <td><a href="downloadFileSetup?delete=<?= (int)$f['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this file?')"><i class="fas fa-trash"></i></a></td>
+                            <td class="text-nowrap">
+                                <?php if ($hasImagePath): ?>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" data-toggle="modal" data-target="#imageModal<?= (int)$f['id'] ?>"><i class="fas fa-image mr-1"></i><?= $imagePath !== '' ? 'Change' : 'Add' ?> Image</button>
+                                <?php endif; ?>
+                                <a href="downloadFileSetup?delete=<?= (int)$f['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this file?')"><i class="fas fa-trash"></i></a>
+                            </td>
                         </tr>
+
+                        <?php if ($hasImagePath): ?>
+                        <div class="modal fade" id="imageModal<?= (int)$f['id'] ?>" tabindex="-1" role="dialog" aria-hidden="true">
+                            <div class="modal-dialog" role="document">
+                                <div class="modal-content">
+                                    <form method="POST" action="downloadFileSetup" enctype="multipart/form-data">
+                                        <input type="hidden" name="action" value="set_image">
+                                        <input type="hidden" name="id" value="<?= (int)$f['id'] ?>">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Image for "<?= htmlspecialchars((string)$f['title']) ?>"</h5>
+                                            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <?php if ($imagePath !== ''): ?>
+                                                <div class="mb-2">
+                                                    <img src="<?= htmlspecialchars($imagePath) ?>" alt="" style="width:100px;height:100px;border-radius:6px;object-fit:cover;">
+                                                </div>
+                                                <div class="form-check mb-3">
+                                                    <input type="checkbox" class="form-check-input" id="removeImage<?= (int)$f['id'] ?>" name="remove_image" value="1">
+                                                    <label class="form-check-label" for="removeImage<?= (int)$f['id'] ?>">Remove current image</label>
+                                                </div>
+                                            <?php endif; ?>
+                                            <div class="form-group mb-0">
+                                                <label>Upload <?= $imagePath !== '' ? 'replacement' : '' ?> image</label>
+                                                <input type="file" name="image" class="form-control-file" accept="image/*">
+                                                <small class="form-text text-muted">Max 5MB (JPG, PNG, GIF, WEBP).</small>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                                            <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Save</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                     <?php endforeach; ?>
                     <?php if (!$files): ?>
-                        <tr><td colspan="5" class="text-center text-muted">No files uploaded yet.</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted">No files uploaded yet.</td></tr>
                     <?php endif; ?>
                     </tbody>
                 </table>
+                <?php if (!$hasImagePath): ?>
+                    <div class="alert alert-warning mt-3 mb-0">
+                        Image support needs a database update. Go to <a href="run-migration">Run Migrations</a> and run pending migrations to enable it.
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>

@@ -8,10 +8,10 @@ try {
         PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
     try {
-        $downloadItems = $pdo->query("SELECT title, description, original_name, file_path FROM download_files ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+        $downloadItems = $pdo->query("SELECT title, description, original_name, file_path, image_path FROM download_files ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
-        // Backward compatibility when original_name column does not exist.
-        $downloadItems = $pdo->query("SELECT title, description, NULL AS original_name, file_path FROM download_files ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
+        // Backward compatibility when original_name/image_path columns do not exist.
+        $downloadItems = $pdo->query("SELECT title, description, NULL AS original_name, file_path, '' AS image_path FROM download_files ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);
     }
 } catch (Throwable $e) {
     $downloadItems = [];
@@ -58,7 +58,11 @@ try {
                 <?php $renderedDownloads++; ?>
                 <div class="bbcc-feature-card fade-up">
                     <div class="bbcc-feature-card__icon bbcc-feature-card__icon--info">
-                        <i class="fa-solid fa-file-arrow-down"></i>
+                        <?php if (!empty($item['image_path'])): ?>
+                            <img src="<?= htmlspecialchars((string)$item['image_path'], ENT_QUOTES, 'UTF-8'); ?>" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
+                        <?php else: ?>
+                            <i class="fa-solid fa-file-arrow-down"></i>
+                        <?php endif; ?>
                     </div>
                     <h3><?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8'); ?></h3>
                     <p><?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></p>
