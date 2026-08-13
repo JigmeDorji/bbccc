@@ -56,17 +56,21 @@ try {
                 <?php $filePath = __DIR__ . '/' . ($item['file_path'] ?? ''); ?>
                 <?php if (!is_file($filePath)) continue; ?>
                 <?php $renderedDownloads++; ?>
-                <div class="bbcc-feature-card fade-up">
-                    <div class="bbcc-feature-card__icon bbcc-feature-card__icon--info">
+                <?php
+                    $downloadHref = htmlspecialchars((string)$item['file_path'], ENT_QUOTES, 'UTF-8');
+                    $downloadName = htmlspecialchars((string)($item['original_name'] ?? basename((string)$item['file_path'])), ENT_QUOTES, 'UTF-8');
+                ?>
+                <div class="bbcc-feature-card bbcc-download-card fade-up">
+                    <a class="bbcc-feature-card__icon bbcc-feature-card__icon--info" href="<?= $downloadHref ?>" download="<?= $downloadName ?>">
                         <?php if (!empty($item['image_path'])): ?>
-                            <img src="<?= htmlspecialchars((string)$item['image_path'], ENT_QUOTES, 'UTF-8'); ?>" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
+                            <img src="<?= htmlspecialchars((string)$item['image_path'], ENT_QUOTES, 'UTF-8'); ?>" alt="">
                         <?php else: ?>
                             <i class="fa-solid fa-file-arrow-down"></i>
                         <?php endif; ?>
-                    </div>
-                    <h3><?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8'); ?></h3>
+                    </a>
+                    <h3><a href="<?= $downloadHref ?>" download="<?= $downloadName ?>"><?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8'); ?></a></h3>
                     <p><?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></p>
-                    <a class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" href="<?= htmlspecialchars((string)$item['file_path'], ENT_QUOTES, 'UTF-8'); ?>" download="<?= htmlspecialchars((string)($item['original_name'] ?? basename((string)$item['file_path'])), ENT_QUOTES, 'UTF-8'); ?>">
+                    <a class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" href="<?= $downloadHref ?>" download="<?= $downloadName ?>">
                         Download <i class="fa-solid fa-arrow-down"></i>
                     </a>
                 </div>

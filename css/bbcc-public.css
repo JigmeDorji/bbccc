@@ -417,6 +417,14 @@ body.bbcc-public {
 .bbcc-feature-card h3 { font-size: 1.2rem; font-weight: 700; margin-bottom: 12px; }
 .bbcc-feature-card p { color: var(--gray-600); font-size: .95rem; line-height: 1.7; margin: 0; }
 
+/* Download cards: image/title double as the download link */
+.bbcc-download-card .bbcc-feature-card__icon { overflow: hidden; color: inherit; }
+.bbcc-download-card .bbcc-feature-card__icon--info { color: var(--info); }
+.bbcc-download-card .bbcc-feature-card__icon img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.bbcc-download-card h3 a { color: inherit; text-decoration: none; }
+.bbcc-download-card h3 a:hover { color: var(--brand); text-decoration: underline; }
+.bbcc-download-card .bbcc-btn { margin-top: 20px; }
+
 @media (max-width: 991px) { .bbcc-features { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 576px) { .bbcc-features { grid-template-columns: 1fr; gap: 20px; } }
 
