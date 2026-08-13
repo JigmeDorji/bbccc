@@ -2,8 +2,10 @@
    BBCC Public Website — Modern Design System
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Google Fonts ── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@600;700;800&display=swap');
+/* Google Fonts are loaded via <link> in include/global_css.php, not
+   @import here — @import forces the browser to fetch and parse this
+   whole file before it can even discover the font stylesheet, adding
+   a serial network round-trip to every page load. */
 
 /* ── Design Tokens ── */
 :root {

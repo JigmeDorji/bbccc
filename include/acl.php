@@ -189,6 +189,7 @@ function bbcc_acl_page_rules(): array {
         'admin-parent-pins' => ['admin'],
         'mail-test' => ['admin'],
         'run-migration' => ['admin'],
+        'regenerate-image-variants' => ['admin', 'website_admin'],
         'bannersetup' => ['admin', 'website_admin'],
         'aboutpagesetup' => ['admin', 'website_admin'],
         'schoolcontentsetup' => ['admin', 'website_admin'],
@@ -306,6 +307,7 @@ function bbcc_acl_route_module_rules(): array {
         // Reports & system settings
         'exportbookings' => ['reports_settings', 'export'],
         'run-migration' => ['reports_settings', 'manage'],
+        'regenerate-image-variants' => ['website', 'manage'],
         'audit-logs' => ['reports_settings', 'manage'],
         'acl-debug' => ['reports_settings', 'manage'],
     ];

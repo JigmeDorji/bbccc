@@ -71,6 +71,7 @@ $_pageTitles = [
     'audit-logs'           => 'Audit Logs',
     'module-access'        => 'Module Access',
     'run-migration'        => 'Run Migrations',
+    'regenerate-image-variants' => 'Regenerate Image Variants',
     'parentProfile'        => 'My Profile',
     'adminProfile'         => 'My Profile',
     'teacherProfile'       => 'My Profile',

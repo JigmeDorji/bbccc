@@ -2,6 +2,7 @@
 require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/role_helpers.php";
+require_once "include/image_helpers.php";
 require_login();
 if (!is_admin_role() && !is_website_admin_role()) {
     header("Location: unauthorized");
@@ -79,6 +80,7 @@ try {
             if (!move_uploaded_file($image_tmp, $upload_path_abs)) {
                 throw new Exception("Failed to upload event image.");
             }
+            bbcc_generate_responsive_variants($upload_path_abs, [360, 640, 960, 1280, 1600], 82);
             $menuImgUrl = "uploads/menu/" . $safeName;
         } else {
             $menuImgUrl = $existing_img;
