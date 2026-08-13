@@ -3,8 +3,9 @@
    Matches public website design tokens (bbcc-public.css)
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Google Fonts ── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@600;700;800&display=swap');
+/* Google Fonts are loaded via <link> in each kiosk page's <head>, not
+   @import here — see kiosk.php / kiosk-access.php / kiosk-mobile.php /
+   kiosk-qr.php. */
 
 /* ── Design Tokens ── */
 :root {

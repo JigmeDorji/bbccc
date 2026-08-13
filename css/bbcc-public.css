@@ -938,10 +938,11 @@ body.bbcc-public {
 .bbcc-service-card-ext:hover { transform: translateY(-6px); box-shadow: var(--shadow-lg); }
 .bbcc-service-card-ext__icon {
     width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 24px;
-    display: flex; align-items: center; justify-content: center;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
     background: var(--brand-bg); color: var(--brand); font-size: 1.8rem;
     transition: var(--transition);
 }
+.bbcc-service-card-ext__icon > picture > img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 .bbcc-service-card-ext:hover .bbcc-service-card-ext__icon {
     background: var(--brand); color: #fff; transform: rotateY(180deg);
 }

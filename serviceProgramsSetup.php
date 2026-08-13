@@ -5,6 +5,7 @@ require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/role_helpers.php";
 require_once "include/csrf.php";
+require_once "include/image_helpers.php";
 require_login();
 if (!is_admin_role() && !is_website_admin_role()) {
     header("Location: unauthorized");
@@ -74,6 +75,7 @@ try {
             if (!move_uploaded_file($tmp, $dir . '/' . $safe)) {
                 throw new Exception('Failed to upload image.');
             }
+            bbcc_generate_responsive_variants($dir . '/' . $safe, [80, 160], 85);
             $imageUrl = 'uploads/service-programs/' . $safe;
         }
 

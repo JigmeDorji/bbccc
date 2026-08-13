@@ -1,6 +1,7 @@
 <?php
 require_once "include/config.php";
 require_once "include/sponsor_program_data.php";
+require_once "include/image_helpers.php";
 $settings = bbcc_load_sponsor_program_settings($DB_HOST, $DB_NAME, $DB_USER, $DB_PASSWORD);
 $view = bbcc_get_sponsor_program_view_data($settings, 1);
 $styleClass = 'sp-style-' . $view['style'];
@@ -33,7 +34,7 @@ $styleClass = 'sp-style-' . $view['style'];
     </div>
 </div>
 <section class="bbcc-section"><div class="bbcc-container"><div class="pr-card <?= htmlspecialchars($styleClass) ?> fade-up" style="text-align:center;">
-    <div class="pr-media"><?php if ($view['image'] !== ''): ?><img src="<?= htmlspecialchars($view['image']) ?>" alt="<?= htmlspecialchars($view['title']) ?>"><?php else: ?><i class="fa-solid <?= htmlspecialchars($view['icon']) ?>"></i><?php endif; ?></div>
+    <div class="pr-media"><?php if ($view['image'] !== ''): ?><?= bbcc_render_responsive_picture($view['image'], $view['title'], ['sizes' => '140px', 'loading' => 'eager', 'widths' => [140, 280]]) ?><?php else: ?><i class="fa-solid <?= htmlspecialchars($view['icon']) ?>"></i><?php endif; ?></div>
     <h2><?= htmlspecialchars($view['title']) ?></h2>
     <p class="pr-date"><strong>Date:</strong> <?= htmlspecialchars($view['date']) ?></p>
     <p class="pr-detail"><?= nl2br(htmlspecialchars($view['detail'])) ?></p>

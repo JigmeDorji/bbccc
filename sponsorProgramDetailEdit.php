@@ -3,6 +3,7 @@ require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/role_helpers.php";
 require_once "include/sponsor_program_data.php";
+require_once "include/image_helpers.php";
 require_login();
 if (!is_admin_role() && !is_website_admin_role()) {
     header("Location: unauthorized");
@@ -24,6 +25,14 @@ $map = [
     3 => ['title' => 'title_three', 'date' => 'date_three', 'detail' => 'detail_three', 'detail_image' => 'detail_image_three', 'style' => 'style_three', 'label' => 'Program 3'],
 ];
 $sel = $map[$program];
+
+// Widths match the one page that actually renders each program's detail image
+// (sponsor_event.php only ever redirects to these, it never renders itself).
+$detailImageWidths = [
+    1 => [140, 280],       // program-tshe-chutham.php
+    2 => [400, 600, 900],  // program-tshe-chenga.php (large split layout)
+    3 => [110, 220],       // program-tara-menlha.php
+][$program];
 
 $flashMessage = '';
 $flashType = 'success';
@@ -70,6 +79,7 @@ try {
             if (!move_uploaded_file($tmp, $dir . "/" . $safe)) {
                 throw new Exception("Failed to upload image.");
             }
+            bbcc_generate_responsive_variants($dir . "/" . $safe, $detailImageWidths, 85);
             $detailImage = "uploads/sponsor/" . $safe;
         }
 

@@ -1,6 +1,7 @@
 <?php
 require_once "include/config.php";
 require_once "include/sponsor_program_data.php";
+require_once "include/image_helpers.php";
 $settings = bbcc_load_sponsor_program_settings($DB_HOST, $DB_NAME, $DB_USER, $DB_PASSWORD);
 $view = bbcc_get_sponsor_program_view_data($settings, 2);
 $styleClass = 'sp-style-' . $view['style'];
@@ -33,7 +34,7 @@ $styleClass = 'sp-style-' . $view['style'];
     <ul class="bbcc-page-hero__breadcrumb"><li><a href="index">Home</a></li><li class="sep">/</li><li><a href="events">Events</a></li><li class="sep">/</li><li>Program 2</li></ul>
 </div></div>
 <section class="bbcc-section"><div class="bbcc-container"><div class="pr-split <?= htmlspecialchars($styleClass) ?> fade-up">
-    <div class="pr-left"><?php if ($view['image'] !== ''): ?><img src="<?= htmlspecialchars($view['image']) ?>" alt="<?= htmlspecialchars($view['title']) ?>"><?php else: ?><i class="fa-solid <?= htmlspecialchars($view['icon']) ?>"></i><?php endif; ?></div>
+    <div class="pr-left"><?php if ($view['image'] !== ''): ?><?= bbcc_render_responsive_picture($view['image'], $view['title'], ['sizes' => '(max-width: 991px) 100vw, 45vw', 'loading' => 'eager', 'fetchpriority' => 'high', 'widths' => [400, 600, 900]]) ?><?php else: ?><i class="fa-solid <?= htmlspecialchars($view['icon']) ?>"></i><?php endif; ?></div>
     <div class="pr-right">
         <h2><?= htmlspecialchars($view['title']) ?></h2>
         <p class="pr-meta"><strong>Date:</strong> <?= htmlspecialchars($view['date']) ?></p>

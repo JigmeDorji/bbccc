@@ -28,6 +28,10 @@ $mobileBaseUrl = "{$protocol}://{$host}{$path}/kiosk-mobile.php";
     <title>Bhutanese Language and Culture School</title>
     <link rel="icon" type="image/jpeg" href="bbccassests/img/logo/logo5.jpg">
     <link rel="apple-touch-icon" href="bbccassests/img/logo/logo5.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:wght@600;700;800&display=swap">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="css/kiosk.css">
     <!-- QR Code generator (client-side, no external API needed) -->

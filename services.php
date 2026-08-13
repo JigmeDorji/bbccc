@@ -1,5 +1,6 @@
 <?php
 require_once "include/config.php";
+require_once "include/image_helpers.php";
 
 $servicePrograms = [
     ['icon' => 'fa-chalkboard-user', 'image_url' => '', 'title' => 'Bhutanese Language and Culture School', 'description' => 'Comprehensive language and culture learning program covering Dzongkha reading, writing, speaking, Bhutanese traditions, and values.', 'link_url' => 'bhutanese-language-and-culture-school'],
@@ -60,7 +61,7 @@ try {
                 <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
                     <div class="bbcc-service-card-ext__icon">
                         <?php if (!empty($sp['image_url'])): ?>
-                            <img src="<?= htmlspecialchars((string)$sp['image_url']) ?>" alt="<?= htmlspecialchars((string)$sp['title']) ?>" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
+                            <?= bbcc_render_responsive_picture((string)$sp['image_url'], (string)$sp['title'], ['sizes' => '80px', 'loading' => 'lazy', 'widths' => [80, 160]]) ?>
                         <?php else: ?>
                             <i class="fa-solid <?= htmlspecialchars((string)$sp['icon']) ?>"></i>
                         <?php endif; ?>

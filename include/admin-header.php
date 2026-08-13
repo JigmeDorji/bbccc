@@ -103,10 +103,16 @@ $_pageTitle = $_pageTitles[$_pageFile] ?? ucwords(str_replace(['-', '_'], ' ', $
 <!-- ═══ BBCC Unified Form Styles ═══ -->
 <link rel="stylesheet" href="css/bbcc-forms.css">
 
+<!-- Google Fonts as a <link>, not @import inside <style> below — @import
+     forces the browser to fetch this whole block before it can even
+     discover the font request, serializing what should be a parallel fetch. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+
 <!-- ═══ Admin Header Styles ═══ -->
 <style>
 /* ── Global Admin Typography ─────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;

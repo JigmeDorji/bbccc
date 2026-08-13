@@ -1,5 +1,6 @@
 <?php
 require_once "include/config.php";
+require_once "include/image_helpers.php";
 
 $downloadItems = [];
 try {
@@ -64,7 +65,7 @@ try {
                     <div class="bbcc-download-card__head">
                         <a class="bbcc-feature-card__icon bbcc-feature-card__icon--info" href="<?= $downloadHref ?>" download="<?= $downloadName ?>">
                             <?php if (!empty($item['image_path'])): ?>
-                                <img src="<?= htmlspecialchars((string)$item['image_path'], ENT_QUOTES, 'UTF-8'); ?>" alt="">
+                                <?= bbcc_render_responsive_picture((string)$item['image_path'], '', ['sizes' => '52px', 'loading' => 'lazy', 'widths' => [52, 104]]) ?>
                             <?php else: ?>
                                 <i class="fa-solid fa-file-arrow-down"></i>
                             <?php endif; ?>

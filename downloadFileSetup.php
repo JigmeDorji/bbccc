@@ -2,6 +2,7 @@
 require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/role_helpers.php";
+require_once "include/image_helpers.php";
 require_login();
 if (!is_admin_role() && !is_website_admin_role()) {
     header("Location: unauthorized");
@@ -71,6 +72,7 @@ try {
             if (!is_dir($imgDirAbs)) @mkdir($imgDirAbs, 0775, true);
             if (!is_dir($imgDirAbs)) throw new Exception("Image upload folder is not available.");
             if (!move_uploaded_file($imgTmp, $imgDirAbs . '/' . $safeImg)) throw new Exception("Failed to upload image.");
+            bbcc_generate_responsive_variants($imgDirAbs . '/' . $safeImg, [52, 104], 85);
             $imagePath = 'uploads/downloads/images/' . $safeImg;
         }
 

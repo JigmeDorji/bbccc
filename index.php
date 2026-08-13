@@ -378,7 +378,7 @@ try {
                 <div class="bbcc-service-card-ext__icon">
                     <?php if ($sponsorImages['image_one'] !== ''): ?>
                         <div class="bbcc-team-card__photo">
-                            <img src="<?= htmlspecialchars((string)$sponsorImages['image_one']) ?>" alt="Tshe Chutham sponsor">
+                            <?= bbcc_render_responsive_picture((string)$sponsorImages['image_one'], 'Tshe Chutham sponsor', ['sizes' => '96px', 'loading' => 'lazy', 'widths' => [96, 192]]) ?>
                         </div>
                     <?php else: ?>
                         <i class="fa-solid <?= htmlspecialchars((string)$sponsorIcons['icon_one']) ?>"></i>
@@ -395,7 +395,7 @@ try {
                 <div class="bbcc-service-card-ext__icon">
                     <?php if ($sponsorImages['image_two'] !== ''): ?>
                         <div class="bbcc-team-card__photo">
-                            <img src="<?= htmlspecialchars((string)$sponsorImages['image_two']) ?>" alt="Tshe Chenga sponsor">
+                            <?= bbcc_render_responsive_picture((string)$sponsorImages['image_two'], 'Tshe Chenga sponsor', ['sizes' => '96px', 'loading' => 'lazy', 'widths' => [96, 192]]) ?>
                         </div>
                     <?php else: ?>
                         <i class="fa-solid <?= htmlspecialchars((string)$sponsorIcons['icon_two']) ?>"></i>
@@ -412,7 +412,7 @@ try {
                 <div class="bbcc-service-card-ext__icon">
                     <?php if ($sponsorImages['image_three'] !== ''): ?>
                         <div class="bbcc-team-card__photo">
-                            <img src="<?= htmlspecialchars((string)$sponsorImages['image_three']) ?>" alt="Tara and Menlha sponsor">
+                            <?= bbcc_render_responsive_picture((string)$sponsorImages['image_three'], 'Tara and Menlha sponsor', ['sizes' => '96px', 'loading' => 'lazy', 'widths' => [96, 192]]) ?>
                         </div>
                     <?php else: ?>
                         <i class="fa-solid <?= htmlspecialchars((string)$sponsorIcons['icon_three']) ?>"></i>

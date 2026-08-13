@@ -104,6 +104,8 @@ try {
 
                 $uploadAbs = $uploadDir . "/" . $safeName;
                 if (!move_uploaded_file($imageTmp, $uploadAbs)) throw new Exception("Failed to upload image.");
+                // Widths cover both consumers of these card images: index.php (96/192) and events.php (150/300).
+                bbcc_generate_responsive_variants($uploadAbs, [96, 150, 192, 300], 85);
                 $images[$col] = "uploads/sponsor/" . $safeName;
             }
         }

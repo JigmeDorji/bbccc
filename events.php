@@ -1,5 +1,6 @@
 <?php
 require_once "include/config.php";
+require_once "include/image_helpers.php";
 date_default_timezone_set('Australia/Melbourne');
 
 $upcomingEvents = [];
@@ -456,7 +457,7 @@ $monthName   = $firstDayObj->format('F');
                 <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
                     <div class="bbcc-service-card-ext__icon">
                         <?php if ($sponsorImages['image_one'] !== ''): ?>
-                            <div class="bbcc-team-card__photo"><img src="<?= htmlspecialchars((string)$sponsorImages['image_one']) ?>" alt="Sponsor Program 1"></div>
+                            <div class="bbcc-team-card__photo"><?= bbcc_render_responsive_picture((string)$sponsorImages['image_one'], 'Sponsor Program 1', ['sizes' => '150px', 'loading' => 'lazy', 'widths' => [150, 300]]) ?></div>
                         <?php else: ?>
                             <i class="fa-solid <?= htmlspecialchars((string)$sponsorIcons['icon_one']) ?>"></i>
                         <?php endif; ?>
@@ -470,7 +471,7 @@ $monthName   = $firstDayObj->format('F');
                 <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
                     <div class="bbcc-service-card-ext__icon">
                         <?php if ($sponsorImages['image_two'] !== ''): ?>
-                            <div class="bbcc-team-card__photo"><img src="<?= htmlspecialchars((string)$sponsorImages['image_two']) ?>" alt="Sponsor Program 2"></div>
+                            <div class="bbcc-team-card__photo"><?= bbcc_render_responsive_picture((string)$sponsorImages['image_two'], 'Sponsor Program 2', ['sizes' => '150px', 'loading' => 'lazy', 'widths' => [150, 300]]) ?></div>
                         <?php else: ?>
                             <i class="fa-solid <?= htmlspecialchars((string)$sponsorIcons['icon_two']) ?>"></i>
                         <?php endif; ?>
@@ -484,7 +485,7 @@ $monthName   = $firstDayObj->format('F');
                 <div class="bbcc-service-card-ext fade-up" style="text-align:left;">
                     <div class="bbcc-service-card-ext__icon">
                         <?php if ($sponsorImages['image_three'] !== ''): ?>
-                            <div class="bbcc-team-card__photo"><img src="<?= htmlspecialchars((string)$sponsorImages['image_three']) ?>" alt="Sponsor Program 3"></div>
+                            <div class="bbcc-team-card__photo"><?= bbcc_render_responsive_picture((string)$sponsorImages['image_three'], 'Sponsor Program 3', ['sizes' => '150px', 'loading' => 'lazy', 'widths' => [150, 300]]) ?></div>
                         <?php else: ?>
                             <i class="fa-solid <?= htmlspecialchars((string)$sponsorIcons['icon_three']) ?>"></i>
                         <?php endif; ?>
