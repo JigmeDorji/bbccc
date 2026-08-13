@@ -91,14 +91,15 @@ try {
         $hasParentProfile = (bool)$stmtHasParent->fetch(PDO::FETCH_ASSOC);
     }
     $stmtHasTeacher = $pdo->prepare("
-        SELECT id
+        SELECT id, full_name
         FROM teachers
         WHERE (user_id = :uid AND :uid <> '')
            OR LOWER(email) = LOWER(:em)
         LIMIT 1
     ");
     $stmtHasTeacher->execute([':uid' => $sessionUserId, ':em' => $sessionUsername]);
-    $hasTeacherProfile = (bool)$stmtHasTeacher->fetch(PDO::FETCH_ASSOC);
+    $teacherProfileRow = $stmtHasTeacher->fetch(PDO::FETCH_ASSOC) ?: null;
+    $hasTeacherProfile = (bool)$teacherProfileRow;
 
     if ($hasParentProfile && $hasTeacherProfile) {
         if (in_array($activePortal, ['parent', 'teacher'], true)) {
@@ -106,6 +107,29 @@ try {
         } else {
             $dashboardRole = 'teacher';
             $_SESSION['active_portal'] = 'teacher';
+        }
+    }
+
+    // Display name for dashboard greetings — never show the raw login email.
+    $displayName = trim($sessionUsername);
+    if (strpos($displayName, '@') !== false) {
+        $displayName = strstr($displayName, '@', true) ?: $displayName;
+    }
+    $displayName = str_replace(['.', '_', '-'], ' ', $displayName);
+    $displayName = trim(preg_replace('/\s+/', ' ', $displayName) ?? $displayName);
+    $displayName = $displayName !== '' ? ucwords(strtolower($displayName)) : 'User';
+
+    if ($dashboardRole === 'teacher') {
+        $teacherFullName = trim((string)($teacherProfileRow['full_name'] ?? ''));
+        if ($teacherFullName !== '') $displayName = $teacherFullName;
+    } elseif ($dashboardRole !== 'parent') {
+        try {
+            $stmtAdminName = $pdo->prepare("SELECT full_name FROM admin_profiles WHERE user_id = :uid LIMIT 1");
+            $stmtAdminName->execute([':uid' => $sessionUserId]);
+            $adminFullName = trim((string)$stmtAdminName->fetchColumn());
+            if ($adminFullName !== '') $displayName = $adminFullName;
+        } catch (Throwable $e) {
+            // Keep fallback display name if admin_profiles table is not present.
         }
     }
 
@@ -973,7 +997,7 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
 
                 <!-- Welcome -->
                 <div class="welcome-banner">
-                    <h2><i class="fas fa-namaste"></i> Welcome, <?php echo htmlspecialchars($parentProfile['full_name'] ?? $_SESSION['username'] ?? 'Parent'); ?>!</h2>
+                    <h2><i class="fas fa-namaste"></i> Welcome, <?php echo htmlspecialchars($parentProfile['full_name'] ?? $displayName); ?>!</h2>
                     <p>Manage your children's enrollments, track attendance, and make fee payments from your dashboard.</p>
                     <div class="quick-actions">
                         <a href="mark-absenteeism"><i class="fas fa-clipboard-check"></i> Mark Absenteeism</a>
@@ -1312,7 +1336,7 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
                 <!-- ═══════════════════════════════════════════ -->
                 <?php if ($isWebsiteAdminDashboard): ?>
                 <div class="welcome-banner">
-                    <h2>Welcome back, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Website Admin'); ?>!</h2>
+                    <h2>Welcome back, <?php echo htmlspecialchars($displayName); ?>!</h2>
                     <p>Here's an overview of your website and event operations. Today is <?php echo date('l, d F Y'); ?>.</p>
                     <div class="quick-actions">
                         <a href="ourTeamSetup"><i class="fas fa-users-cog"></i> Team</a>
@@ -1457,7 +1481,7 @@ function bbcc_ensure_term_class_total_columns(PDO $pdo): void {
 
                 <!-- Welcome Banner -->
                 <div class="welcome-banner">
-                    <h2>Welcome back, <?php echo htmlspecialchars($_SESSION['username'] ?? 'Admin'); ?>!</h2>
+                    <h2>Welcome back, <?php echo htmlspecialchars($displayName); ?>!</h2>
                     <p>
                         <?php if ($dashboardRole === 'teacher'): ?>
                             Here's an overview of your classroom.
