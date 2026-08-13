@@ -69,7 +69,9 @@ try {
                         <?php endif; ?>
                     </a>
                     <h3><a href="<?= $downloadHref ?>" download="<?= $downloadName ?>"><?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8'); ?></a></h3>
-                    <p><?= htmlspecialchars((string)($item['description'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></p>
+                    <?php if (trim((string)($item['description'] ?? '')) !== ''): ?>
+                        <p><?= htmlspecialchars((string)$item['description'], ENT_QUOTES, 'UTF-8'); ?></p>
+                    <?php endif; ?>
                     <a class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" href="<?= $downloadHref ?>" download="<?= $downloadName ?>">
                         Download <i class="fa-solid fa-arrow-down"></i>
                     </a>
