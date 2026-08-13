@@ -61,20 +61,24 @@ try {
                     $downloadName = htmlspecialchars((string)($item['original_name'] ?? basename((string)$item['file_path'])), ENT_QUOTES, 'UTF-8');
                 ?>
                 <div class="bbcc-feature-card bbcc-download-card fade-up">
-                    <a class="bbcc-feature-card__icon bbcc-feature-card__icon--info" href="<?= $downloadHref ?>" download="<?= $downloadName ?>">
-                        <?php if (!empty($item['image_path'])): ?>
-                            <img src="<?= htmlspecialchars((string)$item['image_path'], ENT_QUOTES, 'UTF-8'); ?>" alt="">
-                        <?php else: ?>
-                            <i class="fa-solid fa-file-arrow-down"></i>
-                        <?php endif; ?>
-                    </a>
-                    <h3><a href="<?= $downloadHref ?>" download="<?= $downloadName ?>"><?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8'); ?></a></h3>
+                    <div class="bbcc-download-card__head">
+                        <a class="bbcc-feature-card__icon bbcc-feature-card__icon--info" href="<?= $downloadHref ?>" download="<?= $downloadName ?>">
+                            <?php if (!empty($item['image_path'])): ?>
+                                <img src="<?= htmlspecialchars((string)$item['image_path'], ENT_QUOTES, 'UTF-8'); ?>" alt="">
+                            <?php else: ?>
+                                <i class="fa-solid fa-file-arrow-down"></i>
+                            <?php endif; ?>
+                        </a>
+                        <h3><a href="<?= $downloadHref ?>" download="<?= $downloadName ?>"><?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8'); ?></a></h3>
+                    </div>
                     <?php if (trim((string)($item['description'] ?? '')) !== ''): ?>
                         <p><?= htmlspecialchars((string)$item['description'], ENT_QUOTES, 'UTF-8'); ?></p>
                     <?php endif; ?>
-                    <a class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" href="<?= $downloadHref ?>" download="<?= $downloadName ?>">
-                        Download <i class="fa-solid fa-arrow-down"></i>
-                    </a>
+                    <div class="bbcc-download-card__footer">
+                        <a class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" href="<?= $downloadHref ?>" download="<?= $downloadName ?>">
+                            Download <i class="fa-solid fa-arrow-down"></i>
+                        </a>
+                    </div>
                 </div>
             <?php endforeach; ?>
             <?php if ($renderedDownloads === 0): ?>
