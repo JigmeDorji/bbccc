@@ -28,6 +28,7 @@ $targets = [
     'uploads/tara'   => [480, 768, 1200],
     'uploads/menu'   => [360, 640, 960, 1280, 1600],
     'uploads/chedtshog' => [480, 768, 1200],
+    'uploads/ourteam' => [96, 192],
 ];
 
 $message = '';
@@ -142,7 +143,7 @@ function riv_kb(int $bytes): string { return number_format($bytes / 1024, 0) . '
                             Photos uploaded before that feature existed (or via a page that doesn't generate them yet)
                             are still served at full original size, which is a common cause of slow page loads.
                             This scans <code>uploads/banner</code>, <code>uploads/about</code>, <code>uploads/school</code>,
-                            <code>uploads/tara</code>, and <code>uploads/menu</code> and creates the missing resized copies.
+                            <code>uploads/tara</code>, <code>uploads/menu</code>, and <code>uploads/ourteam</code> and creates the missing resized copies.
                             Safe to run any time — it skips images that already have them.
                         </p>
                         <form method="POST" data-confirm="Regenerate missing image variants now?">

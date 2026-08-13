@@ -2,6 +2,7 @@
 require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/role_helpers.php";
+require_once "include/image_helpers.php";
 require_login();
 
 if (!is_admin_role() && !is_website_admin_role()) {
@@ -88,6 +89,7 @@ try {
             }
             $upload_path_abs = $upload_dir_abs . "/" . $safeName;
             if (!move_uploaded_file($image_tmp, $upload_path_abs)) throw new Exception("Failed to upload image.");
+            bbcc_generate_responsive_variants($upload_path_abs, [96, 192], 85);
             $imgUrl = "uploads/ourteam/" . $safeName;
         } elseif ($fileError !== UPLOAD_ERR_NO_FILE) {
             throw new Exception("Team photo upload failed: " . bbcc_team_upload_error_text($fileError));

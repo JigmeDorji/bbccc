@@ -1,5 +1,6 @@
 <?php
 require_once "include/config.php";
+require_once "include/image_helpers.php";
 
 $aboutData = [];
 $teamData = [];
@@ -65,11 +66,17 @@ try {
     <div class="bbcc-container">
         <div class="bbcc-about">
             <div class="bbcc-about__image fade-up">
-                <?php if (!empty($aboutData['imgUrl'])): ?>
-                <img src="<?= htmlspecialchars($aboutData['imgUrl']) ?>" alt="Bhutanese Buddhist and Cultural Centre">
-                <?php else: ?>
-                <img src="bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png" alt="BBCC">
-                <?php endif; ?>
+                <?= bbcc_render_responsive_picture(
+                    !empty($aboutData['imgUrl']) ? (string)$aboutData['imgUrl'] : 'bbccassests/img/about/Gemini_Generated_Image_eenj50eenj50eenj.png',
+                    'Bhutanese Buddhist and Cultural Centre',
+                    [
+                        'sizes' => '(max-width: 991px) 100vw, 45vw',
+                        'loading' => 'eager',
+                        'decoding' => 'async',
+                        'fetchpriority' => 'high',
+                        'widths' => [480, 768, 1200],
+                    ]
+                ) ?>
             </div>
             <div class="bbcc-about__content fade-up">
                 <span class="section-badge"><i class="fa-solid fa-circle-info"></i> Our Story</span>
@@ -108,7 +115,11 @@ try {
                 <?php foreach ($boardMembers as $member): ?>
                 <div class="bbcc-team-card fade-up">
                     <div class="bbcc-team-card__photo">
-                        <img src="<?= htmlspecialchars($member['imgUrl']) ?>" alt="<?= htmlspecialchars($member['Name']) ?>">
+                        <?= bbcc_render_responsive_picture(
+                            (string)$member['imgUrl'],
+                            (string)$member['Name'],
+                            ['sizes' => '96px', 'loading' => 'lazy', 'decoding' => 'async', 'widths' => [96, 192]]
+                        ) ?>
                     </div>
                     <h4 class="bbcc-team-card__name"><?= htmlspecialchars($member['Name']) ?></h4>
                     <span class="bbcc-team-card__role"><?= htmlspecialchars($member['designation']) ?></span>
@@ -137,7 +148,11 @@ try {
                 <?php foreach ($executiveMembers as $member): ?>
                 <div class="bbcc-team-card fade-up">
                     <div class="bbcc-team-card__photo">
-                        <img src="<?= htmlspecialchars($member['imgUrl']) ?>" alt="<?= htmlspecialchars($member['Name']) ?>">
+                        <?= bbcc_render_responsive_picture(
+                            (string)$member['imgUrl'],
+                            (string)$member['Name'],
+                            ['sizes' => '96px', 'loading' => 'lazy', 'decoding' => 'async', 'widths' => [96, 192]]
+                        ) ?>
                     </div>
                     <h4 class="bbcc-team-card__name"><?= htmlspecialchars($member['Name']) ?></h4>
                     <span class="bbcc-team-card__role"><?= htmlspecialchars($member['designation']) ?></span>
