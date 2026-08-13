@@ -427,9 +427,15 @@ body.bbcc-public {
 .bbcc-download-card .bbcc-feature-card__icon img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .bbcc-download-card h3 { margin-bottom: 0; line-height: 1.35; }
 .bbcc-download-card h3 a { color: inherit; text-decoration: none; }
-.bbcc-download-card h3 a:hover { color: var(--brand); text-decoration: underline; }
-.bbcc-download-card p { flex: 1 0 auto; margin-bottom: 20px; }
-.bbcc-download-card__footer { margin-top: auto; padding-top: 20px; border-top: 1px solid var(--gray-200); }
+.bbcc-download-card h3 a:hover { color: var(--brand); }
+.bbcc-download-card h3 a:hover .bbcc-download-card__dl-icon { background: var(--brand); color: #fff; }
+.bbcc-download-card__dl-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; margin-left: 6px; border-radius: 50%;
+    background: var(--brand-bg); color: var(--brand); font-size: .65rem;
+    vertical-align: middle; position: relative; top: -1px; transition: var(--transition-fast);
+}
+.bbcc-download-card p { margin-bottom: 0; }
 
 @media (max-width: 991px) { .bbcc-features { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 576px) { .bbcc-features { grid-template-columns: 1fr; gap: 20px; } }

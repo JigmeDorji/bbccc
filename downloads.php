@@ -69,16 +69,16 @@ try {
                                 <i class="fa-solid fa-file-arrow-down"></i>
                             <?php endif; ?>
                         </a>
-                        <h3><a href="<?= $downloadHref ?>" download="<?= $downloadName ?>"><?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8'); ?></a></h3>
+                        <h3>
+                            <a href="<?= $downloadHref ?>" download="<?= $downloadName ?>" title="Download">
+                                <?= htmlspecialchars($item['title'], ENT_QUOTES, 'UTF-8'); ?>
+                                <i class="fa-solid fa-download bbcc-download-card__dl-icon"></i>
+                            </a>
+                        </h3>
                     </div>
                     <?php if (trim((string)($item['description'] ?? '')) !== ''): ?>
                         <p><?= htmlspecialchars((string)$item['description'], ENT_QUOTES, 'UTF-8'); ?></p>
                     <?php endif; ?>
-                    <div class="bbcc-download-card__footer">
-                        <a class="bbcc-btn bbcc-btn--outline bbcc-btn--sm" href="<?= $downloadHref ?>" download="<?= $downloadName ?>">
-                            Download <i class="fa-solid fa-arrow-down"></i>
-                        </a>
-                    </div>
                 </div>
             <?php endforeach; ?>
             <?php if ($renderedDownloads === 0): ?>
