@@ -88,6 +88,21 @@ try {
         $msgType = "success";
     }
 
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'edit_details') {
+        $id = (int)($_POST['id'] ?? 0);
+        if ($id <= 0) throw new Exception("Invalid file.");
+
+        $title = trim((string)($_POST['title'] ?? ''));
+        $description = trim((string)($_POST['description'] ?? ''));
+        if ($title === '') throw new Exception("Title is required.");
+
+        $upd = $pdo->prepare("UPDATE download_files SET title = :title, description = :description WHERE id = :id");
+        $upd->execute([':title' => $title, ':description' => $description, ':id' => $id]);
+
+        $message = "Details updated successfully.";
+        $msgType = "success";
+    }
+
     if (isset($_GET['delete'])) {
         $id = (int)$_GET['delete'];
         $stmt = $pdo->prepare("SELECT file_path FROM download_files WHERE id = :id");
@@ -106,7 +121,7 @@ try {
         $msgType = "success";
     }
 
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') !== 'set_image') {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && !in_array($_POST['action'] ?? '', ['set_image', 'edit_details'], true)) {
         $maxPost = bbcc_ini_bytes((string)ini_get('post_max_size'));
         $contentLen = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
         if ($contentLen > 0 && $maxPost > 0 && $contentLen > $maxPost && empty($_POST) && empty($_FILES)) {
@@ -249,12 +264,42 @@ try {
                             <td><?= htmlspecialchars((string)$f['description']) ?></td>
                             <td><a href="<?= htmlspecialchars((string)$f['file_path']) ?>" target="_blank"><?= htmlspecialchars((string)($f['original_name'] ?? basename((string)$f['file_path']))) ?></a></td>
                             <td class="text-nowrap">
+                                <button type="button" class="btn btn-outline-primary btn-sm" data-toggle="modal" data-target="#editModal<?= (int)$f['id'] ?>"><i class="fas fa-edit mr-1"></i>Edit</button>
                                 <?php if ($hasImagePath): ?>
                                     <button type="button" class="btn btn-outline-secondary btn-sm" data-toggle="modal" data-target="#imageModal<?= (int)$f['id'] ?>"><i class="fas fa-image mr-1"></i><?= $imagePath !== '' ? 'Change' : 'Add' ?> Image</button>
                                 <?php endif; ?>
                                 <a href="downloadFileSetup?delete=<?= (int)$f['id'] ?>" class="btn btn-danger btn-sm" onclick="return confirm('Delete this file?')"><i class="fas fa-trash"></i></a>
                             </td>
                         </tr>
+
+                        <div class="modal fade" id="editModal<?= (int)$f['id'] ?>" tabindex="-1" role="dialog" aria-hidden="true">
+                            <div class="modal-dialog" role="document">
+                                <div class="modal-content">
+                                    <form method="POST" action="downloadFileSetup">
+                                        <input type="hidden" name="action" value="edit_details">
+                                        <input type="hidden" name="id" value="<?= (int)$f['id'] ?>">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Edit File Details</h5>
+                                            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="form-group">
+                                                <label>Title</label>
+                                                <input type="text" name="title" class="form-control" value="<?= htmlspecialchars((string)$f['title']) ?>" required>
+                                            </div>
+                                            <div class="form-group mb-0">
+                                                <label>Description</label>
+                                                <input type="text" name="description" class="form-control" value="<?= htmlspecialchars((string)$f['description']) ?>">
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                                            <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Save</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
 
                         <?php if ($hasImagePath): ?>
                         <div class="modal fade" id="imageModal<?= (int)$f['id'] ?>" tabindex="-1" role="dialog" aria-hidden="true">
