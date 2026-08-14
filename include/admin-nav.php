@@ -350,7 +350,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
 
     <?php if (!isParent() && !isTeacher() && !isPatron()) { ?>
         <?php
-            $websiteActive = in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','schoolContentSetup.php','taraContentSetup.php','chedTshogContentSetup.php','serviceProgramsSetup.php','sponsorSetup.php','ProgramDetailsSetup.php','sponsorProgramDetailEdit.php','downloadFileSetup.php','serviceSetup.php','ourTeamSetup.php','viewFeedback.php','regenerate-image-variants.php'], true);
+            $websiteActive = in_array($currentPage, ['bannerSetup.php','aboutPageSetup.php','schoolContentSetup.php','taraContentSetup.php','chedTshogContentSetup.php','serviceProgramsSetup.php','sponsorSetup.php','ProgramDetailsSetup.php','sponsorProgramDetailEdit.php','downloadFileSetup.php','serviceSetup.php','blogSetup.php','ourTeamSetup.php','viewFeedback.php','regenerate-image-variants.php'], true);
             $dzoActive = in_array($currentPage, ['dzo-dashboard.php','dzoClassManagement.php','admin-enrolments.php','admin-parents-children.php','feesManagement.php','update-payments.php','manual-payments.php','admin-fee-verification.php','attendanceManagement.php','attendance-records.php','dzongkha-classroom.php','parent-email.php','admin-parent-email-log.php','admin-attendance.php','admin-class-setup.php','admin-assign-class.php','feesSetting.php','admin-parent-pins.php','admin-class-students.php'], true);
             $eventsActive = in_array($currentPage, ['eventManagement.php','bookingManagement.php'], true);
             $adminSettingsActive = in_array($currentPage, ['userSetup.php','adminProfile.php','acl-debug.php','audit-logs.php','run-migration.php','module-access.php'], true);
@@ -380,6 +380,7 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
                     <a class="collapse-item <?= ($currentPage == 'serviceProgramsSetup.php') ? 'active' : '' ?>" href="serviceProgramsSetup"><i class="fas fa-icons fa-sm mr-1 text-muted"></i> Setup Service Cards</a>
                     <a class="collapse-item <?= ($currentPage == 'downloadFileSetup.php') ? 'active' : '' ?>" href="downloadFileSetup"><i class="fas fa-file-download fa-sm mr-1 text-muted"></i> Setup Download Files</a>
                     <a class="collapse-item <?= ($currentPage == 'serviceSetup.php') ? 'active' : '' ?>" href="serviceSetup"><i class="fas fa-bullhorn fa-sm mr-1 text-muted"></i> Post Event</a>
+                    <a class="collapse-item <?= ($currentPage == 'blogSetup.php' || $currentPage == 'blog-post.php') ? 'active' : '' ?>" href="blogSetup"><i class="fas fa-newspaper fa-sm mr-1 text-muted"></i> Blog</a>
                     <a class="collapse-item <?= ($currentPage == 'ourTeamSetup.php') ? 'active' : '' ?>" href="ourTeamSetup"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Executive &amp; Board Members</a>
                     <a class="collapse-item <?= ($currentPage == 'viewFeedback.php') ? 'active' : '' ?>" href="viewFeedback"><i class="fas fa-envelope fa-sm mr-1 text-muted"></i> Contact Messages</a>
                     <a class="collapse-item <?= ($currentPage == 'regenerate-image-variants.php') ? 'active' : '' ?>" href="regenerate-image-variants"><i class="fas fa-images fa-sm mr-1 text-muted"></i> Regenerate Image Variants</a>

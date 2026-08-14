@@ -31,6 +31,7 @@ $targets = [
     'uploads/ourteam' => [96, 192],
     'uploads/service-programs' => [80, 160],
     'uploads/downloads/images' => [52, 104],
+    'uploads/blog' => [360, 640, 960, 1280],
     // Holds both card images (image_one/two/three, 96/150px) and detail
     // images (detail_image_one/two/three, up to 900px) — union of both.
     'uploads/sponsor' => [96, 110, 140, 150, 192, 220, 280, 300, 400, 600, 900],
@@ -149,8 +150,8 @@ function riv_kb(int $bytes): string { return number_format($bytes / 1024, 0) . '
                             are still served at full original size, which is a common cause of slow page loads.
                             This scans <code>uploads/banner</code>, <code>uploads/about</code>, <code>uploads/school</code>,
                             <code>uploads/tara</code>, <code>uploads/menu</code>, <code>uploads/ched-tshog</code>, <code>uploads/ourteam</code>,
-                            <code>uploads/service-programs</code>, <code>uploads/downloads/images</code>, and <code>uploads/sponsor</code>,
-                            and creates the missing resized copies.
+                            <code>uploads/service-programs</code>, <code>uploads/downloads/images</code>, <code>uploads/sponsor</code>,
+                            and <code>uploads/blog</code>, and creates the missing resized copies.
                             Safe to run any time — it skips images that already have them.
                         </p>
                         <form method="POST" data-confirm="Regenerate missing image variants now?">

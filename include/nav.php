@@ -57,6 +57,9 @@ $isServicesPage = in_array($currentPage, $servicePages, true);
             <li class="<?= ($currentPage === 'events.php' || $currentPage === 'event_detail.php' || $currentPage === 'book-event.php') ? 'active' : '' ?>">
                 <a href="events">Events</a>
             </li>
+            <li class="<?= ($currentPage === 'blog.php' || $currentPage === 'blog-post.php') ? 'active' : '' ?>">
+                <a href="blog">Blog</a>
+            </li>
             <li class="<?= ($currentPage === 'downloads.php') ? 'active' : '' ?>">
                 <a href="downloads">Downloads</a>
             </li>

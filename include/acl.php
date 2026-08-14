@@ -204,6 +204,7 @@ function bbcc_acl_page_rules(): array {
         'serviceprogramssetup' => ['admin', 'website_admin'],
         'sponsorprogramdetailedit' => ['admin', 'website_admin'],
         'sponsorsetup' => ['admin', 'website_admin'],
+        'blogsetup' => ['admin', 'website_admin'],
         'aboutpagesetup' => ['admin', 'website_admin'],
         'schoolcontentsetup' => ['admin', 'website_admin'],
         'downloadfilesetup' => ['admin', 'website_admin'],
@@ -278,6 +279,7 @@ function bbcc_acl_route_module_rules(): array {
         'sponsorprogramdetailedit' => ['website', 'manage'],
         'sponsorsetup' => ['website', 'manage'],
         'donationsetting' => ['website', 'manage'],
+        'blogsetup' => ['website', 'manage'],
 
         // Users & access
         'usersetup' => ['users_access', 'manage'],

@@ -51,6 +51,7 @@ $_pageTitles = [
     'schoolContentSetup'   => 'School Content',
     'downloadFileSetup'    => 'Download Files',
     'serviceSetup'         => 'Post Event',
+    'blogSetup'            => 'Blog Setup',
     'ourTeamSetup'         => 'Executive & Board Members',
     'viewFeedback'         => 'Contact Messages',
     'dzo-dashboard'        => 'Dzo Class Dashboard',
