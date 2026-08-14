@@ -102,6 +102,7 @@ try {
     </div>
 </section>
 
+<?php if (!empty($boardMembers)): ?>
 <!-- Team Section: Board Members -->
 <section class="bbcc-section bbcc-section--gray">
     <div class="bbcc-container">
@@ -110,63 +111,62 @@ try {
             <h2>Board <span>Members</span></h2>
             <p>The BBCC board members provide governance and strategic direction to strengthen spiritual, cultural, and community outcomes.</p>
         </div>
-        <?php if (!empty($boardMembers)): ?>
-            <div class="bbcc-team-grid">
-                <?php foreach ($boardMembers as $member): ?>
-                <div class="bbcc-team-card fade-up">
-                    <div class="bbcc-team-card__photo">
+        <div class="bbcc-team-grid">
+            <?php foreach ($boardMembers as $member): ?>
+            <div class="bbcc-team-card fade-up">
+                <div class="bbcc-team-card__photo<?= empty($member['imgUrl']) ? ' bbcc-team-card__photo--fallback' : '' ?>">
+                    <?php if (!empty($member['imgUrl'])): ?>
                         <?= bbcc_render_responsive_picture(
                             (string)$member['imgUrl'],
                             (string)$member['Name'],
                             ['sizes' => '96px', 'loading' => 'lazy', 'decoding' => 'async', 'widths' => [96, 192]]
                         ) ?>
-                    </div>
-                    <h4 class="bbcc-team-card__name"><?= htmlspecialchars($member['Name']) ?></h4>
-                    <span class="bbcc-team-card__role"><?= htmlspecialchars($member['designation']) ?></span>
-                    <div class="bbcc-team-card__accent"></div>
+                    <?php else: ?>
+                        <i class="fa-solid fa-user"></i>
+                    <?php endif; ?>
                 </div>
-                <?php endforeach; ?>
+                <h4 class="bbcc-team-card__name"><?= htmlspecialchars($member['Name']) ?></h4>
+                <span class="bbcc-team-card__role"><?= htmlspecialchars($member['designation']) ?></span>
+                <div class="bbcc-team-card__accent"></div>
             </div>
-        <?php else: ?>
-            <div class="fade-up" style="max-width:760px;margin:0 auto;text-align:center;background:#fff;border:1px dashed #d1d5db;border-radius:14px;padding:22px;color:#6b7280;">
-                Board members will be displayed here.
-            </div>
-        <?php endif; ?>
+            <?php endforeach; ?>
+        </div>
     </div>
 </section>
+<?php endif; ?>
 
+<?php if (!empty($executiveMembers)): ?>
 <!-- Team Section: Executive Members -->
-<section class="bbcc-section">
+<section class="bbcc-section<?= empty($boardMembers) ? ' bbcc-section--gray' : '' ?>">
     <div class="bbcc-container">
         <div class="section-header fade-up">
             <span class="section-badge"><i class="fa-solid fa-users"></i> Our Team</span>
             <h2>Executive <span>Members</span></h2>
             <p>The BBCC executive members are committed to delivering spiritual services, cultural programs, and community support.</p>
         </div>
-        <?php if (!empty($executiveMembers)): ?>
-            <div class="bbcc-team-grid">
-                <?php foreach ($executiveMembers as $member): ?>
-                <div class="bbcc-team-card fade-up">
-                    <div class="bbcc-team-card__photo">
+        <div class="bbcc-team-grid">
+            <?php foreach ($executiveMembers as $member): ?>
+            <div class="bbcc-team-card fade-up">
+                <div class="bbcc-team-card__photo<?= empty($member['imgUrl']) ? ' bbcc-team-card__photo--fallback' : '' ?>">
+                    <?php if (!empty($member['imgUrl'])): ?>
                         <?= bbcc_render_responsive_picture(
                             (string)$member['imgUrl'],
                             (string)$member['Name'],
                             ['sizes' => '96px', 'loading' => 'lazy', 'decoding' => 'async', 'widths' => [96, 192]]
                         ) ?>
-                    </div>
-                    <h4 class="bbcc-team-card__name"><?= htmlspecialchars($member['Name']) ?></h4>
-                    <span class="bbcc-team-card__role"><?= htmlspecialchars($member['designation']) ?></span>
-                    <div class="bbcc-team-card__accent"></div>
+                    <?php else: ?>
+                        <i class="fa-solid fa-user"></i>
+                    <?php endif; ?>
                 </div>
-                <?php endforeach; ?>
+                <h4 class="bbcc-team-card__name"><?= htmlspecialchars($member['Name']) ?></h4>
+                <span class="bbcc-team-card__role"><?= htmlspecialchars($member['designation']) ?></span>
+                <div class="bbcc-team-card__accent"></div>
             </div>
-        <?php else: ?>
-            <div class="fade-up" style="max-width:760px;margin:0 auto;text-align:center;background:#fff;border:1px dashed #d1d5db;border-radius:14px;padding:22px;color:#6b7280;">
-                Executive members will be displayed here.
-            </div>
-        <?php endif; ?>
+            <?php endforeach; ?>
+        </div>
     </div>
 </section>
+<?php endif; ?>
 
 <!-- CTA -->
 <section class="bbcc-cta">

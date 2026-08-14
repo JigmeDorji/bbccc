@@ -623,6 +623,10 @@ body.bbcc-public {
     transition: transform .5s ease;
 }
 .bbcc-team-card:hover .bbcc-team-card__photo img { transform: scale(1.08); }
+.bbcc-team-card__photo--fallback {
+    display: flex; align-items: center; justify-content: center;
+    background: var(--brand-bg); color: var(--brand); font-size: 2.75rem;
+}
 .bbcc-team-card__name {
     font-family: 'Playfair Display', serif;
     font-size: 1.25rem; font-weight: 700; color: var(--gray-900);
