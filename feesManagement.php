@@ -863,6 +863,88 @@ $due3 = $feesSettings['due_term3'] ?? null;
 $due4 = $feesSettings['due_term4'] ?? null;
 
 $classOptions = $pdo->query("SELECT id, class_name FROM classes WHERE active = 1 ORDER BY class_name ASC")->fetchAll(PDO::FETCH_ASSOC);
+
+// ---------------- Class-wise fee status (mirrors exportClassFeeStatus.php) ----------------
+$classWise = [];
+$classWiseGrandDue = 0.0;
+$classWiseGrandPaid = 0.0;
+$classWiseTotalStudents = 0;
+try {
+    $classWiseRows = $pdo->query("
+        SELECT
+            c.id AS class_id,
+            c.class_name,
+            s.id AS student_db_id,
+            s.student_id AS student_code,
+            s.student_name,
+            COALESCE(fp.plan_type, e.fee_plan, '') AS plan_type,
+            fp.due_amount,
+            fp.paid_amount
+        FROM (
+            SELECT ca1.student_id, ca1.class_id
+            FROM class_assignments ca1
+            INNER JOIN (
+                SELECT ca2.student_id, MAX(ca2.id) AS assignment_id
+                FROM class_assignments ca2
+                INNER JOIN classes c2 ON c2.id = ca2.class_id AND c2.active = 1
+                GROUP BY ca2.student_id
+            ) latest_ca ON latest_ca.assignment_id = ca1.id
+        ) ca
+        INNER JOIN classes c ON c.id = ca.class_id AND c.active = 1
+        INNER JOIN students s ON s.id = ca.student_id
+        LEFT JOIN pcm_fee_payments fp ON fp.student_id = s.id
+        LEFT JOIN pcm_enrolments e ON e.id = fp.enrolment_id
+        WHERE s.approval_status = 'Approved'
+          AND LOWER(COALESCE(s.status, 'active')) <> 'past'
+        ORDER BY c.class_name ASC, s.student_name ASC, fp.id ASC
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    $classWiseRows = [];
+}
+
+foreach ($classWiseRows as $r) {
+    $cid = (string)$r['class_id'];
+    if (!isset($classWise[$cid])) {
+        $classWise[$cid] = [
+            'class_name' => (string)$r['class_name'],
+            'students' => [],
+            'total_due' => 0.0,
+            'total_paid' => 0.0,
+        ];
+    }
+
+    $sid = (string)$r['student_db_id'];
+    if (!isset($classWise[$cid]['students'][$sid])) {
+        $classWise[$cid]['students'][$sid] = [
+            'student_code' => (string)$r['student_code'],
+            'student_name' => (string)$r['student_name'],
+            'plans' => [],
+            'due' => 0.0,
+            'paid' => 0.0,
+            'has_payment_record' => false,
+        ];
+    }
+
+    $plan = (string)($r['plan_type'] ?? '');
+    if ($plan !== '') {
+        $classWise[$cid]['students'][$sid]['plans'][$plan] = true;
+    }
+
+    if ($r['due_amount'] !== null) {
+        $due = (float)$r['due_amount'];
+        $paid = (float)($r['paid_amount'] ?? 0);
+        $classWise[$cid]['students'][$sid]['has_payment_record'] = true;
+        $classWise[$cid]['students'][$sid]['due'] += $due;
+        $classWise[$cid]['students'][$sid]['paid'] += $paid;
+        $classWise[$cid]['total_due'] += $due;
+        $classWise[$cid]['total_paid'] += $paid;
+        $classWiseGrandDue += $due;
+        $classWiseGrandPaid += $paid;
+    }
+}
+foreach ($classWise as $cid => $c) {
+    $classWiseTotalStudents += count($c['students']);
+}
 $classCharges = $pdo->query("
     SELECT cc.*,
            c.class_name,
@@ -1144,6 +1226,114 @@ if ($updateOnlyMode) {
                         </div>
                     </div>
                 </div>
+
+                <!-- ✅ CLASS-WISE FEE STATUS -->
+                <div class="card shadow mb-4">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap" style="gap:8px;">
+                        <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-layer-group mr-1"></i>Class-wise Fee Status</h6>
+                        <div>
+                            <label for="classWiseFilter" class="sr-only">Filter by class</label>
+                            <select id="classWiseFilter" class="form-control form-control-sm">
+                                <option value="">All Classes</option>
+                                <?php foreach ($classWise as $cwId => $cwClass): ?>
+                                    <option value="cwc-<?php echo (int)$cwId; ?>"><?php echo h($cwClass['class_name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-3 mb-2">
+                                <div class="stat-card shadow-sm">
+                                    <div class="stat-label text-primary">Students</div>
+                                    <div class="stat-value"><?php echo (int)$classWiseTotalStudents; ?></div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="stat-card shadow-sm">
+                                    <div class="stat-label text-info">Total Due</div>
+                                    <div class="stat-value">$<?php echo number_format($classWiseGrandDue, 2); ?></div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="stat-card shadow-sm">
+                                    <div class="stat-label text-success">Total Paid</div>
+                                    <div class="stat-value">$<?php echo number_format($classWiseGrandPaid, 2); ?></div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-2">
+                                <div class="stat-card shadow-sm">
+                                    <div class="stat-label text-danger">Outstanding</div>
+                                    <div class="stat-value">$<?php echo number_format(max(0, $classWiseGrandDue - $classWiseGrandPaid), 2); ?></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <?php if (empty($classWise)): ?>
+                            <div class="text-muted text-center py-4">No approved students found in any class.</div>
+                        <?php else: ?>
+                        <div class="table-responsive">
+                            <table class="table table-bordered table-hover table-sm mb-0">
+                                <thead class="thead-light">
+                                    <tr>
+                                        <th>Student</th>
+                                        <th>Fee Plan</th>
+                                        <th class="text-right">Due</th>
+                                        <th class="text-right">Paid</th>
+                                        <th class="text-right">Balance</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <?php foreach ($classWise as $cwId => $cwClass): ?>
+                                <tbody class="class-wise-group" data-class="cwc-<?php echo (int)$cwId; ?>">
+                                    <tr class="table-secondary">
+                                        <td colspan="6">
+                                            <strong><?php echo h($cwClass['class_name']); ?></strong>
+                                            <span class="text-muted small ml-2"><?php echo count($cwClass['students']); ?> student(s)</span>
+                                            <span class="float-right small">
+                                                Due: <strong>$<?php echo number_format($cwClass['total_due'], 2); ?></strong> &nbsp;|&nbsp;
+                                                Paid: <strong>$<?php echo number_format($cwClass['total_paid'], 2); ?></strong> &nbsp;|&nbsp;
+                                                Balance: <strong>$<?php echo number_format(max(0, $cwClass['total_due'] - $cwClass['total_paid']), 2); ?></strong>
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    <?php foreach ($cwClass['students'] as $cwStu): ?>
+                                        <?php
+                                            $cwBalance = max(0, $cwStu['due'] - $cwStu['paid']);
+                                            if (!$cwStu['has_payment_record']) {
+                                                $cwStatusLabel = 'No fee record'; $cwStatusBadge = 'secondary';
+                                            } elseif ($cwStu['due'] > 0 && $cwStu['paid'] >= $cwStu['due']) {
+                                                $cwStatusLabel = 'Fully Paid'; $cwStatusBadge = 'success';
+                                            } elseif ($cwStu['paid'] > 0) {
+                                                $cwStatusLabel = 'Part-paid'; $cwStatusBadge = 'warning';
+                                            } else {
+                                                $cwStatusLabel = 'Unpaid'; $cwStatusBadge = 'danger';
+                                            }
+                                        ?>
+                                        <tr>
+                                            <td><?php echo h($cwStu['student_name']); ?> <span class="text-muted small">(<?php echo h($cwStu['student_code']); ?>)</span></td>
+                                            <td><?php echo h(implode(', ', array_keys($cwStu['plans'])) ?: '—'); ?></td>
+                                            <td class="text-right"><?php echo $cwStu['has_payment_record'] ? '$' . number_format($cwStu['due'], 2) : '—'; ?></td>
+                                            <td class="text-right"><?php echo $cwStu['has_payment_record'] ? '$' . number_format($cwStu['paid'], 2) : '—'; ?></td>
+                                            <td class="text-right"><?php echo $cwStu['has_payment_record'] ? '$' . number_format($cwBalance, 2) : '—'; ?></td>
+                                            <td><span class="badge badge-<?php echo $cwStatusBadge; ?>"><?php echo $cwStatusLabel; ?></span></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                                <?php endforeach; ?>
+                            </table>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <script>
+                    document.getElementById('classWiseFilter')?.addEventListener('change', function () {
+                        var val = this.value;
+                        document.querySelectorAll('.class-wise-group').forEach(function (tb) {
+                            tb.style.display = (!val || tb.dataset.class === val) ? '' : 'none';
+                        });
+                    });
+                </script>
 
                 <!-- ✅ BANK + DUE SUMMARY BOX -->
                 <div class="card shadow mb-4">
