@@ -1231,14 +1231,36 @@ if ($updateOnlyMode) {
                 <div class="card shadow mb-4">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap" style="gap:8px;">
                         <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-layer-group mr-1"></i>Class-wise Fee Status</h6>
-                        <div>
-                            <label for="classWiseFilter" class="sr-only">Filter by class</label>
-                            <select id="classWiseFilter" class="form-control form-control-sm">
-                                <option value="">All Classes</option>
-                                <?php foreach ($classWise as $cwId => $cwClass): ?>
-                                    <option value="cwc-<?php echo (int)$cwId; ?>"><?php echo h($cwClass['class_name']); ?></option>
-                                <?php endforeach; ?>
-                            </select>
+                        <div class="d-flex flex-wrap" style="gap:8px;">
+                            <div>
+                                <label for="classWiseFilter" class="sr-only">Filter by class</label>
+                                <select id="classWiseFilter" class="form-control form-control-sm">
+                                    <option value="">All Classes</option>
+                                    <?php foreach ($classWise as $cwId => $cwClass): ?>
+                                        <option value="cwc-<?php echo (int)$cwId; ?>"><?php echo h($cwClass['class_name']); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="classWisePlanFilter" class="sr-only">Filter by fee plan</label>
+                                <select id="classWisePlanFilter" class="form-control form-control-sm">
+                                    <option value="">All Fee Plans</option>
+                                    <option value="term-wise">Term-wise</option>
+                                    <option value="half-yearly">Half-yearly</option>
+                                    <option value="yearly">Yearly</option>
+                                    <option value="additional">Additional</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="classWiseStatusFilter" class="sr-only">Filter by status</label>
+                                <select id="classWiseStatusFilter" class="form-control form-control-sm">
+                                    <option value="">All Statuses</option>
+                                    <option value="fully-paid">Fully Paid</option>
+                                    <option value="part-paid">Part-paid</option>
+                                    <option value="unpaid">Unpaid</option>
+                                    <option value="no-record">No fee record</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                     <div class="card-body">
@@ -1301,16 +1323,20 @@ if ($updateOnlyMode) {
                                         <?php
                                             $cwBalance = max(0, $cwStu['due'] - $cwStu['paid']);
                                             if (!$cwStu['has_payment_record']) {
-                                                $cwStatusLabel = 'No fee record'; $cwStatusBadge = 'secondary';
+                                                $cwStatusLabel = 'No fee record'; $cwStatusBadge = 'secondary'; $cwStatusSlug = 'no-record';
                                             } elseif ($cwStu['due'] > 0 && $cwStu['paid'] >= $cwStu['due']) {
-                                                $cwStatusLabel = 'Fully Paid'; $cwStatusBadge = 'success';
+                                                $cwStatusLabel = 'Fully Paid'; $cwStatusBadge = 'success'; $cwStatusSlug = 'fully-paid';
                                             } elseif ($cwStu['paid'] > 0) {
-                                                $cwStatusLabel = 'Part-paid'; $cwStatusBadge = 'warning';
+                                                $cwStatusLabel = 'Part-paid'; $cwStatusBadge = 'warning'; $cwStatusSlug = 'part-paid';
                                             } else {
-                                                $cwStatusLabel = 'Unpaid'; $cwStatusBadge = 'danger';
+                                                $cwStatusLabel = 'Unpaid'; $cwStatusBadge = 'danger'; $cwStatusSlug = 'unpaid';
                                             }
+                                            $cwPlanSlugs = array_map(
+                                                fn($p) => strtolower(str_replace(' ', '-', $p)),
+                                                array_keys($cwStu['plans'])
+                                            );
                                         ?>
-                                        <tr>
+                                        <tr class="cw-student-row" data-status="<?php echo h($cwStatusSlug); ?>" data-plans="<?php echo h(implode(' ', $cwPlanSlugs)); ?>">
                                             <td><?php echo h($cwStu['student_name']); ?> <span class="text-muted small">(<?php echo h($cwStu['student_code']); ?>)</span></td>
                                             <td><?php echo h(implode(', ', array_keys($cwStu['plans'])) ?: '—'); ?></td>
                                             <td class="text-right"><?php echo $cwStu['has_payment_record'] ? '$' . number_format($cwStu['due'], 2) : '—'; ?></td>
@@ -1327,12 +1353,42 @@ if ($updateOnlyMode) {
                     </div>
                 </div>
                 <script>
-                    document.getElementById('classWiseFilter')?.addEventListener('change', function () {
-                        var val = this.value;
-                        document.querySelectorAll('.class-wise-group').forEach(function (tb) {
-                            tb.style.display = (!val || tb.dataset.class === val) ? '' : 'none';
-                        });
-                    });
+                    (function () {
+                        var classSel = document.getElementById('classWiseFilter');
+                        var planSel = document.getElementById('classWisePlanFilter');
+                        var statusSel = document.getElementById('classWiseStatusFilter');
+                        if (!classSel || !planSel || !statusSel) return;
+
+                        function applyClassWiseFilters() {
+                            var classVal = classSel.value;
+                            var planVal = planSel.value;
+                            var statusVal = statusSel.value;
+
+                            document.querySelectorAll('.class-wise-group').forEach(function (tb) {
+                                if (classVal && tb.dataset.class !== classVal) {
+                                    tb.style.display = 'none';
+                                    return;
+                                }
+                                tb.style.display = '';
+
+                                var anyVisible = false;
+                                tb.querySelectorAll('.cw-student-row').forEach(function (row) {
+                                    var planMatch = !planVal || (row.dataset.plans || '').split(' ').indexOf(planVal) !== -1;
+                                    var statusMatch = !statusVal || row.dataset.status === statusVal;
+                                    var show = planMatch && statusMatch;
+                                    row.style.display = show ? '' : 'none';
+                                    if (show) anyVisible = true;
+                                });
+
+                                var header = tb.querySelector('tr.table-secondary');
+                                if (header) header.style.display = anyVisible ? '' : 'none';
+                            });
+                        }
+
+                        classSel.addEventListener('change', applyClassWiseFilters);
+                        planSel.addEventListener('change', applyClassWiseFilters);
+                        statusSel.addEventListener('change', applyClassWiseFilters);
+                    })();
                 </script>
 
                 <!-- ✅ BANK + DUE SUMMARY BOX -->
