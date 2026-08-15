@@ -1342,7 +1342,11 @@ if ($updateOnlyMode) {
                                             <td class="text-right"><?php echo $cwStu['has_payment_record'] ? '$' . number_format($cwStu['due'], 2) : '—'; ?></td>
                                             <td class="text-right"><?php echo $cwStu['has_payment_record'] ? '$' . number_format($cwStu['paid'], 2) : '—'; ?></td>
                                             <td class="text-right"><?php echo $cwStu['has_payment_record'] ? '$' . number_format($cwBalance, 2) : '—'; ?></td>
-                                            <td><span class="badge badge-<?php echo $cwStatusBadge; ?>"><?php echo $cwStatusLabel; ?></span></td>
+                                            <td>
+                                                <a href="update-payments?q=<?php echo urlencode($cwStu['student_code']); ?>" class="badge badge-<?php echo $cwStatusBadge; ?>" title="Update fees for <?php echo h($cwStu['student_name']); ?>" style="text-decoration:none;">
+                                                    <?php echo $cwStatusLabel; ?> <i class="fas fa-pen-to-square" style="font-size:.7em;"></i>
+                                                </a>
+                                            </td>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>

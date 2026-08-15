@@ -1348,6 +1348,21 @@ document.addEventListener('DOMContentLoaded', function () {
     sortPaymentRows();
     applyPaymentRowFilters();
 
+    // Deep-link support: ?q=<student code or name> pre-fills the search
+    // box (e.g. from Fees Overview's "click status to update" links) and
+    // scrolls straight to the matching row.
+    const deepLinkQuery = new URLSearchParams(window.location.search).get('q');
+    if (deepLinkQuery && paymentSearch) {
+        paymentSearch.value = deepLinkQuery;
+        applyPaymentRowFilters();
+        const firstMatch = Array.from(document.querySelectorAll('.update-student-row'))
+            .find(row => row.style.display !== 'none');
+        if (firstMatch) {
+            firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            firstMatch.classList.add('table-active');
+        }
+    }
+
     // ---------- Payment plan tabs ----------
     const methodPills = document.querySelectorAll('.js-method-pill');
     const planSections = document.querySelectorAll('.fee-plan-section');
