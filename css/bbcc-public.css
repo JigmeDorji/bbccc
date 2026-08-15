@@ -183,8 +183,12 @@ body.bbcc-public {
 }
 
 .bbcc-nav__has-submenu { position: relative; }
+/* Invisible bridge over the visual gap below the trigger link, so moving
+   the mouse straight down into the submenu doesn't drop out of :hover. */
+.bbcc-nav__has-submenu::after {
+    content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 10px;
+}
 .bbcc-nav__submenu {
-    display: none;
     position: absolute;
     top: calc(100% + 6px);
     left: 0;
@@ -197,8 +201,20 @@ body.bbcc-public {
     background: var(--white);
     box-shadow: var(--shadow-md);
     z-index: 1200;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-8px);
+    transition: opacity .18s ease, transform .18s ease, visibility 0s linear .18s;
+    pointer-events: none;
 }
-.bbcc-nav__has-submenu:hover .bbcc-nav__submenu { display: block; }
+.bbcc-nav__has-submenu:hover .bbcc-nav__submenu,
+.bbcc-nav__has-submenu:focus-within .bbcc-nav__submenu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    transition: opacity .18s ease, transform .18s ease;
+    pointer-events: auto;
+}
 .bbcc-nav__submenu li a { padding: 10px 12px; }
 
 .bbcc-nav__login {
@@ -233,8 +249,8 @@ body.bbcc-public {
     .bbcc-nav li a { padding: 14px 16px; border-radius: var(--radius-sm); }
     .bbcc-nav li.active a::after { display: none; }
     .bbcc-nav__login { margin-top: 8px; justify-content: center; }
+    .bbcc-nav__has-submenu::after { display: none; }
     .bbcc-nav__submenu {
-        display: block;
         position: static;
         min-width: 0;
         margin: 6px 0 0 12px;
@@ -242,6 +258,11 @@ body.bbcc-public {
         border: 0;
         box-shadow: none;
         background: transparent;
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+        pointer-events: auto;
+        transition: none;
     }
     .bbcc-nav__submenu li a { padding: 10px 14px; }
 }
