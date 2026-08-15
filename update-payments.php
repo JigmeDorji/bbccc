@@ -217,6 +217,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_fee_id'])) {
     }
 }
 
+// ---------------- CHANGE A STUDENT'S FEE PLAN ----------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'change_plan') {
+    try {
+        $studentDbId = (int)($_POST['student_id'] ?? 0);
+        if ($studentDbId <= 0) throw new Exception("Invalid student.");
+        $reviewer = (string)($_SESSION['username'] ?? 'admin');
+
+        $result = pcm_admin_update_child_details($pdo, $studentDbId, ['fee_plan' => (string)($_POST['fee_plan'] ?? '')], $reviewer);
+        $message = $result['flash'];
+        $success = true;
+        $reload = true;
+    } catch (Throwable $e) {
+        $message = "Error: " . $e->getMessage();
+        $success = false;
+        $reload = false;
+    }
+}
+
 // ---------------- EDIT A FEE ROW (due/paid/ref/status) ----------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_payment_row') {
     try {
@@ -965,6 +983,11 @@ $isAdminTier = is_admin_role();
                                                             <?php if ((int)($info['start_term'] ?? 1) > 1): ?>
                                                                 <br><span class="badge badge-light border mt-1">Started Term <?= (int)$info['start_term'] ?></span>
                                                             <?php endif; ?>
+                                                            <br>
+                                                            <button type="button" class="btn btn-outline-secondary btn-sm mt-1 js-changeplan-btn" title="Change fee plan"
+                                                                    data-student-id="<?= (int)$sid ?>" data-current-plan="<?= h($planName) ?>" data-child="<?= h((string)$info['student_name']) ?>">
+                                                                <i class="fas fa-right-left mr-1"></i>Plan: <?= h($planName) ?>
+                                                            </button>
                                                         </td>
                                                         <td class="nowrap">
                                                             <?php if (!empty($info['class_name'])): ?>
@@ -1105,6 +1128,39 @@ $isAdminTier = is_admin_role();
         </div>
 
         <?php include_once 'include/admin-footer.php'; ?>
+    </div>
+</div>
+
+<!-- Shared modal: Change fee plan -->
+<div class="modal fade" id="changePlanModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="POST" data-confirm="Change this student's fee plan? Their fee instalments will be regenerated unless some have already been paid or reviewed.">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="change_plan">
+                <input type="hidden" name="student_id" id="changePlanStudentId" value="">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Change Fee Plan</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="small mb-2"><strong id="changePlanChild"></strong></div>
+                    <div class="form-group mb-0">
+                        <label>Fee Plan</label>
+                        <select name="fee_plan" id="changePlanSelect" class="form-control">
+                            <option value="Term-wise">Term-wise</option>
+                            <option value="Half-yearly">Half-yearly</option>
+                            <option value="Yearly">Yearly</option>
+                        </select>
+                        <small class="form-text text-muted">Instalments already paid or under review are kept as-is; only untouched rows are regenerated for the new plan.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
@@ -1430,6 +1486,15 @@ document.addEventListener('DOMContentLoaded', function () {
     // Row action buttons + proof viewer: delegated on document (one listener
     // covers every cell, including the repeated Additional-charges rows).
     document.addEventListener('click', function (e) {
+        const changePlanBtn = e.target.closest('.js-changeplan-btn');
+        if (changePlanBtn) {
+            document.getElementById('changePlanStudentId').value = changePlanBtn.dataset.studentId;
+            document.getElementById('changePlanSelect').value = changePlanBtn.dataset.currentPlan;
+            document.getElementById('changePlanChild').textContent = changePlanBtn.dataset.child;
+            jQuery('#changePlanModal').modal('show');
+            return;
+        }
+
         const editBtn = e.target.closest('.js-edit-btn');
         if (editBtn) {
             document.getElementById('editPaymentId').value = editBtn.dataset.id;
