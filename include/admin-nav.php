@@ -167,8 +167,9 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
     display: none !important;
 }
 
-/* Dzo Class Mgmt subgroup toggles */
-#collapseOrders .collapse-item.dzo-subgroup-trigger {
+/* Dzo Class Mgmt + Website subgroup toggles */
+#collapseOrders .collapse-item.dzo-subgroup-trigger,
+#collapseWebsite .collapse-item.dzo-subgroup-trigger {
     display: flex !important;
     align-items: center;
     justify-content: space-between;
@@ -191,13 +192,15 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
 #collapseWebsite .collapse-item i {
     margin-top: 2px;
 }
-#collapseOrders .dzo-subgroup-trigger::after {
+#collapseOrders .dzo-subgroup-trigger::after,
+#collapseWebsite .dzo-subgroup-trigger::after {
     content: '▾';
     font-size: 0.85rem;
     opacity: 0.85;
     transition: transform .18s ease;
 }
-#collapseOrders .dzo-subgroup-trigger.collapsed::after {
+#collapseOrders .dzo-subgroup-trigger.collapsed::after,
+#collapseWebsite .dzo-subgroup-trigger.collapsed::after {
     transform: rotate(-90deg);
 }
 
@@ -284,9 +287,11 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
     }
     .drawer-close-btn button:active { background: rgba(255,255,255,0.28); }
 
-    /* Dzo Class Mgmt mobile subgroups */
-    #collapseOrders .dzo-group-header { display: none !important; }
-    #collapseOrders .dzo-subgroup-links .collapse-item {
+    /* Dzo Class Mgmt + Website mobile subgroups */
+    #collapseOrders .dzo-group-header,
+    #collapseWebsite .dzo-group-header { display: none !important; }
+    #collapseOrders .dzo-subgroup-links .collapse-item,
+    #collapseWebsite .dzo-subgroup-links .collapse-item {
         padding-left: 20px !important;
         min-height: 44px;
     }
@@ -371,19 +376,23 @@ body:not(.sidebar-toggled) #accordionSidebar .nav-item .nav-link span,
             <a class="nav-link <?= $websiteActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseWebsite"
                aria-expanded="<?= $websiteActive ? 'true' : 'false' ?>" aria-controls="collapseWebsite">
                 <i class="fas fa-cogs"></i>
-                <span>Website Settings</span>
+                <span>Website</span>
             </a>
             <div id="collapseWebsite" class="collapse <?= $websiteActive ? 'show' : '' ?>" data-parent="#accordionSidebar">
                 <div class="bg-white py-2 collapse-inner rounded">
-                    <a class="collapse-item <?= ($currentPage == 'schoolContentSetup.php') ? 'active' : '' ?>" href="schoolContentSetup"><i class="fas fa-school fa-sm mr-1 text-muted"></i> Setup School Content</a>
-                    <a class="collapse-item <?= in_array($currentPage, ['ProgramDetailsSetup.php','sponsorProgramDetailEdit.php'], true) ? 'active' : '' ?>" href="ProgramDetailsSetup"><i class="fas fa-file-alt fa-sm mr-1 text-muted"></i> Setup Program Details</a>
-                    <a class="collapse-item <?= ($currentPage == 'serviceProgramsSetup.php') ? 'active' : '' ?>" href="serviceProgramsSetup"><i class="fas fa-icons fa-sm mr-1 text-muted"></i> Setup Service Cards</a>
-                    <a class="collapse-item <?= ($currentPage == 'downloadFileSetup.php') ? 'active' : '' ?>" href="downloadFileSetup"><i class="fas fa-file-download fa-sm mr-1 text-muted"></i> Setup Download Files</a>
-                    <a class="collapse-item <?= ($currentPage == 'serviceSetup.php') ? 'active' : '' ?>" href="serviceSetup"><i class="fas fa-bullhorn fa-sm mr-1 text-muted"></i> Post Event</a>
-                    <a class="collapse-item <?= ($currentPage == 'blogSetup.php' || $currentPage == 'blog-post.php') ? 'active' : '' ?>" href="blogSetup"><i class="fas fa-newspaper fa-sm mr-1 text-muted"></i> Blog</a>
-                    <a class="collapse-item <?= ($currentPage == 'ourTeamSetup.php') ? 'active' : '' ?>" href="ourTeamSetup"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Executive &amp; Board Members</a>
-                    <a class="collapse-item <?= ($currentPage == 'viewFeedback.php') ? 'active' : '' ?>" href="viewFeedback"><i class="fas fa-envelope fa-sm mr-1 text-muted"></i> Contact Messages</a>
-                    <a class="collapse-item <?= ($currentPage == 'regenerate-image-variants.php') ? 'active' : '' ?>" href="regenerate-image-variants"><i class="fas fa-images fa-sm mr-1 text-muted"></i> Regenerate Image Variants</a>
+                    <h6 class="collapse-header dzo-group-header d-none d-lg-block">Website Setting</h6>
+                    <a class="collapse-item dzo-subgroup-trigger <?= $websiteActive ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseWebsiteSetting" aria-expanded="<?= $websiteActive ? 'true' : 'false' ?>" aria-controls="collapseWebsiteSetting">Website Setting</a>
+                    <div id="collapseWebsiteSetting" class="collapse dzo-subgroup-links <?= $websiteActive ? 'show' : '' ?>" data-parent="#collapseWebsite">
+                        <a class="collapse-item <?= ($currentPage == 'schoolContentSetup.php') ? 'active' : '' ?>" href="schoolContentSetup"><i class="fas fa-school fa-sm mr-1 text-muted"></i> Setup School Content</a>
+                        <a class="collapse-item <?= in_array($currentPage, ['ProgramDetailsSetup.php','sponsorProgramDetailEdit.php'], true) ? 'active' : '' ?>" href="ProgramDetailsSetup"><i class="fas fa-file-alt fa-sm mr-1 text-muted"></i> Setup Program Details</a>
+                        <a class="collapse-item <?= ($currentPage == 'serviceProgramsSetup.php') ? 'active' : '' ?>" href="serviceProgramsSetup"><i class="fas fa-icons fa-sm mr-1 text-muted"></i> Setup Service Cards</a>
+                        <a class="collapse-item <?= ($currentPage == 'downloadFileSetup.php') ? 'active' : '' ?>" href="downloadFileSetup"><i class="fas fa-file-download fa-sm mr-1 text-muted"></i> Setup Download Files</a>
+                        <a class="collapse-item <?= ($currentPage == 'serviceSetup.php') ? 'active' : '' ?>" href="serviceSetup"><i class="fas fa-bullhorn fa-sm mr-1 text-muted"></i> Post Event</a>
+                        <a class="collapse-item <?= ($currentPage == 'blogSetup.php' || $currentPage == 'blog-post.php') ? 'active' : '' ?>" href="blogSetup"><i class="fas fa-newspaper fa-sm mr-1 text-muted"></i> Blog</a>
+                        <a class="collapse-item <?= ($currentPage == 'ourTeamSetup.php') ? 'active' : '' ?>" href="ourTeamSetup"><i class="fas fa-users fa-sm mr-1 text-muted"></i> Executive &amp; Board Members</a>
+                        <a class="collapse-item <?= ($currentPage == 'viewFeedback.php') ? 'active' : '' ?>" href="viewFeedback"><i class="fas fa-envelope fa-sm mr-1 text-muted"></i> Contact Messages</a>
+                        <a class="collapse-item <?= ($currentPage == 'regenerate-image-variants.php') ? 'active' : '' ?>" href="regenerate-image-variants"><i class="fas fa-images fa-sm mr-1 text-muted"></i> Regenerate Image Variants</a>
+                    </div>
                 </div>
             </div>
         </li>
