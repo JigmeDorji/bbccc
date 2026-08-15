@@ -10,6 +10,7 @@ $servicePages = [
     'droenchoe-tara-practice.php',
 ];
 $isServicesPage = in_array($currentPage, $servicePages, true);
+$isAboutPage = in_array($currentPage, ['about-us.php', 'blog.php', 'blog-post.php'], true);
 ?>
 
 <!-- Top Bar -->
@@ -48,17 +49,18 @@ $isServicesPage = in_array($currentPage, $servicePages, true);
             <li class="<?= ($currentPage === 'index.php') ? 'active' : '' ?>">
                 <a href="index">Home</a>
             </li>
-            <li class="<?= ($currentPage === 'about-us.php') ? 'active' : '' ?>">
-                <a href="about-us">About</a>
+            <li class="bbcc-nav__has-submenu <?= $isAboutPage ? 'active' : '' ?>">
+                <a href="about-us">About <i class="fa-solid fa-chevron-down" style="font-size:.6rem;margin-left:4px;"></i></a>
+                <ul class="bbcc-nav__submenu">
+                    <li class="<?= ($currentPage === 'about-us.php') ? 'active' : '' ?>"><a href="about-us">About Us</a></li>
+                    <li class="<?= ($currentPage === 'blog.php' || $currentPage === 'blog-post.php') ? 'active' : '' ?>"><a href="blog">Blog</a></li>
+                </ul>
             </li>
             <li class="<?= $isServicesPage ? 'active' : '' ?>">
                 <a href="services">Services</a>
             </li>
             <li class="<?= ($currentPage === 'events.php' || $currentPage === 'event_detail.php' || $currentPage === 'book-event.php') ? 'active' : '' ?>">
                 <a href="events">Events</a>
-            </li>
-            <li class="<?= ($currentPage === 'blog.php' || $currentPage === 'blog-post.php') ? 'active' : '' ?>">
-                <a href="blog">Blog</a>
             </li>
             <li class="<?= ($currentPage === 'downloads.php') ? 'active' : '' ?>">
                 <a href="downloads">Downloads</a>
