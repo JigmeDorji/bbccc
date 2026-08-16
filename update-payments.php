@@ -292,7 +292,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
         $rowStmt->execute([':id' => $pid]);
         $row = $rowStmt->fetch(PDO::FETCH_ASSOC);
         if (!$row) throw new Exception("Fee record not found.");
-        if ((string)$row['status'] === 'Verified') throw new Exception("A verified (paid) record cannot be deleted.");
 
         $pdo->prepare("DELETE FROM pcm_fee_payments WHERE id = :id")->execute([':id' => $pid]);
 
@@ -1126,9 +1125,9 @@ $isAdminTier = is_admin_role();
                                                                                 <i class="fas fa-envelope"></i>
                                                                             </button>
                                                                         <?php endif; ?>
-                                                                        <?php if ($isAdminTier && $status !== 'Verified'): ?>
+                                                                        <?php if ($isAdminTier): ?>
                                                                             <button type="button" class="btn btn-outline-danger js-delete-charge-btn" title="Delete this fee record"
-                                                                                    data-id="<?= $feeId ?>" data-child="<?= h((string)$info['student_name']) ?>" data-label="<?= h(installment_label($code)) ?>">
+                                                                                    data-id="<?= $feeId ?>" data-child="<?= h((string)$info['student_name']) ?>" data-label="<?= h(installment_label($code)) ?>" data-status="<?= h($status) ?>">
                                                                                 <i class="fas fa-trash-alt"></i>
                                                                             </button>
                                                                         <?php endif; ?>
@@ -1185,9 +1184,9 @@ $isAdminTier = is_admin_role();
                                                                                 <i class="fas fa-envelope"></i>
                                                                             </button>
                                                                         <?php endif; ?>
-                                                                        <?php if ($isAdminTier && $aStatus !== 'Verified'): ?>
+                                                                        <?php if ($isAdminTier): ?>
                                                                             <button type="button" class="btn btn-outline-danger js-delete-charge-btn" title="Delete charge"
-                                                                                    data-id="<?= $aId ?>" data-child="<?= h((string)$info['student_name']) ?>" data-label="<?= h((string)$ar['instalment_label']) ?>">
+                                                                                    data-id="<?= $aId ?>" data-child="<?= h((string)$info['student_name']) ?>" data-label="<?= h((string)$ar['instalment_label']) ?>" data-status="<?= h($aStatus) ?>">
                                                                                 <i class="fas fa-trash-alt"></i>
                                                                             </button>
                                                                         <?php endif; ?>
@@ -1378,10 +1377,15 @@ $isAdminTier = is_admin_role();
                 </div>
                 <div class="modal-body">
                     <p>Delete <strong id="deleteChargeLabel"></strong> for <strong id="deleteChargeChild"></strong>? This cannot be undone. Use this only for records that were created by mistake (e.g. a wrong term).</p>
+                    <div id="deleteChargeVerifiedWarning" class="alert alert-danger d-none">
+                        <strong>Warning:</strong> this record is marked <strong>Verified</strong> (already recorded as paid). Deleting it permanently removes the payment record and cannot be undone.
+                        Type <strong>DELETE</strong> below to confirm.
+                        <input type="text" id="deleteChargeConfirmText" class="form-control mt-2" autocomplete="off">
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-danger"><i class="fas fa-trash-alt mr-1"></i>Delete</button>
+                    <button type="submit" id="deleteChargeSubmitBtn" class="btn btn-danger"><i class="fas fa-trash-alt mr-1"></i>Delete</button>
                 </div>
             </form>
         </div>
@@ -1464,6 +1468,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const clearPaymentSearch = document.getElementById('clearUpdatePaymentSearch');
     const visiblePaymentCount = document.getElementById('visiblePaymentCount');
     const paymentNoResults = document.getElementById('paymentNoResults');
+
+    const deleteChargeConfirmText = document.getElementById('deleteChargeConfirmText');
+    if (deleteChargeConfirmText) {
+        deleteChargeConfirmText.addEventListener('input', function () {
+            const warningVisible = !document.getElementById('deleteChargeVerifiedWarning').classList.contains('d-none');
+            document.getElementById('deleteChargeSubmitBtn').disabled = warningVisible && this.value.trim() !== 'DELETE';
+        });
+    }
 
     document.querySelectorAll('.update-overview-table tbody').forEach(tbody => {
         Array.from(tbody.querySelectorAll('.update-student-row')).forEach((row, index) => {
@@ -1687,6 +1699,13 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('deleteChargeId').value = deleteChargeBtn.dataset.id;
             document.getElementById('deleteChargeChild').textContent = deleteChargeBtn.dataset.child;
             document.getElementById('deleteChargeLabel').textContent = deleteChargeBtn.dataset.label;
+            const isVerified = deleteChargeBtn.dataset.status === 'Verified';
+            const warningEl = document.getElementById('deleteChargeVerifiedWarning');
+            const confirmEl = document.getElementById('deleteChargeConfirmText');
+            const submitBtn = document.getElementById('deleteChargeSubmitBtn');
+            confirmEl.value = '';
+            warningEl.classList.toggle('d-none', !isVerified);
+            submitBtn.disabled = isVerified;
             jQuery('#deleteChargeModal').modal('show');
             return;
         }
