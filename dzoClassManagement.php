@@ -45,10 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 $currentParentId = (int)($student['parent_id'] ?? 0);
-                if ($currentParentId <= 0) {
-                    throw new Exception("Current parent link is missing.");
-                }
-                if ($currentParentId === $targetParentId) {
+                if ($currentParentId > 0 && $currentParentId === $targetParentId) {
                     throw new Exception("Student is already linked to the selected parent.");
                 }
 
