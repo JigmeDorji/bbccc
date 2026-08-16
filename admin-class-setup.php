@@ -247,9 +247,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $email = trim($_POST['email'] ?? '');
             $phone = trim($_POST['phone'] ?? '');
             $active = isset($_POST['teacher_active']) ? 1 : 0;
+            $newPassword = (string)($_POST['new_password'] ?? '');
 
             if ($editId === 0 || $fullName === '') {
                 throw new Exception("Teacher ID and name are required.");
+            }
+            if ($newPassword !== '' && strlen($newPassword) < 6) {
+                throw new Exception("New password must be at least 6 characters.");
             }
 
             $teacherRow = $pdo->prepare("SELECT id, user_id, email FROM teachers WHERE id = :id LIMIT 1");
@@ -294,9 +298,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare("UPDATE user SET username = :username WHERE userid = :uid")
                     ->execute([':username' => $email, ':uid' => $userId]);
             }
+            if ($newPassword !== '' && $userId !== '') {
+                $pdo->prepare("UPDATE user SET password = :password WHERE userid = :uid")
+                    ->execute([':password' => password_hash($newPassword, PASSWORD_DEFAULT), ':uid' => $userId]);
+            }
             $pdo->commit();
 
-            $message = "Teacher updated successfully.";
+            $message = "Teacher updated successfully." . ($newPassword !== '' ? " Password reset." : "");
             $messageTab = 'teachers';
         } catch (Exception $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
@@ -939,6 +947,11 @@ $teachers = $pdo->query(
                             <input type="text" class="form-control" name="phone" id="edit_teacher_phone">
                         </div>
                     </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-key mr-1" style="color:#881b12;font-size:.7rem;"></i> New Password <span class="text-muted font-weight-normal">(leave blank to keep current)</span></label>
+                        <input type="password" class="form-control" name="new_password" id="edit_teacher_password" autocomplete="new-password" minlength="6" placeholder="••••••••">
+                        <small class="form-text text-muted">At least 6 characters. Only fill this in to reset the teacher's login password.</small>
+                    </div>
                     <div class="custom-control custom-switch">
                         <input type="checkbox" class="custom-control-input" id="edit_teacher_active" name="teacher_active" value="1">
                         <label class="custom-control-label" for="edit_teacher_active">Active</label>
@@ -1034,6 +1047,7 @@ $(document).on('click', '.btn-edit-teacher', function(){
     $('#edit_teacher_email').val(btn.data('email'));
     $('#edit_teacher_phone').val(btn.data('phone'));
     $('#edit_teacher_active').prop('checked', btn.data('active') == 1);
+    $('#edit_teacher_password').val('');
     $('#editTeacherModal').modal('show');
 });
 
