@@ -280,24 +280,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_i
     }
 }
 
-// ---------------- DELETE A ONE-OFF ADDITIONAL CHARGE ----------------
+// ---------------- DELETE A FEE RECORD (term instalment or additional charge) ----------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_individual_charge') {
     try {
-        if (!is_admin_role()) throw new Exception("Only admin can delete charges.");
+        if (!is_admin_role()) throw new Exception("Only admin can delete fee records.");
 
         $pid = (int)($_POST['payment_id'] ?? 0);
-        if ($pid <= 0) throw new Exception("Invalid charge.");
+        if ($pid <= 0) throw new Exception("Invalid record.");
 
         $rowStmt = $pdo->prepare("SELECT id, plan_type, status FROM pcm_fee_payments WHERE id = :id LIMIT 1");
         $rowStmt->execute([':id' => $pid]);
         $row = $rowStmt->fetch(PDO::FETCH_ASSOC);
-        if (!$row) throw new Exception("Charge not found.");
-        if ((string)$row['plan_type'] !== 'Additional') throw new Exception("Only additional charges can be deleted here.");
-        if ((string)$row['status'] === 'Verified') throw new Exception("A verified (paid) charge cannot be deleted.");
+        if (!$row) throw new Exception("Fee record not found.");
+        if ((string)$row['status'] === 'Verified') throw new Exception("A verified (paid) record cannot be deleted.");
 
         $pdo->prepare("DELETE FROM pcm_fee_payments WHERE id = :id")->execute([':id' => $pid]);
 
-        $message = "Additional charge deleted.";
+        $message = "Fee record deleted.";
         $success = true;
         $reload = true;
     } catch (Throwable $e) {
@@ -1127,6 +1126,12 @@ $isAdminTier = is_admin_role();
                                                                                 <i class="fas fa-envelope"></i>
                                                                             </button>
                                                                         <?php endif; ?>
+                                                                        <?php if ($isAdminTier && $status !== 'Verified'): ?>
+                                                                            <button type="button" class="btn btn-outline-danger js-delete-charge-btn" title="Delete this fee record"
+                                                                                    data-id="<?= $feeId ?>" data-child="<?= h((string)$info['student_name']) ?>" data-label="<?= h(installment_label($code)) ?>">
+                                                                                <i class="fas fa-trash-alt"></i>
+                                                                            </button>
+                                                                        <?php endif; ?>
                                                                     </div>
                                                                 <?php endif; ?>
                                                             </td>
@@ -1359,7 +1364,7 @@ $isAdminTier = is_admin_role();
     </div>
 </div>
 
-<!-- Shared modal: Delete additional charge -->
+<!-- Shared modal: Delete a fee record (term instalment or additional charge) -->
 <div class="modal fade" id="deleteChargeModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
@@ -1368,11 +1373,11 @@ $isAdminTier = is_admin_role();
                 <input type="hidden" name="action" value="delete_individual_charge">
                 <input type="hidden" name="payment_id" id="deleteChargeId" value="">
                 <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title">Delete Additional Charge</h5>
+                    <h5 class="modal-title">Delete Fee Record</h5>
                     <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
                 </div>
                 <div class="modal-body">
-                    <p>Delete <strong id="deleteChargeLabel"></strong> for <strong id="deleteChargeChild"></strong>? This cannot be undone.</p>
+                    <p>Delete <strong id="deleteChargeLabel"></strong> for <strong id="deleteChargeChild"></strong>? This cannot be undone. Use this only for records that were created by mistake (e.g. a wrong term).</p>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
