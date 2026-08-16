@@ -92,23 +92,22 @@ function bbcc_render_enrolment_rows(array $rows, array $campusChoices, array $al
             <td><?= date('d M Y', strtotime($e['submitted_at'])) ?></td>
             <td>
                 <div class="d-flex flex-column" style="gap:6px;min-width:220px;">
-                    <form method="POST" class="input-group input-group-sm">
+                    <?php $hasClassYet = !empty($e['assigned_class_id']); ?>
+                    <form method="POST" class="js-assign-class-form">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="assign_class">
                         <input type="hidden" name="enrolment_id" value="<?= (int)$e['id'] ?>">
-                        <select name="class_id" class="form-control" <?= $canAssignClass ? 'required' : 'disabled' ?>>
-                            <option value=""><?= $canAssignClass ? 'Assign class…' : 'Class assignment locked' ?></option>
+                        <select name="class_id" class="form-control form-control-sm mb-1" <?= $canAssignClass ? 'required' : 'disabled' ?>>
+                            <option value=""><?= $canAssignClass ? 'Select class…' : 'Class assignment locked' ?></option>
                             <?php foreach ($matchingClasses as $cl): ?>
                                 <option value="<?= (int)$cl['id'] ?>" <?= ((int)$e['assigned_class_id'] === (int)$cl['id']) ? 'selected' : '' ?>>
                                     <?= h($cl['class_name']) ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
-                        <div class="input-group-append">
-                            <button type="submit" class="btn btn-outline-primary" <?= $canAssignClass ? '' : 'disabled' ?> title="Update Class">
-                                <i class="fas fa-sync-alt"></i>
-                            </button>
-                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary btn-block js-save-class-btn" <?= $canAssignClass ? '' : 'disabled' ?>>
+                            <i class="fas fa-save mr-1"></i><?= $hasClassYet ? 'Update Class' : 'Save Class' ?>
+                        </button>
                     </form>
                     <?php if ($rowStatusNorm === 'pending'): ?>
                     <div class="btn-group btn-group-sm w-100" role="group">
