@@ -589,12 +589,17 @@ function pcm_admin_update_child_details(PDO $pdo, int $studentDbId, array $post,
                 $pdo->prepare("UPDATE pcm_enrolments SET start_term = :st, fee_plan = :plan, fee_amount = :amt WHERE id = :id")
                     ->execute([':st' => $newStartTerm, ':plan' => $newPlan, ':amt' => $newAmount, ':id' => $eid]);
 
-                $touchedStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE enrolment_id = :eid AND status <> 'Unpaid'");
+                // Only a genuinely confirmed (Verified) payment should block
+                // regeneration -- a Pending or Rejected row is an unconfirmed
+                // submission against what may have been the wrong term/plan
+                // in the first place, matching the same rule already used by
+                // feesManagement.php's Manual Fee Term Adjustment.
+                $touchedStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE enrolment_id = :eid AND status = 'Verified'");
                 $touchedStmt->execute([':eid' => $eid]);
                 $touchedCount = (int)$touchedStmt->fetchColumn();
 
                 if ($touchedCount > 0) {
-                    $termNote = ' Plan/starting term updated, but existing fee instalments were left as-is because some have already been paid or reviewed -- please check the fees page.';
+                    $termNote = ' Plan/starting term updated, but existing fee instalments were left as-is because at least one has already been verified as paid -- please check the fees page.';
                 } else {
                     $pdo->prepare("DELETE FROM pcm_fee_payments WHERE enrolment_id = :eid")->execute([':eid' => $eid]);
                     pcm_create_fee_rows($pdo, $eid, $studentDbId, $parentId, $newPlan, null, $newStartTerm);
