@@ -235,6 +235,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
     }
 }
 
+// ---------------- ADD A ONE-OFF ADDITIONAL CHARGE FOR ONE STUDENT ----------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_individual_charge') {
+    try {
+        if (!is_admin_role()) throw new Exception("Only admin can add charges.");
+        pcm_ensure_class_charge_schema($pdo);
+
+        $studentDbId = (int)($_POST['student_id'] ?? 0);
+        $title = trim((string)($_POST['charge_title'] ?? ''));
+        $amount = (float)($_POST['charge_amount'] ?? 0);
+        $dueDate = trim((string)($_POST['charge_due_date'] ?? ''));
+
+        if ($studentDbId <= 0) throw new Exception("Invalid student.");
+        if ($title === '') throw new Exception("Charge name is required.");
+        if ($amount <= 0) throw new Exception("Amount must be greater than zero.");
+
+        $enrolStmt = $pdo->prepare("SELECT id, parent_id FROM pcm_enrolments WHERE student_id = :sid LIMIT 1");
+        $enrolStmt->execute([':sid' => $studentDbId]);
+        $enrol = $enrolStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$enrol) throw new Exception("This student has no enrolment record yet.");
+
+        $ins = $pdo->prepare("
+            INSERT INTO pcm_fee_payments
+                (enrolment_id, class_charge_id, student_id, parent_id, plan_type, instalment_label, due_amount, paid_amount, due_date, status)
+            VALUES
+                (:eid, NULL, :sid, :pid, 'Additional', :label, :due, 0, :due_date, 'Unpaid')
+        ");
+        $ins->execute([
+            ':eid'  => (int)$enrol['id'],
+            ':sid'  => $studentDbId,
+            ':pid'  => (int)$enrol['parent_id'],
+            ':label' => $title,
+            ':due'  => $amount,
+            ':due_date' => $dueDate !== '' ? $dueDate : null,
+        ]);
+
+        $message = "Additional charge added.";
+        $success = true;
+        $reload = true;
+    } catch (Throwable $e) {
+        $message = "Error: " . $e->getMessage();
+        $success = false;
+        $reload = false;
+    }
+}
+
+// ---------------- DELETE A ONE-OFF ADDITIONAL CHARGE ----------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_individual_charge') {
+    try {
+        if (!is_admin_role()) throw new Exception("Only admin can delete charges.");
+
+        $pid = (int)($_POST['payment_id'] ?? 0);
+        if ($pid <= 0) throw new Exception("Invalid charge.");
+
+        $rowStmt = $pdo->prepare("SELECT id, plan_type, status FROM pcm_fee_payments WHERE id = :id LIMIT 1");
+        $rowStmt->execute([':id' => $pid]);
+        $row = $rowStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) throw new Exception("Charge not found.");
+        if ((string)$row['plan_type'] !== 'Additional') throw new Exception("Only additional charges can be deleted here.");
+        if ((string)$row['status'] === 'Verified') throw new Exception("A verified (paid) charge cannot be deleted.");
+
+        $pdo->prepare("DELETE FROM pcm_fee_payments WHERE id = :id")->execute([':id' => $pid]);
+
+        $message = "Additional charge deleted.";
+        $success = true;
+        $reload = true;
+    } catch (Throwable $e) {
+        $message = "Error: " . $e->getMessage();
+        $success = false;
+        $reload = false;
+    }
+}
+
 // ---------------- EDIT A FEE ROW (due/paid/ref/status) ----------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_payment_row') {
     try {
@@ -1108,9 +1180,21 @@ $isAdminTier = is_admin_role();
                                                                                 <i class="fas fa-envelope"></i>
                                                                             </button>
                                                                         <?php endif; ?>
+                                                                        <?php if ($isAdminTier && $aStatus !== 'Verified'): ?>
+                                                                            <button type="button" class="btn btn-outline-danger js-delete-charge-btn" title="Delete charge"
+                                                                                    data-id="<?= $aId ?>" data-child="<?= h((string)$info['student_name']) ?>" data-label="<?= h((string)$ar['instalment_label']) ?>">
+                                                                                <i class="fas fa-trash-alt"></i>
+                                                                            </button>
+                                                                        <?php endif; ?>
                                                                     </div>
                                                                 </div>
                                                             <?php endforeach; endif; ?>
+                                                            <?php if ($isAdminTier): ?>
+                                                                <button type="button" class="btn btn-outline-primary btn-sm btn-block js-add-charge-btn"
+                                                                        data-student-id="<?= (int)$sid ?>" data-child="<?= h((string)$info['student_name']) ?>">
+                                                                    <i class="fas fa-plus mr-1"></i>Add Charge
+                                                                </button>
+                                                            <?php endif; ?>
                                                         </td>
                                                     </tr>
                                                 <?php endforeach; ?>
@@ -1269,6 +1353,56 @@ $isAdminTier = is_admin_role();
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-danger">Reject</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Shared modal: Delete additional charge -->
+<div class="modal fade" id="deleteChargeModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="POST">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="delete_individual_charge">
+                <input type="hidden" name="payment_id" id="deleteChargeId" value="">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title">Delete Additional Charge</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <p>Delete <strong id="deleteChargeLabel"></strong> for <strong id="deleteChargeChild"></strong>? This cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger"><i class="fas fa-trash-alt mr-1"></i>Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Shared modal: Add individual charge -->
+<div class="modal fade" id="addChargeModal" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <form method="POST">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="add_individual_charge">
+                <input type="hidden" name="student_id" id="addChargeStudentId" value="">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">Add Charge for <span id="addChargeChild"></span></h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group"><label>Charge Name</label><input type="text" name="charge_title" class="form-control" maxlength="120" placeholder="e.g. Excursion Fee" required></div>
+                    <div class="form-group"><label>Amount</label><input type="number" step="0.01" min="0.01" name="charge_amount" class="form-control" required></div>
+                    <div class="form-group mb-0"><label>Due Date (optional)</label><input type="date" name="charge_due_date" class="form-control"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-plus mr-1"></i>Add Charge</button>
                 </div>
             </form>
         </div>
@@ -1540,6 +1674,23 @@ document.addEventListener('DOMContentLoaded', function () {
         if (emailBtn) {
             document.getElementById('emailPaymentId').value = emailBtn.dataset.id;
             jQuery('#emailPaymentModal').modal('show');
+            return;
+        }
+
+        const deleteChargeBtn = e.target.closest('.js-delete-charge-btn');
+        if (deleteChargeBtn) {
+            document.getElementById('deleteChargeId').value = deleteChargeBtn.dataset.id;
+            document.getElementById('deleteChargeChild').textContent = deleteChargeBtn.dataset.child;
+            document.getElementById('deleteChargeLabel').textContent = deleteChargeBtn.dataset.label;
+            jQuery('#deleteChargeModal').modal('show');
+            return;
+        }
+
+        const addChargeBtn = e.target.closest('.js-add-charge-btn');
+        if (addChargeBtn) {
+            document.getElementById('addChargeStudentId').value = addChargeBtn.dataset.studentId;
+            document.getElementById('addChargeChild').textContent = addChargeBtn.dataset.child;
+            jQuery('#addChargeModal').modal('show');
             return;
         }
 
