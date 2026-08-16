@@ -138,6 +138,7 @@ foreach ($students as $student) {
                         <th>#</th>
                         <th>Student ID</th>
                         <th>Child</th>
+                        <th>Parent ID</th>
                         <th>Parent</th>
                         <th>Parent Email</th>
                         <th>Parent Phone</th>
@@ -164,6 +165,7 @@ foreach ($students as $student) {
                         <td><?= $i + 1 ?></td>
                         <td><code><?= h((string)($kid['student_id'] ?? '')) ?></code></td>
                         <td class="child-name"><?= h((string)($kid['student_name'] ?? '')) ?></td>
+                        <td><?= $pid ?></td>
                         <td><?= h((string)($parent['full_name'] ?? 'Unnamed parent')) ?></td>
                         <td><?= h((string)($parent['email'] ?? '')) ?></td>
                         <td><?= h((string)($parent['phone'] ?? '')) ?></td>
@@ -206,15 +208,21 @@ $(function(){
         order: [[3, 'asc'], [2, 'asc']],
         columnDefs: [
             { orderable: false, targets: 0 },
-            { visible: false, targets: [3, 4, 5, 6] }
+            { visible: false, targets: [3, 4, 5, 6, 7] }
         ],
         rowGroup: {
+            // Group by the parent's actual account ID, not their name --
+            // several different parents can share the same common name
+            // (e.g. multiple "Sonam Tobgay" accounts), and grouping by
+            // name text merged those distinct families into one row,
+            // hiding all but one parent's contact details.
             dataSrc: 3,
             startRender: function(rows, group) {
                 var d = rows.data()[0];
-                var email = d[4] || '';
-                var phone = d[5] || '';
-                var pStatus = d[6] || 'Active';
+                var parentName = d[4] || 'Unnamed parent';
+                var email = d[5] || '';
+                var phone = d[6] || '';
+                var pStatus = d[7] || 'Active';
                 var badgeClass = pStatus.toLowerCase() === 'active' ? 'success' : 'secondary';
                 var count = rows.count();
 
@@ -222,7 +230,7 @@ $(function(){
                 var $td = $('<td colspan="8"/>').appendTo($tr);
                 var $wrap = $('<div class="d-flex flex-wrap align-items-center justify-content-between"/>').appendTo($td);
                 var $left = $('<div/>').appendTo($wrap);
-                $('<strong class="parent-name"/>').text(group).appendTo($left);
+                $('<strong class="parent-name"/>').text(parentName).appendTo($left);
                 if (email) {
                     $left.append(' ');
                     $('<i class="fas fa-envelope text-muted small ml-2 mr-1"></i>').appendTo($left);
@@ -243,7 +251,7 @@ $(function(){
     $('.filter-btn').on('click', function(){
         $('.filter-btn').removeClass('active'); $(this).addClass('active');
         var status = ($(this).data('filter') || 'all').toString();
-        dt.column(11).search(status === 'all' ? '' : '^' + status + '$', true, false);
+        dt.column(12).search(status === 'all' ? '' : '^' + status + '$', true, false);
         dt.draw();
     });
 });
