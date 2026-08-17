@@ -783,15 +783,12 @@ $isAdminTier = is_admin_role();
                                 showConfirmButton: true,
                                 timer: ok ? 1400 : 6000
                             }).then(()=> {
-                                if (ok && reload) {
-                                    const search = document.getElementById('updatePaymentSearch');
-                                    const classFilter = document.getElementById('updateClassFilter');
-                                    const params = new URLSearchParams();
-                                    if (search && search.value.trim() !== '') params.set('q', search.value.trim());
-                                    if (classFilter && classFilter.value !== 'all') params.set('class', classFilter.value);
-                                    const qs = params.toString();
-                                    window.location.href = 'update-payments.php' + (qs ? '?' + qs : '');
-                                }
+                                // The search box on THIS page is whatever the server
+                                // rendered (empty, since this came from a plain form
+                                // POST, not a GET carrying ?q=) -- the actual restore
+                                // of what was typed before the action happens on the
+                                // next load, from sessionStorage (see applyPaymentRowFilters).
+                                if (ok && reload) window.location.href = 'update-payments.php';
                             });
                         }
                     });
@@ -1551,6 +1548,15 @@ document.addEventListener('DOMContentLoaded', function () {
             row.style.display = classMatches && searchMatches ? '' : 'none';
         });
         refreshPaymentResultSummary();
+        // Persist so the search/filter survives an action (edit, verify,
+        // delete, etc.) reloading this page via a real form POST -- the
+        // reloaded page has no way to know what was typed before the
+        // submit, so sessionStorage is the only thing that carries it
+        // across that boundary.
+        try {
+            sessionStorage.setItem('updatePaymentsSearchQ', paymentSearch ? paymentSearch.value : '');
+            sessionStorage.setItem('updatePaymentsSearchClass', selectedClass);
+        } catch (e) { /* storage unavailable (private mode, etc.) -- fine to skip */ }
     }
 
     if (classFilter) classFilter.addEventListener('change', applyPaymentRowFilters);
@@ -1569,22 +1575,32 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
     sortPaymentRows();
+
+    // Restore search/class filter before the first filter pass runs --
+    // ?q=/?class= (deep-link, e.g. from Fees Overview's "click status to
+    // update" links) take priority when present, otherwise fall back to
+    // what was last typed, remembered via sessionStorage since a real
+    // form POST reload (edit, verify, delete, etc.) can't carry it any
+    // other way. This MUST run before applyPaymentRowFilters() below --
+    // that call itself re-saves whatever is currently in the search box
+    // to sessionStorage, which would silently wipe out the saved value
+    // if it ran first against the still-empty, freshly-loaded inputs.
+    const deepLinkParams = new URLSearchParams(window.location.search);
+    let restoreQuery = deepLinkParams.get('q');
+    let restoreClass = deepLinkParams.get('class');
+    const shouldScrollToMatch = !!restoreQuery;
+    if (restoreQuery === null && restoreClass === null) {
+        try {
+            restoreQuery = sessionStorage.getItem('updatePaymentsSearchQ');
+            restoreClass = sessionStorage.getItem('updatePaymentsSearchClass');
+        } catch (e) { /* storage unavailable -- fine to skip */ }
+    }
+    if (restoreClass && restoreClass !== 'all' && classFilter) classFilter.value = restoreClass;
+    if (restoreQuery && paymentSearch) paymentSearch.value = restoreQuery;
+
     applyPaymentRowFilters();
 
-    // Deep-link support: ?q=<student code or name> pre-fills the search
-    // box (e.g. from Fees Overview's "click status to update" links, or
-    // from returning here after an edit/update action) and scrolls
-    // straight to the matching row. ?class=<id> restores the class filter.
-    const deepLinkParams = new URLSearchParams(window.location.search);
-    const deepLinkQuery = deepLinkParams.get('q');
-    const deepLinkClass = deepLinkParams.get('class');
-    if (deepLinkClass && classFilter) {
-        classFilter.value = deepLinkClass;
-        applyPaymentRowFilters();
-    }
-    if (deepLinkQuery && paymentSearch) {
-        paymentSearch.value = deepLinkQuery;
-        applyPaymentRowFilters();
+    if (restoreQuery && shouldScrollToMatch) {
         const firstMatch = Array.from(document.querySelectorAll('.update-student-row'))
             .find(row => row.style.display !== 'none');
         if (firstMatch) {
