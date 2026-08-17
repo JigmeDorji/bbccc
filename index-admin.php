@@ -164,6 +164,24 @@ try {
             $stmtKids->execute([':pid' => $parentDbId]);
             $myChildren = $stmtKids->fetchAll(PDO::FETCH_ASSOC);
 
+            // The enrolment's fee_amount/payment_amount above is a fixed
+            // baseline set when the plan was chosen -- it doesn't move
+            // when admin later adds/removes individual fee records (e.g.
+            // an ad-hoc additional charge). Overwrite it with the live
+            // sum of that child's actual fee rows where any exist, so
+            // parents see the real current total, not a stale plan price.
+            if (bbcc_table_exists($pdo, 'pcm_fee_payments') && !empty($myChildren)) {
+                $stmtChildTotals = $pdo->prepare("SELECT SUM(due_amount) FROM pcm_fee_payments WHERE student_id = :sid");
+                foreach ($myChildren as &$childRow) {
+                    $stmtChildTotals->execute([':sid' => (int)$childRow['id']]);
+                    $liveTotal = $stmtChildTotals->fetchColumn();
+                    if ($liveTotal !== null && $liveTotal !== false) {
+                        $childRow['payment_amount'] = number_format((float)$liveTotal, 2, '.', '');
+                    }
+                }
+                unset($childRow);
+            }
+
             if (bbcc_table_exists($pdo, 'pcm_fee_payments')) {
                 $parentPlansUsed = [];
                 $stmtParentFees = $pdo->prepare("

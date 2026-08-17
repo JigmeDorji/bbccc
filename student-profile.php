@@ -295,7 +295,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                 <?php else: ?>
                     <div class="dl-row"><div class="dl-label">Fee Plan</div><div class="dl-value"><?= h($curPlan) ?></div></div>
                     <div class="dl-row"><div class="dl-label">Starting Term</div><div class="dl-value">Term <?= (int)$curStartTerm ?></div></div>
-                    <div class="dl-row"><div class="dl-label">Fee Amount</div><div class="dl-value">$<?= number_format((float)($student['fee_amount'] ?? 0), 2) ?></div></div>
+                    <div class="dl-row"><div class="dl-label">Fee Amount</div><div class="dl-value">$<?= number_format($totalDue, 2) ?></div></div>
                     <div class="dl-row"><div class="dl-label">Campus</div><div class="dl-value"><?= h(pcm_campus_selection_label((string)($student['campus_preference'] ?? ''))) ?></div></div>
                     <div class="dl-row"><div class="dl-label">Class</div><div class="dl-value"><?= h((string)($student['class_name'] ?? 'Not assigned')) ?></div></div>
                     <div class="dl-row"><div class="dl-label">Payment Ref</div><div class="dl-value"><?= h((string)($student['payment_ref'] ?? '—')) ?></div></div>
