@@ -1377,10 +1377,11 @@ $isAdminTier = is_admin_role();
 <div class="modal fade" id="deleteChargeModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog" role="document">
         <div class="modal-content">
-            <form method="POST">
+            <form method="POST" id="deleteChargeForm" data-self-managed-submit>
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="delete_individual_charge">
                 <input type="hidden" name="payment_id" id="deleteChargeId" value="">
+                <input type="hidden" id="deleteChargeIsVerified" value="0">
                 <div class="modal-header bg-danger text-white">
                     <h5 class="modal-title">Delete Fee Record</h5>
                     <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
@@ -1479,11 +1480,16 @@ document.addEventListener('DOMContentLoaded', function () {
     const visiblePaymentCount = document.getElementById('visiblePaymentCount');
     const paymentNoResults = document.getElementById('paymentNoResults');
 
-    const deleteChargeConfirmText = document.getElementById('deleteChargeConfirmText');
-    if (deleteChargeConfirmText) {
-        deleteChargeConfirmText.addEventListener('input', function () {
-            const warningVisible = !document.getElementById('deleteChargeVerifiedWarning').classList.contains('d-none');
-            document.getElementById('deleteChargeSubmitBtn').disabled = warningVisible && this.value.trim().toUpperCase() !== 'DELETE';
+    const deleteChargeForm = document.getElementById('deleteChargeForm');
+    if (deleteChargeForm) {
+        deleteChargeForm.addEventListener('submit', function (e) {
+            const isVerified = document.getElementById('deleteChargeIsVerified').value === '1';
+            if (!isVerified) return;
+            const typed = (document.getElementById('deleteChargeConfirmText').value || '').trim().toUpperCase();
+            if (typed !== 'DELETE') {
+                e.preventDefault();
+                Swal.fire({ icon: 'warning', title: 'Type DELETE to confirm', text: 'This record is Verified (paid) — type DELETE in the box to confirm removing it.' });
+            }
         });
     }
 
@@ -1717,12 +1723,9 @@ document.addEventListener('DOMContentLoaded', function () {
             document.getElementById('deleteChargeChild').textContent = deleteChargeBtn.dataset.child;
             document.getElementById('deleteChargeLabel').textContent = deleteChargeBtn.dataset.label;
             const isVerified = deleteChargeBtn.dataset.status === 'Verified';
-            const warningEl = document.getElementById('deleteChargeVerifiedWarning');
-            const confirmEl = document.getElementById('deleteChargeConfirmText');
-            const submitBtn = document.getElementById('deleteChargeSubmitBtn');
-            confirmEl.value = '';
-            warningEl.classList.toggle('d-none', !isVerified);
-            submitBtn.disabled = isVerified;
+            document.getElementById('deleteChargeVerifiedWarning').classList.toggle('d-none', !isVerified);
+            document.getElementById('deleteChargeConfirmText').value = '';
+            document.getElementById('deleteChargeIsVerified').value = isVerified ? '1' : '0';
             jQuery('#deleteChargeModal').modal('show');
             return;
         }
