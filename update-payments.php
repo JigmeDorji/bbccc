@@ -305,6 +305,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
     }
 }
 
+// ---------------- GENERATE STANDARD FEE SCHEDULE FOR A CHILD WITH NO FEE RECORDS ----------------
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'generate_fee_schedule') {
+    try {
+        if (!is_admin_role()) throw new Exception("Only admin can generate fee schedules.");
+
+        $studentDbId = (int)($_POST['student_id'] ?? 0);
+        if ($studentDbId <= 0) throw new Exception("Invalid student.");
+
+        $enrolStmt = $pdo->prepare("SELECT id, parent_id, fee_plan, start_term, student_id FROM pcm_enrolments WHERE student_id = :sid LIMIT 1");
+        $enrolStmt->execute([':sid' => $studentDbId]);
+        $enrol = $enrolStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$enrol) throw new Exception("This student has no enrolment record yet.");
+
+        $existingStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE student_id = :sid");
+        $existingStmt->execute([':sid' => $studentDbId]);
+        if ((int)$existingStmt->fetchColumn() > 0) {
+            throw new Exception("This student already has fee records -- use Change Plan or Add Charge instead of generating a new schedule.");
+        }
+
+        $startTerm = pcm_normalize_start_term($enrol['start_term'] ?? 1);
+        pcm_create_fee_rows($pdo, (int)$enrol['id'], $studentDbId, (int)$enrol['parent_id'], (string)$enrol['fee_plan'], null, $startTerm);
+
+        // pcm_create_fee_rows uses INSERT IGNORE, which silently swallows a
+        // row-level failure instead of throwing -- verify rows actually got
+        // created before reporting success.
+        $verifyStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE student_id = :sid");
+        $verifyStmt->execute([':sid' => $studentDbId]);
+        if ((int)$verifyStmt->fetchColumn() === 0) {
+            throw new Exception("Fee schedule generation did not create any rows. Please check for a data conflict.");
+        }
+
+        pcm_log_enrolment_event($pdo, $studentDbId, (int)$enrol['id'], 'admin_fee_schedule_generated', (string)($_SESSION['username'] ?? 'admin'), "Fee schedule generated for {$enrol['fee_plan']} / Term {$startTerm}.");
+
+        $message = "Fee schedule created.";
+        $success = true;
+        $reload = true;
+    } catch (Throwable $e) {
+        $message = "Error: " . $e->getMessage();
+        $success = false;
+        $reload = false;
+    }
+}
+
 // ---------------- EDIT A FEE ROW (due/paid/ref/status) ----------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_payment_row') {
     try {
@@ -613,6 +656,28 @@ $stmtPayments = $pdo->prepare("
 $stmtPayments->execute();
 $payments = $stmtPayments->fetchAll(PDO::FETCH_ASSOC);
 
+// ---------------- Enrolled children with NO fee record at all ----------------
+// Since the table above is built FROM pcm_fee_payments, a child who is
+// enrolled but has zero fee rows (e.g. after deleting their only record,
+// or a data gap) never appears anywhere in it -- surface them separately
+// with a one-click way to generate their standard fee schedule.
+$missingScheduleStmt = $pdo->query("
+    SELECT
+        s.id AS student_db_id, s.student_id AS student_code, s.student_name,
+        e.id AS enrolment_id, e.fee_plan, e.start_term,
+        p.full_name AS parent_name
+    FROM students s
+    INNER JOIN pcm_enrolments e ON e.student_id = s.id
+    LEFT JOIN parents p ON p.id = e.parent_id
+    LEFT JOIN pcm_fee_payments f ON f.student_id = s.id
+    WHERE s.approval_status = 'Approved'
+      AND LOWER(COALESCE(s.status, 'active')) <> 'past'
+      AND f.id IS NULL
+    GROUP BY s.id
+    ORDER BY s.student_name ASC
+");
+$missingScheduleChildren = $missingScheduleStmt->fetchAll(PDO::FETCH_ASSOC);
+
 $updateCounts = ['Pending' => 0, 'Verified' => 0, 'Rejected' => 0, 'Unpaid' => 0];
 foreach ($payments as $row) {
     $k = (string)($row['status'] ?? '');
@@ -914,6 +979,44 @@ $isAdminTier = is_admin_role();
                                         </tr>
                                     <?php endforeach; ?>
                                 <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php if ($isAdminTier && !empty($missingScheduleChildren)): ?>
+                <!-- Enrolled children with no fee schedule at all -->
+                <div class="card shadow mb-4 border-left-warning">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-warning"><i class="fas fa-exclamation-triangle mr-1"></i>Missing Fee Schedule</h6>
+                        <span class="mini">Enrolled children with zero fee records &mdash; they won't appear in the table below until generated</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered mb-0">
+                                <thead class="thead-light">
+                                    <tr><th>Student ID</th><th>Child</th><th>Parent</th><th>Plan</th><th>Start Term</th><th></th></tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($missingScheduleChildren as $mc): ?>
+                                        <tr>
+                                            <td><code><?= h((string)$mc['student_code']) ?></code></td>
+                                            <td><?= h((string)$mc['student_name']) ?></td>
+                                            <td><?= h((string)($mc['parent_name'] ?? '-')) ?></td>
+                                            <td><?= h((string)$mc['fee_plan']) ?></td>
+                                            <td>Term <?= (int)($mc['start_term'] ?? 1) ?></td>
+                                            <td class="text-right">
+                                                <form method="POST" class="d-inline" data-confirm="Generate the standard fee schedule for <?= h((string)$mc['student_name']) ?> (<?= h((string)$mc['fee_plan']) ?>, starting Term <?= (int)($mc['start_term'] ?? 1) ?>)?">
+                                                    <?= csrf_field() ?>
+                                                    <input type="hidden" name="action" value="generate_fee_schedule">
+                                                    <input type="hidden" name="student_id" value="<?= (int)$mc['student_db_id'] ?>">
+                                                    <button type="submit" class="btn btn-sm btn-warning"><i class="fas fa-plus mr-1"></i>Generate Fee Schedule</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
                                 </tbody>
                             </table>
                         </div>
