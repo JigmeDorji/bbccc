@@ -584,27 +584,32 @@ function pcm_admin_update_child_details(PDO $pdo, int $studentDbId, array $post,
                 if (!pcm_plan_allowed_for_start_term($newPlan, $newStartTerm)) {
                     throw new Exception("The {$newPlan} plan is not available for Term {$newStartTerm}. Choose a different combination.");
                 }
-                $newAmount = pcm_plan_total_for_start_term($newPlan, $newStartTerm);
-
-                $pdo->prepare("UPDATE pcm_enrolments SET start_term = :st, fee_plan = :plan, fee_amount = :amt WHERE id = :id")
-                    ->execute([':st' => $newStartTerm, ':plan' => $newPlan, ':amt' => $newAmount, ':id' => $eid]);
 
                 // Only a genuinely confirmed (Verified) payment should block
-                // regeneration -- a Pending or Rejected row is an unconfirmed
+                // this -- a Pending or Rejected row is an unconfirmed
                 // submission against what may have been the wrong term/plan
                 // in the first place, matching the same rule already used by
-                // feesManagement.php's Manual Fee Term Adjustment.
+                // feesManagement.php's Manual Fee Term Adjustment. Check
+                // BEFORE writing anything: changing pcm_enrolments.fee_plan
+                // while leaving the old fee rows in place (because they
+                // couldn't be regenerated) previously left the enrolment and
+                // its fee schedule disagreeing with each other -- the plan
+                // "successfully" changed but the payments table, which
+                // groups by each row's own plan_type, looked untouched.
                 $touchedStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE enrolment_id = :eid AND status = 'Verified'");
                 $touchedStmt->execute([':eid' => $eid]);
                 $touchedCount = (int)$touchedStmt->fetchColumn();
-
                 if ($touchedCount > 0) {
-                    $termNote = ' Plan/starting term updated, but existing fee instalments were left as-is because at least one has already been verified as paid -- please check the fees page.';
-                } else {
-                    $pdo->prepare("DELETE FROM pcm_fee_payments WHERE enrolment_id = :eid")->execute([':eid' => $eid]);
-                    pcm_create_fee_rows($pdo, $eid, $studentDbId, $parentId, $newPlan, null, $newStartTerm);
-                    $termNote = ' Fee instalment schedule was regenerated.';
+                    throw new Exception("Cannot change the plan/starting term for {$student['student_name']} -- at least one fee instalment has already been verified as paid. Delete or adjust the affected fee record(s) on Update Payments first if you need to proceed.");
                 }
+
+                $newAmount = pcm_plan_total_for_start_term($newPlan, $newStartTerm);
+                $pdo->prepare("UPDATE pcm_enrolments SET start_term = :st, fee_plan = :plan, fee_amount = :amt WHERE id = :id")
+                    ->execute([':st' => $newStartTerm, ':plan' => $newPlan, ':amt' => $newAmount, ':id' => $eid]);
+
+                $pdo->prepare("DELETE FROM pcm_fee_payments WHERE enrolment_id = :eid")->execute([':eid' => $eid]);
+                pcm_create_fee_rows($pdo, $eid, $studentDbId, $parentId, $newPlan, null, $newStartTerm);
+                $termNote = ' Fee instalment schedule was regenerated.';
 
                 pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_plan_term_updated', $reviewer, "Plan/term changed to {$newPlan} / Term {$newStartTerm}.");
             }
