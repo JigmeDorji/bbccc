@@ -782,7 +782,17 @@ $isAdminTier = is_admin_role();
                                 title: msg,
                                 showConfirmButton: true,
                                 timer: ok ? 1400 : 6000
-                            }).then(()=> { if (ok && reload) window.location.href = 'update-payments.php'; });
+                            }).then(()=> {
+                                if (ok && reload) {
+                                    const search = document.getElementById('updatePaymentSearch');
+                                    const classFilter = document.getElementById('updateClassFilter');
+                                    const params = new URLSearchParams();
+                                    if (search && search.value.trim() !== '') params.set('q', search.value.trim());
+                                    if (classFilter && classFilter.value !== 'all') params.set('class', classFilter.value);
+                                    const qs = params.toString();
+                                    window.location.href = 'update-payments.php' + (qs ? '?' + qs : '');
+                                }
+                            });
                         }
                     });
                 </script>
@@ -1556,9 +1566,16 @@ document.addEventListener('DOMContentLoaded', function () {
     applyPaymentRowFilters();
 
     // Deep-link support: ?q=<student code or name> pre-fills the search
-    // box (e.g. from Fees Overview's "click status to update" links) and
-    // scrolls straight to the matching row.
-    const deepLinkQuery = new URLSearchParams(window.location.search).get('q');
+    // box (e.g. from Fees Overview's "click status to update" links, or
+    // from returning here after an edit/update action) and scrolls
+    // straight to the matching row. ?class=<id> restores the class filter.
+    const deepLinkParams = new URLSearchParams(window.location.search);
+    const deepLinkQuery = deepLinkParams.get('q');
+    const deepLinkClass = deepLinkParams.get('class');
+    if (deepLinkClass && classFilter) {
+        classFilter.value = deepLinkClass;
+        applyPaymentRowFilters();
+    }
     if (deepLinkQuery && paymentSearch) {
         paymentSearch.value = deepLinkQuery;
         applyPaymentRowFilters();
