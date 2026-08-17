@@ -1473,7 +1473,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (deleteChargeConfirmText) {
         deleteChargeConfirmText.addEventListener('input', function () {
             const warningVisible = !document.getElementById('deleteChargeVerifiedWarning').classList.contains('d-none');
-            document.getElementById('deleteChargeSubmitBtn').disabled = warningVisible && this.value.trim() !== 'DELETE';
+            document.getElementById('deleteChargeSubmitBtn').disabled = warningVisible && this.value.trim().toUpperCase() !== 'DELETE';
         });
     }
 
