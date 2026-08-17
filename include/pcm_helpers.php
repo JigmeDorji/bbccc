@@ -609,6 +609,18 @@ function pcm_admin_update_child_details(PDO $pdo, int $studentDbId, array $post,
 
                 $pdo->prepare("DELETE FROM pcm_fee_payments WHERE enrolment_id = :eid")->execute([':eid' => $eid]);
                 pcm_create_fee_rows($pdo, $eid, $studentDbId, $parentId, $newPlan, null, $newStartTerm);
+
+                // Verify the regenerate actually produced rows under the new
+                // plan before claiming success -- pcm_create_fee_rows uses
+                // INSERT IGNORE (silently skips on a key collision instead of
+                // throwing), so a silent failure there would otherwise still
+                // report "regenerated" while the table shows nothing changed.
+                $verifyStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE enrolment_id = :eid AND plan_type = :plan");
+                $verifyStmt->execute([':eid' => $eid, ':plan' => $newPlan]);
+                if ((int)$verifyStmt->fetchColumn() === 0) {
+                    throw new Exception("Plan/term change did not take effect -- no fee rows were created for the new plan. Please try again or check for a data conflict.");
+                }
+
                 $termNote = ' Fee instalment schedule was regenerated.';
 
                 pcm_log_enrolment_event($pdo, $studentDbId, $eid, 'admin_plan_term_updated', $reviewer, "Plan/term changed to {$newPlan} / Term {$newStartTerm}.");
