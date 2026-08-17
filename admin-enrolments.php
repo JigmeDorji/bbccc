@@ -504,7 +504,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
                         'children-enrollment'
                     );
                 }
-                $flash = 'Class assigned for <strong>' . h((string)$en['student_name']) . '</strong>.';
+
+                // Assigning a class is itself an admin decision to enroll the
+                // child -- auto-approve a still-Pending enrolment here so it
+                // doesn't sit stuck on "Pending" even though the child is
+                // already in a class and generating fee rows.
+                $autoApprovedNote = '';
+                if (strtolower(trim((string)($en['status'] ?? ''))) === 'pending') {
+                    $decision = pcm_process_enrolment_decision($pdo, (int)$en['student_id'], 'approve', $currentActor, 'Auto-approved on class assignment.');
+                    pcm_log_enrolment_event($pdo, (int)$en['student_id'], $eid, 'enrolment_approved', $currentActor, 'Auto-approved on class assignment.');
+                    if (!empty($decision['parent_email'])) {
+                        pcm_notify_parent_enrolment_confirmed(
+                            (string)$decision['parent_email'],
+                            (string)$decision['parent_name'],
+                            (string)$decision['student_name']
+                        );
+                        bbcc_notify_username(
+                            $pdo,
+                            (string)$decision['parent_email'],
+                            'Enrollment Approved for ' . (string)$decision['student_name'],
+                            'Your child enrollment has been approved. Thank you for completing the enrollment process.',
+                            'children-enrollment'
+                        );
+                    }
+                    $autoApprovedNote = ' Enrolment also approved.';
+                }
+
+                $flash = 'Class assigned for <strong>' . h((string)$en['student_name']) . '</strong>.' . $autoApprovedNote;
                 $ok = true;
             }
         }

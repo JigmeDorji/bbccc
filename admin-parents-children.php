@@ -4,6 +4,8 @@ require_once "include/config.php";
 require_once "include/auth.php";
 require_once "include/role_helpers.php";
 require_once "include/pcm_helpers.php";
+require_once "include/csrf.php";
+require_once "include/notifications.php";
 require_login();
 
 if (!is_admin_role()) {
@@ -12,6 +14,48 @@ if (!is_admin_role()) {
 }
 
 $pdo = pcm_pdo();
+$currentActor = (string)($_SESSION['username'] ?? 'admin');
+$flash = '';
+$flashOk = false;
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'quick_approve_enrolment') {
+    verify_csrf();
+    $studentDbId = (int)($_POST['student_id'] ?? 0);
+    if ($studentDbId <= 0) {
+        $flash = 'Invalid student.';
+    } else {
+        try {
+            $statusStmt = $pdo->prepare("SELECT status FROM pcm_enrolments WHERE student_id = :sid LIMIT 1");
+            $statusStmt->execute([':sid' => $studentDbId]);
+            $currentStatus = (string)($statusStmt->fetchColumn() ?: '');
+            if ($currentStatus !== 'Pending') {
+                $flash = 'This enrolment is no longer Pending (already ' . h($currentStatus ?: 'unset') . ').';
+            } else {
+                $result = pcm_process_enrolment_decision($pdo, $studentDbId, 'approve', $currentActor, 'Approved from Parents & Children page.');
+                pcm_log_enrolment_event($pdo, $studentDbId, (int)($result['enrolment_id'] ?? 0), 'enrolment_approved', $currentActor, 'Approved from Parents & Children page.');
+                if (!empty($result['parent_email'])) {
+                    pcm_notify_parent_enrolment_confirmed(
+                        (string)$result['parent_email'],
+                        (string)$result['parent_name'],
+                        (string)$result['student_name']
+                    );
+                    bbcc_notify_username(
+                        $pdo,
+                        (string)$result['parent_email'],
+                        'Enrollment Approved for ' . (string)$result['student_name'],
+                        'Your child enrollment has been approved. Thank you for completing the enrollment process.',
+                        'children-enrollment'
+                    );
+                }
+                $flash = 'Enrolment approved for <strong>' . h((string)$result['student_name']) . '</strong>.';
+                $flashOk = true;
+            }
+        } catch (Throwable $e) {
+            $flash = 'Error: ' . $e->getMessage();
+        }
+    }
+}
+
 $studentParentExpr = pcm_students_parent_expr($pdo, 's');
 $latestClassJoin = pcm_latest_class_assignment_join('s.id', 'ca', 'c');
 
@@ -87,6 +131,19 @@ foreach ($students as $student) {
 <div id="content-wrapper" class="d-flex flex-column">
 <div id="content">
 <?php include 'include/admin-header.php'; ?>
+
+<?php if ($flash !== ''): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    Swal.fire({
+        icon: <?= $flashOk ? "'success'" : "'error'" ?>,
+        title: <?= json_encode(strip_tags($flash)) ?>,
+        showConfirmButton: true,
+        timer: <?= $flashOk ? 1600 : 6000 ?>
+    });
+});
+</script>
+<?php endif; ?>
 
 <div class="container-fluid py-3">
     <div class="d-sm-flex align-items-center justify-content-between mb-3">
@@ -174,6 +231,14 @@ foreach ($students as $student) {
                         <td>
                             <?php if ($enrolment !== ''): ?>
                                 <span class="badge badge-<?= pcm_badge($enrolment) ?>"><?= h($enrolment) ?></span>
+                                <?php if ($enrolment === 'Pending'): ?>
+                                    <form method="POST" class="d-inline" data-confirm="Approve this enrolment for <?= h((string)($kid['student_name'] ?? 'this child')) ?>?">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="action" value="quick_approve_enrolment">
+                                        <input type="hidden" name="student_id" value="<?= (int)($kid['student_db_id'] ?? 0) ?>">
+                                        <button type="submit" class="btn btn-outline-success btn-sm py-0 px-1 ml-1" title="Approve this enrolment"><i class="fas fa-check"></i></button>
+                                    </form>
+                                <?php endif; ?>
                             <?php else: ?>
                                 <span class="badge badge-warning">Please enroll</span>
                             <?php endif; ?>
