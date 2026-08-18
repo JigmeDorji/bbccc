@@ -37,7 +37,11 @@ try {
 }
 
 // ── Derive display name & initials ──
-$_displayName  = htmlspecialchars(logged_in_username() ?? 'User', ENT_QUOTES, 'UTF-8');
+// $_SESSION['username'] is the login email, not a person's name (see
+// login.php) -- bbcc_current_display_name() looks up the real name
+// from the role-appropriate table (parents/teachers/admin_profiles).
+$_rawDisplayName = isset($hdrPdo) ? bbcc_current_display_name($hdrPdo) : (logged_in_username() ?? 'User');
+$_displayName  = htmlspecialchars($_rawDisplayName, ENT_QUOTES, 'UTF-8');
 $_displayRole  = htmlspecialchars(ucfirst(logged_in_user_role() ?? 'User'), ENT_QUOTES, 'UTF-8');
 $_nameParts    = explode(' ', $_displayName);
 $_initials     = strtoupper(substr($_nameParts[0], 0, 1) . (isset($_nameParts[1]) ? substr($_nameParts[1], 0, 1) : ''));

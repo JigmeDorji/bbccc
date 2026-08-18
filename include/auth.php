@@ -68,6 +68,54 @@ function logged_in_user_role() {
 }
 
 /**
+ * Resolve the logged-in user's actual full name, not their login
+ * identifier -- $_SESSION['username'] is the login email (see
+ * login.php: "Email as Username"), so displaying it directly as a
+ * "name" in the UI shows an email address instead of a person's name.
+ * Looks up the real name from the role-appropriate table using the
+ * same match rules each profile page already uses (parents/teachers
+ * matched by user_id or email; admins by admin_profiles.user_id), and
+ * falls back to the session username only if no name is on file yet.
+ */
+function bbcc_current_display_name(PDO $pdo): string {
+    $sessionUserId = trim((string)($_SESSION['userid'] ?? ''));
+    $sessionUsername = trim((string)($_SESSION['username'] ?? ''));
+    $role = strtolower(trim((string)($_SESSION['role'] ?? '')));
+    $fullName = '';
+
+    try {
+        if ($role === 'parent') {
+            $stmt = $pdo->prepare("
+                SELECT full_name FROM parents
+                WHERE (user_id = :uid AND :uid <> '') OR LOWER(email) = LOWER(:em)
+                ORDER BY (user_id = :uid) DESC, id ASC
+                LIMIT 1
+            ");
+            $stmt->execute([':uid' => $sessionUserId, ':em' => $sessionUsername]);
+            $fullName = (string)($stmt->fetchColumn() ?: '');
+        } elseif ($role === 'teacher') {
+            $stmt = $pdo->prepare("
+                SELECT full_name FROM teachers
+                WHERE (user_id = :uid AND :uid <> '') OR LOWER(email) = LOWER(:em)
+                ORDER BY id ASC
+                LIMIT 1
+            ");
+            $stmt->execute([':uid' => $sessionUserId, ':em' => $sessionUsername]);
+            $fullName = (string)($stmt->fetchColumn() ?: '');
+        } else {
+            $stmt = $pdo->prepare("SELECT full_name FROM admin_profiles WHERE user_id = :uid LIMIT 1");
+            $stmt->execute([':uid' => $sessionUserId]);
+            $fullName = (string)($stmt->fetchColumn() ?: '');
+        }
+    } catch (Throwable $e) {
+        $fullName = '';
+    }
+
+    $fullName = trim($fullName);
+    return $fullName !== '' ? $fullName : $sessionUsername;
+}
+
+/**
  * Redirect if not logged in
  */
 function require_login() {
