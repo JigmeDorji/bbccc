@@ -43,6 +43,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'admin
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'generate_fee_schedule') {
+    verify_csrf();
+    try {
+        $result = pcm_admin_generate_fee_schedule($pdo, (int)($_POST['student_id'] ?? 0), $reviewer);
+        $flash = $result['flash'];
+        $ok = $result['ok'];
+    } catch (Throwable $e) {
+        $flash = 'Error: ' . $e->getMessage();
+        $ok = false;
+    }
+    $_SESSION['student_profile_flash'] = ['message' => $flash, 'ok' => $ok];
+    header('Location: student-profile?id=' . $studentDbId);
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_fee_row') {
     verify_csrf();
     try {
@@ -301,6 +316,17 @@ document.addEventListener('DOMContentLoaded',()=>{
                     <div class="dl-row"><div class="dl-label">Payment Ref</div><div class="dl-value"><?= h((string)($student['payment_ref'] ?? '—')) ?></div></div>
                     <div class="dl-row"><div class="dl-label">Enrolment Status</div><div class="dl-value"><span class="badge badge-<?= pcm_badge((string)$student['enrolment_status']) ?>"><?= h((string)$student['enrolment_status']) ?></span></div></div>
                     <div class="dl-row"><div class="dl-label">Submitted</div><div class="dl-value"><?= !empty($student['enrolment_submitted_at']) ? date('d M Y', strtotime((string)$student['enrolment_submitted_at'])) : '—' ?></div></div>
+                    <?php if (empty($feePayments)): ?>
+                        <div class="alert alert-warning mt-3 mb-0 py-2 px-3">
+                            <div class="small mb-2"><i class="fas fa-exclamation-triangle mr-1"></i>This child has no fee records yet.</div>
+                            <form method="POST" data-confirm="Generate the standard fee schedule for <?= h((string)$student['student_name']) ?> (<?= h($curPlan) ?>, starting Term <?= (int)$curStartTerm ?>)?">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="action" value="generate_fee_schedule">
+                                <input type="hidden" name="student_id" value="<?= (int)$studentDbId ?>">
+                                <button type="submit" class="btn btn-sm btn-warning"><i class="fas fa-plus mr-1"></i>Generate Fee Schedule</button>
+                            </form>
+                        </div>
+                    <?php endif; ?>
                 <?php endif; ?>
             </div>
         </div>

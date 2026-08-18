@@ -309,36 +309,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delet
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'generate_fee_schedule') {
     try {
         if (!is_admin_role()) throw new Exception("Only admin can generate fee schedules.");
-
-        $studentDbId = (int)($_POST['student_id'] ?? 0);
-        if ($studentDbId <= 0) throw new Exception("Invalid student.");
-
-        $enrolStmt = $pdo->prepare("SELECT id, parent_id, fee_plan, start_term, student_id FROM pcm_enrolments WHERE student_id = :sid LIMIT 1");
-        $enrolStmt->execute([':sid' => $studentDbId]);
-        $enrol = $enrolStmt->fetch(PDO::FETCH_ASSOC);
-        if (!$enrol) throw new Exception("This student has no enrolment record yet.");
-
-        $existingStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE student_id = :sid");
-        $existingStmt->execute([':sid' => $studentDbId]);
-        if ((int)$existingStmt->fetchColumn() > 0) {
-            throw new Exception("This student already has fee records -- use Change Plan or Add Charge instead of generating a new schedule.");
-        }
-
-        $startTerm = pcm_normalize_start_term($enrol['start_term'] ?? 1);
-        pcm_create_fee_rows($pdo, (int)$enrol['id'], $studentDbId, (int)$enrol['parent_id'], (string)$enrol['fee_plan'], null, $startTerm);
-
-        // pcm_create_fee_rows uses INSERT IGNORE, which silently swallows a
-        // row-level failure instead of throwing -- verify rows actually got
-        // created before reporting success.
-        $verifyStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE student_id = :sid");
-        $verifyStmt->execute([':sid' => $studentDbId]);
-        if ((int)$verifyStmt->fetchColumn() === 0) {
-            throw new Exception("Fee schedule generation did not create any rows. Please check for a data conflict.");
-        }
-
-        pcm_log_enrolment_event($pdo, $studentDbId, (int)$enrol['id'], 'admin_fee_schedule_generated', (string)($_SESSION['username'] ?? 'admin'), "Fee schedule generated for {$enrol['fee_plan']} / Term {$startTerm}.");
-
-        $message = "Fee schedule created.";
+        $result = pcm_admin_generate_fee_schedule($pdo, (int)($_POST['student_id'] ?? 0), (string)($_SESSION['username'] ?? 'admin'));
+        $message = $result['flash'];
         $success = true;
         $reload = true;
     } catch (Throwable $e) {
@@ -670,8 +642,7 @@ $missingScheduleStmt = $pdo->query("
     INNER JOIN pcm_enrolments e ON e.student_id = s.id
     LEFT JOIN parents p ON p.id = e.parent_id
     LEFT JOIN pcm_fee_payments f ON f.student_id = s.id
-    WHERE s.approval_status = 'Approved'
-      AND LOWER(COALESCE(s.status, 'active')) <> 'past'
+    WHERE LOWER(COALESCE(s.status, 'active')) <> 'past'
       AND f.id IS NULL
     GROUP BY s.id
     ORDER BY s.student_name ASC

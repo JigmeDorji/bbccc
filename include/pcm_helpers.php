@@ -461,6 +461,52 @@ function pcm_create_fee_rows(PDO $pdo, int $enrolmentId, int $studentId, int $pa
 }
 
 /**
+ * Generate the standard fee instalment rows for an already-enrolled
+ * student who currently has zero pcm_fee_payments rows (e.g. after a
+ * fee record was deleted, or a data gap). Shared by update-payments.php
+ * and student-profile.php so this is available from either page rather
+ * than only surfacing when a specific search/list query happens to
+ * catch the student. Throws Exception if the student isn't enrolled,
+ * already has fee records, or if generation unexpectedly produces zero
+ * rows (pcm_create_fee_rows uses INSERT IGNORE, which silently
+ * swallows a row-level failure instead of throwing).
+ */
+function pcm_admin_generate_fee_schedule(PDO $pdo, int $studentDbId, string $reviewer): array {
+    if ($studentDbId <= 0) {
+        throw new Exception("Invalid student.");
+    }
+
+    $enrolStmt = $pdo->prepare("SELECT id, parent_id, fee_plan, start_term FROM pcm_enrolments WHERE student_id = :sid LIMIT 1");
+    $enrolStmt->execute([':sid' => $studentDbId]);
+    $enrol = $enrolStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$enrol) {
+        throw new Exception("This student has no enrolment record yet.");
+    }
+
+    $existingStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE student_id = :sid");
+    $existingStmt->execute([':sid' => $studentDbId]);
+    if ((int)$existingStmt->fetchColumn() > 0) {
+        throw new Exception("This student already has fee records -- use Change Plan or Add Charge instead of generating a new schedule.");
+    }
+
+    $startTerm = pcm_normalize_start_term($enrol['start_term'] ?? 1);
+    pcm_create_fee_rows($pdo, (int)$enrol['id'], $studentDbId, (int)$enrol['parent_id'], (string)$enrol['fee_plan'], null, $startTerm);
+
+    $verifyStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE student_id = :sid");
+    $verifyStmt->execute([':sid' => $studentDbId]);
+    if ((int)$verifyStmt->fetchColumn() === 0) {
+        throw new Exception("Fee schedule generation did not create any rows. Please check for a data conflict.");
+    }
+
+    pcm_log_enrolment_event($pdo, $studentDbId, (int)$enrol['id'], 'admin_fee_schedule_generated', $reviewer, "Fee schedule generated for {$enrol['fee_plan']} / Term {$startTerm}.");
+
+    return [
+        'flash' => 'Fee schedule created.',
+        'ok' => true,
+    ];
+}
+
+/**
  * Update a student's bio/parent details and (optionally) their
  * enrolment's starting term, from an admin form. Shared by
  * dzoClassManagement.php and student-profile.php so the validation and
