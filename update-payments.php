@@ -988,7 +988,7 @@ $isAdminTier = is_admin_role();
 
                 <?php if ($isAdminTier && !empty($missingScheduleChildren)): ?>
                 <!-- Enrolled children with no fee schedule at all -->
-                <div class="card shadow mb-4 border-left-warning">
+                <div class="card shadow mb-4 border-left-warning" id="missingScheduleCard">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center">
                         <h6 class="m-0 font-weight-bold text-warning"><i class="fas fa-exclamation-triangle mr-1"></i>Missing Fee Schedule</h6>
                         <span class="mini">Enrolled children with zero fee records &mdash; they won't appear in the table below until generated</span>
@@ -999,9 +999,9 @@ $isAdminTier = is_admin_role();
                                 <thead class="thead-light">
                                     <tr><th>Student ID</th><th>Child</th><th>Parent</th><th>Plan</th><th>Start Term</th><th></th></tr>
                                 </thead>
-                                <tbody>
+                                <tbody id="missingScheduleBody">
                                     <?php foreach ($missingScheduleChildren as $mc): ?>
-                                        <tr>
+                                        <tr class="missing-schedule-row" data-student="<?= h((string)$mc['student_name']) ?> <?= h((string)$mc['student_code']) ?> <?= h((string)($mc['parent_name'] ?? '')) ?>">
                                             <td><code><?= h((string)$mc['student_code']) ?></code></td>
                                             <td><?= h((string)$mc['student_name']) ?></td>
                                             <td><?= h((string)($mc['parent_name'] ?? '-')) ?></td>
@@ -1635,7 +1635,9 @@ document.addEventListener('DOMContentLoaded', function () {
             if (rowVisible && sectionVisible) visibleRows++;
         });
         if (visiblePaymentCount) visiblePaymentCount.textContent = String(visibleRows);
-        if (paymentNoResults) paymentNoResults.style.display = visibleRows === 0 ? 'block' : 'none';
+        const missingScheduleCard = document.getElementById('missingScheduleCard');
+        const hasVisibleMissingSchedule = !!missingScheduleCard && missingScheduleCard.style.display !== 'none';
+        if (paymentNoResults) paymentNoResults.style.display = (visibleRows === 0 && !hasVisibleMissingSchedule) ? 'block' : 'none';
     }
 
     function applyPaymentRowFilters() {
@@ -1650,6 +1652,23 @@ document.addEventListener('DOMContentLoaded', function () {
             const searchMatches = query === '' || searchableText.includes(query);
             row.style.display = classMatches && searchMatches ? '' : 'none';
         });
+
+        // Children with zero fee records live in a separate "Missing Fee
+        // Schedule" card (not built from pcm_fee_payments, so they're not
+        // .update-student-row) -- searching should still find them, with
+        // their own "Generate Fee Schedule" button acting as the way to
+        // add a payment record for a student who doesn't have one yet.
+        const missingScheduleCard = document.getElementById('missingScheduleCard');
+        if (missingScheduleCard) {
+            let visibleMissing = 0;
+            missingScheduleCard.querySelectorAll('.missing-schedule-row').forEach(row => {
+                const searchMatches = query === '' || (row.dataset.student || '').toLowerCase().includes(query);
+                row.style.display = searchMatches ? '' : 'none';
+                if (searchMatches) visibleMissing++;
+            });
+            missingScheduleCard.style.display = visibleMissing > 0 ? '' : 'none';
+        }
+
         refreshPaymentResultSummary();
         // Persist so the search/filter survives an action (edit, verify,
         // delete, etc.) reloading this page via a real form POST -- the
