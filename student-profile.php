@@ -58,6 +58,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'gener
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_fee_row') {
+    verify_csrf();
+    try {
+        $result = pcm_admin_delete_fee_row($pdo, (int)($_POST['payment_id'] ?? 0));
+        $flash = $result['flash'];
+        $ok = $result['ok'];
+    } catch (Throwable $e) {
+        $flash = 'Error: ' . $e->getMessage();
+        $ok = false;
+    }
+    $_SESSION['student_profile_flash'] = ['message' => $flash, 'ok' => $ok];
+    header('Location: student-profile?id=' . $studentDbId);
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_fee_row') {
     verify_csrf();
     try {
@@ -115,9 +130,13 @@ $feePayments->execute([':id' => $studentDbId]);
 $feePayments = $feePayments->fetchAll(PDO::FETCH_ASSOC);
 $totalDue = 0.0;
 $totalPaid = 0.0;
+$hasPlanFeeRows = false;
 foreach ($feePayments as $fp) {
     $totalDue += (float)($fp['due_amount'] ?? 0);
     $totalPaid += (float)($fp['paid_amount'] ?? 0);
+    if (in_array((string)($fp['plan_type'] ?? ''), ['Term-wise', 'Half-yearly', 'Yearly'], true)) {
+        $hasPlanFeeRows = true;
+    }
 }
 
 // Attendance history + summary
@@ -316,9 +335,9 @@ document.addEventListener('DOMContentLoaded',()=>{
                     <div class="dl-row"><div class="dl-label">Payment Ref</div><div class="dl-value"><?= h((string)($student['payment_ref'] ?? '—')) ?></div></div>
                     <div class="dl-row"><div class="dl-label">Enrolment Status</div><div class="dl-value"><span class="badge badge-<?= pcm_badge((string)$student['enrolment_status']) ?>"><?= h((string)$student['enrolment_status']) ?></span></div></div>
                     <div class="dl-row"><div class="dl-label">Submitted</div><div class="dl-value"><?= !empty($student['enrolment_submitted_at']) ? date('d M Y', strtotime((string)$student['enrolment_submitted_at'])) : '—' ?></div></div>
-                    <?php if (empty($feePayments)): ?>
+                    <?php if (!$hasPlanFeeRows): ?>
                         <div class="alert alert-warning mt-3 mb-0 py-2 px-3">
-                            <div class="small mb-2"><i class="fas fa-exclamation-triangle mr-1"></i>This child has no fee records yet.</div>
+                            <div class="small mb-2"><i class="fas fa-exclamation-triangle mr-1"></i>This child has no fee instalment schedule<?= !empty($feePayments) ? ' (only an additional charge exists below)' : '' ?>.</div>
                             <form method="POST" data-confirm="Generate the standard fee schedule for <?= h((string)$student['student_name']) ?> (<?= h($curPlan) ?>, starting Term <?= (int)$curStartTerm ?>)?">
                                 <?= csrf_field() ?>
                                 <input type="hidden" name="action" value="generate_fee_schedule">
@@ -399,6 +418,11 @@ document.addEventListener('DOMContentLoaded',()=>{
                                     data-ref="<?= h((string)($fp['payment_ref'] ?? '')) ?>"
                                     data-status="<?= h((string)($fp['status'] ?? 'Unpaid')) ?>"
                                 ><i class="fas fa-edit"></i></button>
+                                <button type="button" class="btn btn-sm btn-outline-danger js-delete-fee-btn"
+                                    data-id="<?= (int)$fp['id'] ?>"
+                                    data-label="<?= h((string)($fp['instalment_label'] ?? '')) ?>"
+                                    data-status="<?= h((string)($fp['status'] ?? 'Unpaid')) ?>"
+                                ><i class="fas fa-trash-alt"></i></button>
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -648,6 +672,36 @@ document.addEventListener('DOMContentLoaded',()=>{
     </div>
 </div>
 
+<!-- Delete Fee Row Modal -->
+<div class="modal fade" id="deleteFeeModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="POST" id="deleteFeeForm" data-self-managed-submit>
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="delete_fee_row">
+                <input type="hidden" name="payment_id" id="deleteFeePaymentId" value="">
+                <input type="hidden" id="deleteFeeIsVerified" value="0">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title font-weight-bold">Delete Fee Record</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>Delete <strong id="deleteFeeLabel"></strong>? This cannot be undone.</p>
+                    <div id="deleteFeeVerifiedWarning" class="alert alert-danger d-none">
+                        <strong>Warning:</strong> this record is marked <strong>Verified</strong> (already recorded as paid). Deleting it permanently removes the payment record and cannot be undone.
+                        Type <strong>DELETE</strong> below to confirm.
+                        <input type="text" id="deleteFeeConfirmText" class="form-control mt-2" autocomplete="off">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger"><i class="fas fa-trash-alt mr-1"></i>Delete</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 [
     ['openEditBioBtn', 'editBioModal'],
@@ -674,6 +728,36 @@ document.querySelectorAll('.js-edit-fee-btn').forEach(function(btn) {
         $('#editFeeModal').modal('show');
     });
 });
+
+document.querySelectorAll('.js-delete-fee-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var d = this.dataset;
+        var isVerified = d.status === 'Verified';
+        document.getElementById('deleteFeePaymentId').value = d.id;
+        document.getElementById('deleteFeeLabel').textContent = d.label || '';
+        document.getElementById('deleteFeeVerifiedWarning').classList.toggle('d-none', !isVerified);
+        document.getElementById('deleteFeeConfirmText').value = '';
+        document.getElementById('deleteFeeIsVerified').value = isVerified ? '1' : '0';
+        $('#deleteFeeModal').modal('show');
+    });
+});
+
+var deleteFeeForm = document.getElementById('deleteFeeForm');
+if (deleteFeeForm) {
+    deleteFeeForm.addEventListener('submit', function (e) {
+        var isVerified = document.getElementById('deleteFeeIsVerified').value === '1';
+        if (!isVerified) return;
+        var typed = (document.getElementById('deleteFeeConfirmText').value || '').trim().toUpperCase();
+        if (typed !== 'DELETE') {
+            e.preventDefault();
+            if (window.Swal) {
+                Swal.fire({ icon: 'warning', title: 'Type DELETE to confirm', text: 'This record is Verified (paid) -- type DELETE in the box to confirm removing it.' });
+            } else {
+                alert('Type DELETE in the box to confirm removing this Verified record.');
+            }
+        }
+    });
+}
 
 // Keep the Starting Term options in sync with the selected Fee Plan
 // (same Term-wise/Half-yearly/Yearly x Term 1-4 matrix used across the

@@ -462,14 +462,20 @@ function pcm_create_fee_rows(PDO $pdo, int $enrolmentId, int $studentId, int $pa
 
 /**
  * Generate the standard fee instalment rows for an already-enrolled
- * student who currently has zero pcm_fee_payments rows (e.g. after a
- * fee record was deleted, or a data gap). Shared by update-payments.php
- * and student-profile.php so this is available from either page rather
- * than only surfacing when a specific search/list query happens to
- * catch the student. Throws Exception if the student isn't enrolled,
- * already has fee records, or if generation unexpectedly produces zero
- * rows (pcm_create_fee_rows uses INSERT IGNORE, which silently
- * swallows a row-level failure instead of throwing).
+ * student who currently has zero Term-wise/Half-yearly/Yearly rows
+ * (e.g. after those were deleted, or a data gap). Shared by
+ * update-payments.php and student-profile.php so this is available
+ * from either page rather than only surfacing when a specific
+ * search/list query happens to catch the student. Throws Exception if
+ * the student isn't enrolled, already has plan instalment rows, or if
+ * generation unexpectedly produces zero rows (pcm_create_fee_rows uses
+ * INSERT IGNORE, which silently swallows a row-level failure instead
+ * of throwing).
+ *
+ * Deliberately only checks/counts plan-type rows, not "Additional"
+ * ones -- a leftover one-off Additional charge (even a Verified one)
+ * isn't a real fee schedule and shouldn't block regenerating the
+ * actual instalments, nor falsely satisfy the post-generation check.
  */
 function pcm_admin_generate_fee_schedule(PDO $pdo, int $studentDbId, string $reviewer): array {
     if ($studentDbId <= 0) {
@@ -483,17 +489,17 @@ function pcm_admin_generate_fee_schedule(PDO $pdo, int $studentDbId, string $rev
         throw new Exception("This student has no enrolment record yet.");
     }
 
-    $existingStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE student_id = :sid");
+    $existingStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE student_id = :sid AND plan_type IN ('Term-wise','Half-yearly','Yearly')");
     $existingStmt->execute([':sid' => $studentDbId]);
     if ((int)$existingStmt->fetchColumn() > 0) {
-        throw new Exception("This student already has fee records -- use Change Plan or Add Charge instead of generating a new schedule.");
+        throw new Exception("This student already has fee instalment rows -- use Change Plan instead of generating a new schedule.");
     }
 
     $startTerm = pcm_normalize_start_term($enrol['start_term'] ?? 1);
     pcm_create_fee_rows($pdo, (int)$enrol['id'], $studentDbId, (int)$enrol['parent_id'], (string)$enrol['fee_plan'], null, $startTerm);
 
-    $verifyStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE student_id = :sid");
-    $verifyStmt->execute([':sid' => $studentDbId]);
+    $verifyStmt = $pdo->prepare("SELECT COUNT(*) FROM pcm_fee_payments WHERE student_id = :sid AND plan_type = :plan");
+    $verifyStmt->execute([':sid' => $studentDbId, ':plan' => (string)$enrol['fee_plan']]);
     if ((int)$verifyStmt->fetchColumn() === 0) {
         throw new Exception("Fee schedule generation did not create any rows. Please check for a data conflict.");
     }
@@ -502,6 +508,33 @@ function pcm_admin_generate_fee_schedule(PDO $pdo, int $studentDbId, string $rev
 
     return [
         'flash' => 'Fee schedule created.',
+        'ok' => true,
+    ];
+}
+
+/**
+ * Delete a single pcm_fee_payments row (term instalment or additional
+ * charge). Shared by update-payments.php and student-profile.php so a
+ * stray record (including a Verified one -- admin-confirmed via the
+ * caller's own UI, e.g. a "type DELETE" gate) can be removed from
+ * either page. No status restriction here: the caller is responsible
+ * for any extra confirmation UX before calling this.
+ */
+function pcm_admin_delete_fee_row(PDO $pdo, int $paymentId): array {
+    if ($paymentId <= 0) {
+        throw new Exception("Invalid record.");
+    }
+
+    $rowStmt = $pdo->prepare("SELECT id FROM pcm_fee_payments WHERE id = :id LIMIT 1");
+    $rowStmt->execute([':id' => $paymentId]);
+    if (!$rowStmt->fetch(PDO::FETCH_ASSOC)) {
+        throw new Exception("Fee record not found.");
+    }
+
+    $pdo->prepare("DELETE FROM pcm_fee_payments WHERE id = :id")->execute([':id' => $paymentId]);
+
+    return [
+        'flash' => 'Fee record deleted.',
         'ok' => true,
     ];
 }

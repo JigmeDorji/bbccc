@@ -284,18 +284,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_i
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete_individual_charge') {
     try {
         if (!is_admin_role()) throw new Exception("Only admin can delete fee records.");
-
-        $pid = (int)($_POST['payment_id'] ?? 0);
-        if ($pid <= 0) throw new Exception("Invalid record.");
-
-        $rowStmt = $pdo->prepare("SELECT id, plan_type, status FROM pcm_fee_payments WHERE id = :id LIMIT 1");
-        $rowStmt->execute([':id' => $pid]);
-        $row = $rowStmt->fetch(PDO::FETCH_ASSOC);
-        if (!$row) throw new Exception("Fee record not found.");
-
-        $pdo->prepare("DELETE FROM pcm_fee_payments WHERE id = :id")->execute([':id' => $pid]);
-
-        $message = "Fee record deleted.";
+        $result = pcm_admin_delete_fee_row($pdo, (int)($_POST['payment_id'] ?? 0));
+        $message = $result['flash'];
         $success = true;
         $reload = true;
     } catch (Throwable $e) {
@@ -628,11 +618,15 @@ $stmtPayments = $pdo->prepare("
 $stmtPayments->execute();
 $payments = $stmtPayments->fetchAll(PDO::FETCH_ASSOC);
 
-// ---------------- Enrolled children with NO fee record at all ----------------
-// Since the table above is built FROM pcm_fee_payments, a child who is
-// enrolled but has zero fee rows (e.g. after deleting their only record,
-// or a data gap) never appears anywhere in it -- surface them separately
-// with a one-click way to generate their standard fee schedule.
+// ---------------- Enrolled children with NO plan instalment rows ----------------
+// Since the table above is only rendered from the plan-tab groups
+// (Term-wise/Half-yearly/Yearly), a child with zero rows in those plan
+// types never gets a row at all -- even if they still have a lingering
+// "Additional" charge, which doesn't count as a plan schedule. Surface
+// them separately with a one-click way to generate their standard fee
+// schedule. Checks specifically for plan-type rows (not "any row") so
+// a leftover Additional charge doesn't hide a child who still needs
+// their real instalments regenerated.
 $missingScheduleStmt = $pdo->query("
     SELECT
         s.id AS student_db_id, s.student_id AS student_code, s.student_name,
@@ -641,7 +635,7 @@ $missingScheduleStmt = $pdo->query("
     FROM students s
     INNER JOIN pcm_enrolments e ON e.student_id = s.id
     LEFT JOIN parents p ON p.id = e.parent_id
-    LEFT JOIN pcm_fee_payments f ON f.student_id = s.id
+    LEFT JOIN pcm_fee_payments f ON f.student_id = s.id AND f.plan_type IN ('Term-wise','Half-yearly','Yearly')
     WHERE LOWER(COALESCE(s.status, 'active')) <> 'past'
       AND f.id IS NULL
     GROUP BY s.id
