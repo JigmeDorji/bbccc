@@ -98,14 +98,33 @@ $parentsWithChildren = 0;
 $totalChildren = count($students);
 $activeChildren = 0;
 $parentsSeen = [];
+$totalChildCountByParent = [];
+$activeChildCountByParent = [];
 foreach ($students as $student) {
     $pid = (int)($student['parent_id'] ?? 0);
     if ($pid > 0 && !isset($parentsSeen[$pid])) {
         $parentsSeen[$pid] = true;
         $parentsWithChildren++;
     }
-    if (strtolower((string)($student['student_status'] ?? 'active')) !== 'past') {
+    if ($pid > 0) {
+        $totalChildCountByParent[$pid] = ($totalChildCountByParent[$pid] ?? 0) + 1;
+    }
+    $isActive = strtolower((string)($student['student_status'] ?? 'active')) !== 'past';
+    if ($isActive) {
         $activeChildren++;
+        if ($pid > 0) {
+            $activeChildCountByParent[$pid] = ($activeChildCountByParent[$pid] ?? 0) + 1;
+        }
+    }
+}
+
+$parentsWithoutActiveChildren = [];
+foreach ($parents as $parent) {
+    $pid = (int)$parent['id'];
+    if (($activeChildCountByParent[$pid] ?? 0) === 0) {
+        $parentsWithoutActiveChildren[] = $parent + [
+            'total_children' => $totalChildCountByParent[$pid] ?? 0,
+        ];
     }
 }
 ?>
@@ -176,6 +195,50 @@ document.addEventListener('DOMContentLoaded', function () {
         </div>
         <div class="col-md-3 mb-3">
             <div class="card border-left-success shadow py-2"><div class="card-body"><div class="text-xs font-weight-bold text-success text-uppercase mb-1">Active Children</div><div class="h5 mb-0 font-weight-bold"><?= (int)$activeChildren ?></div></div></div>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center" data-toggle="collapse" data-target="#noActiveChildrenBody" role="button" style="cursor:pointer;">
+            <h6 class="m-0 font-weight-bold text-primary">
+                Parents Without Active Children
+                <span class="badge badge-warning ml-1"><?= count($parentsWithoutActiveChildren) ?></span>
+            </h6>
+            <small class="text-muted">Includes parents with zero children on record</small>
+        </div>
+        <div id="noActiveChildrenBody" class="collapse<?= !empty($parentsWithoutActiveChildren) ? ' show' : '' ?>">
+            <div class="card-body">
+                <?php if (empty($parentsWithoutActiveChildren)): ?>
+                    <p class="text-muted mb-0">Every parent has at least one active child.</p>
+                <?php else: ?>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover mb-0">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>#</th><th>Parent</th><th>Email</th><th>Phone</th><th>Parent Status</th><th>Children on Record</th><th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($parentsWithoutActiveChildren as $i => $p): ?>
+                            <tr>
+                                <td><?= $i + 1 ?></td>
+                                <td><?= h((string)($p['full_name'] ?? '')) ?></td>
+                                <td><?= h((string)($p['email'] ?? '')) ?></td>
+                                <td><?= h((string)($p['phone'] ?? '')) ?></td>
+                                <td><span class="badge badge-<?= strtolower((string)($p['status'] ?? 'Active')) === 'active' ? 'success' : 'secondary' ?>"><?= h((string)($p['status'] ?? 'Active')) ?></span></td>
+                                <td><?= (int)($p['total_children'] ?? 0) === 0 ? '<span class="text-muted">None</span>' : (int)$p['total_children'] . ' (none active)' ?></td>
+                                <td>
+                                    <a href="admin-enrolments?add_child_for=<?= (int)$p['id'] ?>" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-plus-circle mr-1"></i> Add Child
+                                    </a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
+            </div>
         </div>
     </div>
 

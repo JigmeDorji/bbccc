@@ -20,6 +20,14 @@ $campusChoices = pcm_campus_choice_labels();
 $ageSettings = pcm_enrolment_age_settings($pdo);
 $allClasses = $pdo->query("SELECT id, class_name FROM classes WHERE active=1 ORDER BY class_name")->fetchAll(PDO::FETCH_ASSOC);
 
+$prefillParent = null;
+$prefillParentId = (int)($_GET['add_child_for'] ?? 0);
+if ($prefillParentId > 0) {
+    $prefillStmt = $pdo->prepare("SELECT id, full_name, email, phone, address FROM parents WHERE id = :id LIMIT 1");
+    $prefillStmt->execute([':id' => $prefillParentId]);
+    $prefillParent = $prefillStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+}
+
 function bbcc_tokens(string $text): array {
     $parts = preg_split('/[^a-z0-9]+/i', strtolower($text)) ?: [];
     $stop = ['campus','college','high','school','hs','the','and','of'];
@@ -313,6 +321,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
         $plan = trim((string)($_POST['fee_plan'] ?? 'Term-wise'));
         $startTerm = pcm_normalize_start_term($_POST['start_term'] ?? 1);
         $ref = trim((string)($_POST['payment_ref'] ?? ''));
+        $existingParentId = (int)($_POST['existing_parent_id'] ?? 0);
         $approveNow = isset($_POST['manual_approve_now']) && (string)$_POST['manual_approve_now'] === '1';
         $campusSelection = $_POST['campus_choice'] ?? [];
         if (!is_array($campusSelection)) $campusSelection = [];
@@ -340,35 +349,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
                 $pdo->beginTransaction();
                 $parentId = 0;
 
-                $parentFind = $pdo->prepare("SELECT id FROM parents WHERE LOWER(email)=:e LIMIT 1");
-                $parentFind->execute([':e' => $parentEmail]);
-                $parentRow = $parentFind->fetch(PDO::FETCH_ASSOC);
-                if ($parentRow) {
-                    $parentId = (int)$parentRow['id'];
+                if ($existingParentId > 0) {
+                    $parentFind = $pdo->prepare("SELECT id FROM parents WHERE id = :id LIMIT 1");
+                    $parentFind->execute([':id' => $existingParentId]);
+                    if (!$parentFind->fetchColumn()) {
+                        throw new Exception('Selected parent account no longer exists.');
+                    }
+                    $parentId = $existingParentId;
                     $pdo->prepare("
                         UPDATE parents
-                        SET full_name = :n, phone = :ph, address = :ad, username = COALESCE(NULLIF(username,''), :un)
+                        SET full_name = :n, phone = :ph, address = :ad
                         WHERE id = :id
                     ")->execute([
                         ':n' => $parentName,
                         ':ph' => $parentPhone,
                         ':ad' => ($parentAddress !== '' ? $parentAddress : null),
-                        ':un' => $parentEmail,
                         ':id' => $parentId
                     ]);
                 } else {
-                    $insParent = $pdo->prepare("
-                        INSERT INTO parents (full_name, email, phone, address, username, status)
-                        VALUES (:n, :e, :ph, :ad, :un, 'Active')
-                    ");
-                    $insParent->execute([
-                        ':n' => $parentName,
-                        ':e' => $parentEmail,
-                        ':ph' => $parentPhone,
-                        ':ad' => ($parentAddress !== '' ? $parentAddress : null),
-                        ':un' => $parentEmail
-                    ]);
-                    $parentId = (int)$pdo->lastInsertId();
+                    $parentFind = $pdo->prepare("SELECT id FROM parents WHERE LOWER(email)=:e LIMIT 1");
+                    $parentFind->execute([':e' => $parentEmail]);
+                    $parentRow = $parentFind->fetch(PDO::FETCH_ASSOC);
+                    if ($parentRow) {
+                        $parentId = (int)$parentRow['id'];
+                        $pdo->prepare("
+                            UPDATE parents
+                            SET full_name = :n, phone = :ph, address = :ad, username = COALESCE(NULLIF(username,''), :un)
+                            WHERE id = :id
+                        ")->execute([
+                            ':n' => $parentName,
+                            ':ph' => $parentPhone,
+                            ':ad' => ($parentAddress !== '' ? $parentAddress : null),
+                            ':un' => $parentEmail,
+                            ':id' => $parentId
+                        ]);
+                    } else {
+                        $insParent = $pdo->prepare("
+                            INSERT INTO parents (full_name, email, phone, address, username, status)
+                            VALUES (:n, :e, :ph, :ad, :un, 'Active')
+                        ");
+                        $insParent->execute([
+                            ':n' => $parentName,
+                            ':e' => $parentEmail,
+                            ':ph' => $parentPhone,
+                            ':ad' => ($parentAddress !== '' ? $parentAddress : null),
+                            ':un' => $parentEmail
+                        ]);
+                        $parentId = (int)$pdo->lastInsertId();
+                    }
                 }
 
                 if ($parentId <= 0) {
@@ -862,32 +890,38 @@ document.addEventListener('DOMContentLoaded',()=>{
 <div class="modal fade" id="manualEnrolModal" tabindex="-1" role="dialog" aria-hidden="true">
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
-            <form method="POST" id="manualEnrolForm" autocomplete="off">
+            <form method="POST" id="manualEnrolForm" autocomplete="off" data-prefill="<?= $prefillParent ? '1' : '0' ?>">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="manual_enrol">
+                <input type="hidden" name="existing_parent_id" id="manualExistingParentId" value="<?= $prefillParent ? (int)$prefillParent['id'] : '' ?>">
                 <div class="modal-header bg-primary text-white">
-                    <h5 class="modal-title">Manual Enrollment (Admin)</h5>
+                    <h5 class="modal-title"><?= $prefillParent ? 'Add Child for ' . h((string)$prefillParent['full_name']) : 'Manual Enrollment (Admin)' ?></h5>
                     <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
                 <div class="modal-body">
+                    <?php if ($prefillParent): ?>
+                    <div class="alert alert-info py-2 small mb-3">
+                        <i class="fas fa-info-circle mr-1"></i> Adding a child under this existing parent account. Parent details below are locked to avoid creating a duplicate account.
+                    </div>
+                    <?php endif; ?>
                     <div class="row">
                         <div class="col-md-6 form-group">
                             <label>Parent Full Name</label>
-                            <input type="text" class="form-control" name="parent_name" required maxlength="150">
+                            <input type="text" class="form-control" name="parent_name" required maxlength="150" value="<?= $prefillParent ? h((string)$prefillParent['full_name']) : '' ?>" <?= $prefillParent ? 'readonly' : '' ?>>
                         </div>
                         <div class="col-md-6 form-group">
                             <label>Parent Email</label>
-                            <input type="email" class="form-control" name="parent_email" required maxlength="150" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="parent@example.com">
+                            <input type="email" class="form-control" name="parent_email" required maxlength="150" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="parent@example.com" value="<?= $prefillParent ? h((string)$prefillParent['email']) : '' ?>" <?= $prefillParent ? 'readonly' : '' ?>>
                         </div>
                         <div class="col-md-6 form-group">
                             <label>Parent Phone</label>
-                            <input type="text" class="form-control" name="parent_phone" required maxlength="50">
+                            <input type="text" class="form-control" name="parent_phone" required maxlength="50" value="<?= $prefillParent ? h((string)$prefillParent['phone']) : '' ?>">
                         </div>
                         <div class="col-md-6 form-group">
                             <label>Parent Address</label>
-                            <input type="text" class="form-control" name="parent_address" maxlength="255">
+                            <input type="text" class="form-control" name="parent_address" maxlength="255" value="<?= $prefillParent ? h((string)$prefillParent['address']) : '' ?>">
                         </div>
                         <div class="col-md-6 form-group">
                             <label>Child Name</label>
@@ -1474,13 +1508,26 @@ $(function(){
         $('#proofModal').modal('show');
     });
 
+    var manualEnrolSkipResetOnce = <?= $prefillParent ? 'true' : 'false' ?>;
     $('#manualEnrolModal').on('shown.bs.modal', function(){
         var form = document.getElementById('manualEnrolForm');
         if (!form) return;
+        if (manualEnrolSkipResetOnce) {
+            manualEnrolSkipResetOnce = false;
+            return;
+        }
         form.reset();
+        form.setAttribute('data-prefill', '0');
+        var existingParentIdInput = document.getElementById('manualExistingParentId');
+        if (existingParentIdInput) existingParentIdInput.value = '';
+        var nameInput = form.querySelector('input[name="parent_name"]');
+        if (nameInput) nameInput.removeAttribute('readonly');
         var emailInput = form.querySelector('input[name="parent_email"]');
-        if (emailInput) emailInput.value = '';
+        if (emailInput) { emailInput.value = ''; emailInput.removeAttribute('readonly'); }
     });
+    <?php if ($prefillParent): ?>
+    $('#manualEnrolModal').modal('show');
+    <?php endif; ?>
 
     $(document).on('click', '.js-enrol-registered-btn', function(){
         var sid = $(this).data('student-id') || '';
