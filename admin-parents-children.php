@@ -93,6 +93,22 @@ $students = $pdo->query("
     ORDER BY s.student_name ASC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
+$childrenWithoutParents = $pdo->query("
+    SELECT
+        s.id AS student_db_id,
+        s.student_id,
+        s.student_name,
+        s.approval_status,
+        s.status AS student_status,
+        s.registration_date
+    FROM students s
+    LEFT JOIN parents p ON p.id = {$studentParentExpr}
+    WHERE {$studentParentExpr} IS NULL
+       OR {$studentParentExpr} <= 0
+       OR p.id IS NULL
+    ORDER BY s.registration_date DESC
+")->fetchAll(PDO::FETCH_ASSOC);
+
 $totalParents = count($parents);
 $parentsWithChildren = 0;
 $totalChildren = count($students);
@@ -230,6 +246,51 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <td>
                                     <a href="admin-enrolments?add_child_for=<?= (int)$p['id'] ?>" class="btn btn-sm btn-primary">
                                         <i class="fas fa-plus-circle mr-1"></i> Add Child
+                                    </a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center" data-toggle="collapse" data-target="#noParentBody" role="button" style="cursor:pointer;">
+            <h6 class="m-0 font-weight-bold text-primary">
+                Children Without Parents
+                <span class="badge badge-warning ml-1"><?= count($childrenWithoutParents) ?></span>
+            </h6>
+            <small class="text-muted">Children with no linked parent account</small>
+        </div>
+        <div id="noParentBody" class="collapse<?= !empty($childrenWithoutParents) ? ' show' : '' ?>">
+            <div class="card-body">
+                <?php if (empty($childrenWithoutParents)): ?>
+                    <p class="text-muted mb-0">Every child on record is linked to a parent.</p>
+                <?php else: ?>
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover mb-0">
+                        <thead class="thead-light">
+                            <tr>
+                                <th>#</th><th>Student ID</th><th>Child</th><th>Registered</th><th>Approval</th><th>Status</th><th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($childrenWithoutParents as $i => $c): ?>
+                            <?php $cApproval = (string)($c['approval_status'] ?? 'Pending'); ?>
+                            <tr>
+                                <td><?= $i + 1 ?></td>
+                                <td><code><?= h((string)($c['student_id'] ?? '')) ?></code></td>
+                                <td class="child-name"><?= h((string)($c['student_name'] ?? '')) ?></td>
+                                <td><?= !empty($c['registration_date']) ? h(date('d M Y', strtotime((string)$c['registration_date']))) : '—' ?></td>
+                                <td><span class="badge badge-<?= pcm_badge($cApproval) ?>"><?= h($cApproval) ?></span></td>
+                                <td><span class="badge badge-<?= strtolower((string)($c['student_status'] ?? 'Active')) === 'past' ? 'secondary' : 'success' ?>"><?= h((string)($c['student_status'] ?? 'Active')) ?></span></td>
+                                <td>
+                                    <a href="dzoClassManagement?join_parent_for=<?= (int)$c['student_db_id'] ?>" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-link mr-1"></i> Assign Parent
                                     </a>
                                 </td>
                             </tr>

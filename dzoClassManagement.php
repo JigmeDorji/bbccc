@@ -20,6 +20,7 @@ $ok    = false;
 
 $studentParentExpr = "parent_id";
 $studentParentJoinExpr = "s.parent_id";
+$joinParentForId = (int)($_GET['join_parent_for'] ?? 0);
 
 // ── POST: record-maintenance actions (registration/enrollment review now lives on admin-enrolments.php) ──
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -966,6 +967,16 @@ $(function(){
         var top = $('#enrolTable').closest('.card').offset().top - 90;
         window.scrollTo({ top: top, behavior: 'smooth' });
     });
+
+    <?php if ($joinParentForId > 0): ?>
+    // Deep link from the Parents & Children page: open Join to Parent for a specific child
+    (function(){
+        var $btn = $('.js-join-parent-btn[data-id="<?= $joinParentForId ?>"]');
+        if (!$btn.length) return;
+        dt.search($btn.data('student-code') || $btn.data('student-name') || '').draw();
+        setTimeout(function(){ $btn.trigger('click'); }, 100);
+    })();
+    <?php endif; ?>
 });
 </script>
 </body>
