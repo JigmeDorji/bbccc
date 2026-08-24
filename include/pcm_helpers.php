@@ -1481,6 +1481,56 @@ function pcm_notify_admin_donation(string $donorName, float $amount): void {
     }
 }
 
+/**
+ * Updates a parent's own contact details (name, email, phone, address).
+ * Does not touch their login username -- that's a separate, more
+ * sensitive change handled elsewhere.
+ */
+function pcm_update_parent_details(PDO $pdo, int $parentId, string $fullName, string $email, string $phone, string $address): array {
+    if ($parentId <= 0) {
+        return ['ok' => false, 'message' => 'Invalid parent.'];
+    }
+    $fullName = trim($fullName);
+    $email = trim($email);
+    $phone = trim($phone);
+    $address = trim($address);
+
+    if ($fullName === '') {
+        return ['ok' => false, 'message' => 'Parent name is required.'];
+    }
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return ['ok' => false, 'message' => 'Please provide a valid email address.'];
+    }
+
+    $existing = $pdo->prepare("SELECT id FROM parents WHERE id = :id LIMIT 1");
+    $existing->execute([':id' => $parentId]);
+    if (!$existing->fetch(PDO::FETCH_ASSOC)) {
+        return ['ok' => false, 'message' => 'Parent not found.'];
+    }
+
+    if ($email !== '') {
+        $dupe = $pdo->prepare("SELECT id FROM parents WHERE LOWER(email) = LOWER(:e) AND id != :id LIMIT 1");
+        $dupe->execute([':e' => $email, ':id' => $parentId]);
+        if ($dupe->fetch()) {
+            return ['ok' => false, 'message' => 'Another parent is already using that email address.'];
+        }
+    }
+
+    $pdo->prepare("
+        UPDATE parents
+        SET full_name = :n, email = :e, phone = :p, address = :a
+        WHERE id = :id
+    ")->execute([
+        ':n' => $fullName,
+        ':e' => ($email !== '' ? $email : null),
+        ':p' => ($phone !== '' ? $phone : null),
+        ':a' => ($address !== '' ? $address : null),
+        ':id' => $parentId,
+    ]);
+
+    return ['ok' => true, 'message' => 'Parent <strong>' . h($fullName) . '</strong> updated.'];
+}
+
 // ============================================================
 // Careful deletion — student / parent / teacher / user account
 // ============================================================

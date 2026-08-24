@@ -6,6 +6,7 @@ require_once "include/role_helpers.php";
 require_once "include/module_access.php";
 require_once "include/patron_schema.php";
 require_once "include/pcm_helpers.php";
+require_once "include/csrf.php";
 require_login();
 allowRoles(['Administrator', 'Admin', 'Company Admin', 'System_owner']);
 
@@ -23,6 +24,7 @@ bbcc_ensure_patrons_table($pdo);
 
 // ─── POST handler (PRG) ──────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    verify_csrf();
     $action = $_POST['action'] ?? '';
     $status = 'success';
     $msg    = '';
@@ -95,6 +97,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([':id' => $teacherId]);
             $msg = "Teacher status toggled.";
 
+        // ── Edit parent details ───────────────────────────
+        } elseif ($action === 'edit_parent') {
+            $parentId = (int)($_POST['parent_id'] ?? 0);
+            $result = pcm_update_parent_details(
+                $pdo,
+                $parentId,
+                (string)($_POST['full_name'] ?? ''),
+                (string)($_POST['email'] ?? ''),
+                (string)($_POST['phone'] ?? ''),
+                (string)($_POST['address'] ?? '')
+            );
+            if (!$result['ok']) throw new Exception(strip_tags($result['message']));
+            $msg = strip_tags($result['message']);
+
         // ── Delete admin/teacher/parent-linked user ───────
         } elseif ($action === 'delete_user') {
             $userId = trim($_POST['userid'] ?? '');
@@ -159,7 +175,7 @@ $teacherUsers = $pdo->query(
 )->fetchAll();
 
 $parentUsers = $pdo->query(
-    "SELECT id, full_name, email, phone, username, status, created_at FROM parents ORDER BY full_name"
+    "SELECT id, full_name, email, phone, address, username, status, created_at FROM parents ORDER BY full_name"
 )->fetchAll();
 
 $patronUsers = $pdo->query(
@@ -578,6 +594,7 @@ foreach ($allUsers as $u) {
                                                         <i class="fas fa-eye" style="font-size:.75rem;"></i>
                                                     </a>
                                                     <form method="POST" style="display:inline;">
+                                                        <?= csrf_field() ?>
                                                         <input type="hidden" name="action" value="toggle_teacher_active">
                                                         <input type="hidden" name="teacher_id" value="<?= (int)$t['teacher_id'] ?>">
                                                         <button type="submit" class="btn btn-sm btn-outline-secondary" style="width:32px;height:32px;padding:0;border-radius:8px;line-height:32px;" title="Toggle Active">
@@ -618,7 +635,7 @@ foreach ($allUsers as $u) {
                                             <th>Phone</th>
                                             <th>Status</th>
                                             <th>Joined</th>
-                                            <th style="width:150px;text-align:center;">Actions</th>
+                                            <th style="width:190px;text-align:center;">Actions</th>
                                         </tr>
                                         </thead>
                                         <tbody>
@@ -654,12 +671,23 @@ foreach ($allUsers as $u) {
                                                         <i class="fas fa-eye" style="font-size:.75rem;"></i>
                                                     </a>
                                                     <form method="POST" style="display:inline;">
+                                                        <?= csrf_field() ?>
                                                         <input type="hidden" name="action" value="toggle_parent_status">
                                                         <input type="hidden" name="parent_id" value="<?= (int)$p['id'] ?>">
                                                         <button type="submit" class="btn btn-sm btn-outline-secondary" style="width:32px;height:32px;padding:0;border-radius:8px;line-height:32px;" title="Toggle Active">
                                                             <i class="fas fa-toggle-<?= $p['status'] === 'Active' ? 'on' : 'off' ?>" style="font-size:.85rem;color:<?= $p['status'] === 'Active' ? '#1cc88a' : '#adb5bd' ?>;"></i>
                                                         </button>
                                                     </form>
+                                                    <button type="button" class="btn btn-sm btn-outline-primary btn-edit-parent"
+                                                        data-parent-id="<?= (int)$p['id'] ?>"
+                                                        data-full-name="<?= htmlspecialchars($p['full_name'], ENT_QUOTES) ?>"
+                                                        data-email="<?= htmlspecialchars((string)($p['email'] ?? ''), ENT_QUOTES) ?>"
+                                                        data-phone="<?= htmlspecialchars((string)($p['phone'] ?? ''), ENT_QUOTES) ?>"
+                                                        data-address="<?= htmlspecialchars((string)($p['address'] ?? ''), ENT_QUOTES) ?>"
+                                                        title="Edit Details"
+                                                        style="width:32px;height:32px;padding:0;border-radius:8px;line-height:32px;">
+                                                        <i class="fas fa-pencil-alt" style="font-size:.75rem;"></i>
+                                                    </button>
                                                     <button type="button" class="btn btn-sm btn-outline-danger btn-delete-parent"
                                                         data-parent-id="<?= (int)$p['id'] ?>"
                                                         data-name="<?= htmlspecialchars($p['full_name'], ENT_QUOTES) ?>"
@@ -739,6 +767,7 @@ foreach ($allUsers as $u) {
     <div class="modal-dialog" role="document">
         <div class="modal-content" style="border-radius:14px;border:none;">
             <form method="POST" id="createAdminForm">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="create_admin">
                 <div class="modal-header" style="border-radius:14px 14px 0 0;background:#f8f9fc;">
                     <h5 class="modal-title font-weight-bold" id="createAdminLabel">
@@ -789,6 +818,7 @@ foreach ($allUsers as $u) {
     <div class="modal-dialog" role="document">
         <div class="modal-content" style="border-radius:14px;border:none;">
             <form method="POST" id="editUserForm">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="edit_user">
                 <input type="hidden" name="userid" id="editUserId">
                 <div class="modal-header" style="border-radius:14px 14px 0 0;background:#f8f9fc;">
@@ -831,16 +861,60 @@ foreach ($allUsers as $u) {
     </div>
 </div>
 
+<!-- ═ Edit Parent Modal ═ -->
+<div class="modal fade" id="editParentModal" tabindex="-1" role="dialog" aria-labelledby="editParentLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content" style="border-radius:14px;border:none;">
+            <form method="POST" id="editParentForm">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="edit_parent">
+                <input type="hidden" name="parent_id" id="editParentId">
+                <div class="modal-header" style="border-radius:14px 14px 0 0;background:#f8f9fc;">
+                    <h5 class="modal-title font-weight-bold" id="editParentLabel">
+                        <i class="fas fa-pencil-alt mr-1 text-primary"></i> Edit Parent Details
+                    </h5>
+                    <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label><i class="fas fa-user mr-1" style="color:var(--brand);font-size:.75rem;"></i> Full Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="full_name" id="editParentFullName" required maxlength="150">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-at mr-1" style="color:var(--brand);font-size:.75rem;"></i> Email</label>
+                        <input type="email" class="form-control" name="email" id="editParentEmail" maxlength="150">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-phone mr-1" style="color:var(--brand);font-size:.75rem;"></i> Phone</label>
+                        <input type="text" class="form-control" name="phone" id="editParentPhone" maxlength="50">
+                    </div>
+                    <div class="form-group mb-0">
+                        <label><i class="fas fa-map-marker-alt mr-1" style="color:var(--brand);font-size:.75rem;"></i> Address</label>
+                        <input type="text" class="form-control" name="address" id="editParentAddress" maxlength="255">
+                    </div>
+                </div>
+                <div class="modal-footer" style="border-top:1px solid #eee;">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal" style="border-radius:10px;">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="border-radius:10px;"><i class="fas fa-save mr-1"></i> Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Hidden delete forms -->
 <form id="deleteUserForm" method="POST" style="display:none;">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="delete_user">
     <input type="hidden" name="userid" id="deleteUserId">
 </form>
 <form id="deleteTeacherForm" method="POST" style="display:none;">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="delete_teacher">
     <input type="hidden" name="teacher_id" id="deleteTeacherId">
 </form>
 <form id="deleteParentForm" method="POST" style="display:none;">
+    <?= csrf_field() ?>
     <input type="hidden" name="action" value="delete_parent">
     <input type="hidden" name="parent_id" id="deleteParentId">
 </form>
@@ -907,6 +981,17 @@ $(function () {
         $('#editUserRole').val(btn.data('role'));
         $('#editUserPwd').val('');
         $('#editUserModal').modal('show');
+    });
+
+    // Open Edit Parent modal
+    $(document).on('click', '.btn-edit-parent', function () {
+        var btn = $(this);
+        $('#editParentId').val(btn.data('parent-id'));
+        $('#editParentFullName').val(btn.data('full-name'));
+        $('#editParentEmail').val(btn.data('email'));
+        $('#editParentPhone').val(btn.data('phone'));
+        $('#editParentAddress').val(btn.data('address'));
+        $('#editParentModal').modal('show');
     });
 
     // Delete user with typed-name confirmation
