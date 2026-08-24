@@ -86,9 +86,11 @@ Please refer to the `Read me` file in the root directory for detailed deployment
 
 ## Environment Configuration
 
-This project now supports environment-based configuration for database and mail credentials.
+This project supports environment-based configuration for database and mail credentials.
 
-Set these variables before starting the app:
+Copy `.env.example` to `.env` (untracked, never committed) and fill in real values — it's loaded automatically. On hosting where a `.env` file isn't convenient, set the same variables as real environment variables instead; those always take precedence over `.env`.
+
+Variables:
 
 - `DB_HOST` (default: `127.0.0.1`)
 - `DB_USER` (default: `root`)

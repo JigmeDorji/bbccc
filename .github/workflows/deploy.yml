@@ -29,6 +29,7 @@ jobs:
             **/node_modules/**
             .github/**
             include/config.php
+            .env
             uploads/**
             README.md
             Read me

@@ -1,6 +1,9 @@
 # Database config (different on local vs production)
 include/config.php
 
+# Local secrets (DB/mail credentials) -- see .env.example
+.env
+
 # User-uploaded content (managed on server, not in repo)
 uploads/
 
