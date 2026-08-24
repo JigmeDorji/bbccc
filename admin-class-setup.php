@@ -4,6 +4,7 @@ require_once "include/auth.php";
 require_once "access_control.php";
 require_once "include/role_helpers.php";
 require_once "include/class_teacher_helpers.php";
+require_once "include/pcm_helpers.php";
 require_login();
 allowRoles(['Administrator', 'Admin', 'Company Admin', 'System_owner', 'Staff']);
 
@@ -314,39 +315,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Delete Teacher
     if ($action === 'delete_teacher') {
-        try {
-            $deleteId = (int)($_POST['delete_teacher_id'] ?? 0);
-            if ($deleteId === 0) {
-                throw new Exception("Invalid teacher ID.");
-            }
-
-            // Check if teacher is assigned to any class
-            $check = $pdo->prepare("SELECT COUNT(*) FROM class_teacher_assignments WHERE teacher_id = :id");
-            $check->execute([':id' => $deleteId]);
-            $assignedCount = $check->fetchColumn();
-
-            if ($assignedCount > 0) {
-                throw new Exception("Cannot delete teacher — assigned to $assignedCount class(es). Unassign first.");
-            }
-
-            // Delete teacher and associated user account
-            $pdo->beginTransaction();
-            $stmt = $pdo->prepare("SELECT user_id FROM teachers WHERE id = :id");
-            $stmt->execute([':id' => $deleteId]);
-            $userId = $stmt->fetchColumn();
-
-            $pdo->prepare("DELETE FROM teachers WHERE id = :id")->execute([':id' => $deleteId]);
-            if ($userId) {
-                $pdo->prepare("DELETE FROM user WHERE userid = :uid")->execute([':uid' => $userId]);
-            }
-            $pdo->commit();
-
-            $message = "Teacher deleted successfully.";
-            $messageTab = 'teachers';
-        } catch (Exception $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            $message = "Error: " . $e->getMessage();
-        }
+        $deleteId = (int)($_POST['delete_teacher_id'] ?? 0);
+        $result = pcm_delete_teacher($pdo, $deleteId, (string)($_SESSION['username'] ?? 'admin'));
+        $message = ($result['ok'] ? '' : 'Error: ') . strip_tags($result['message']);
+        $messageTab = 'teachers';
     }
 
     // Assign Teacher(s)
@@ -973,6 +945,36 @@ $teachers = $pdo->query(
 </form>
 
 <script>
+// Reusable "type the name to confirm" guard for destructive actions.
+function bbccTypedConfirm(opts) {
+    var expected = String(opts.expected || '');
+    Swal.fire({
+        title: opts.title,
+        html: opts.warningHtml +
+            '<div class="mt-3 text-left"><label class="small font-weight-bold mb-1">Type <code>' +
+            $('<div>').text(expected).html() + '</code> to confirm:</label>' +
+            '<input id="typedConfirmInput" class="swal2-input" style="margin:0;" autocomplete="off"></div>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: opts.confirmColor || '#881b12',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: opts.confirmText || '<i class="fas fa-trash-alt mr-1"></i> Yes, delete',
+        cancelButtonText: 'Cancel',
+        reverseButtons: true,
+        focusConfirm: false,
+        preConfirm: function () {
+            var val = (document.getElementById('typedConfirmInput').value || '').trim();
+            if (val !== expected) {
+                Swal.showValidationMessage('Type the name exactly to confirm.');
+                return false;
+            }
+            return true;
+        }
+    }).then(function (result) {
+        if (result.isConfirmed && typeof opts.onConfirm === 'function') opts.onConfirm();
+    });
+}
+
 // Preserve active tab via URL hash (or forced tab after POST)
 $(function(){
     var forcedTab = <?= json_encode($messageTab) ?>;
@@ -1051,22 +1053,16 @@ $(document).on('click', '.btn-edit-teacher', function(){
     $('#editTeacherModal').modal('show');
 });
 
-// ─── Delete Teacher (SweetAlert) ───
+// ─── Delete Teacher (typed-name confirmation) ───
 $(document).on('click', '.btn-delete-teacher', function(){
     var id = $(this).data('id');
     var name = $(this).data('name');
-    Swal.fire({
+    bbccTypedConfirm({
         title: 'Delete Teacher?',
-        html: 'Are you sure you want to delete <strong>' + name + '</strong>?<br><small class="text-muted">This will also remove their login account.</small>',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#881b12',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: '<i class="fas fa-trash-alt mr-1"></i> Yes, delete',
-        cancelButtonText: 'Cancel',
-        reverseButtons: true
-    }).then(function(result){
-        if (result.isConfirmed) {
+        expected: name,
+        warningHtml: 'This permanently removes <strong>' + $('<div>').text(name).html() + '</strong> and their login account. ' +
+            'Blocked if they are still assigned to any class. This cannot be undone.',
+        onConfirm: function () {
             $('#delete_teacher_id').val(id);
             $('#deleteTeacherForm').submit();
         }

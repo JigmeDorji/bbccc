@@ -5,6 +5,7 @@ require_once "access_control.php";
 require_once "include/role_helpers.php";
 require_once "include/module_access.php";
 require_once "include/patron_schema.php";
+require_once "include/pcm_helpers.php";
 require_login();
 allowRoles(['Administrator', 'Admin', 'Company Admin', 'System_owner']);
 
@@ -94,16 +95,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ->execute([':id' => $teacherId]);
             $msg = "Teacher status toggled.";
 
-        // ── Delete admin user ────────────────────────────
+        // ── Delete admin/teacher/parent-linked user ───────
         } elseif ($action === 'delete_user') {
             $userId = trim($_POST['userid'] ?? '');
-            if ($userId === '') throw new Exception("Invalid user.");
-            if ($userId === '1') throw new Exception("The root admin account cannot be deleted.");
+            $result = pcm_delete_user($pdo, $userId, (string)($_SESSION['username'] ?? 'admin'));
+            if (!$result['ok']) throw new Exception(strip_tags($result['message']));
+            $msg = strip_tags($result['message']);
 
-            // If linked to a teacher record, remove teacher  row too
-            $pdo->prepare("DELETE FROM teachers WHERE user_id=:uid")->execute([':uid' => $userId]);
-            $pdo->prepare("DELETE FROM user WHERE userid=:uid")->execute([':uid' => $userId]);
-            $msg = "User deleted successfully.";
+        // ── Delete parent ─────────────────────────────────
+        } elseif ($action === 'delete_parent') {
+            $parentId = (int)($_POST['parent_id'] ?? 0);
+            $result = pcm_delete_parent($pdo, $parentId, (string)($_SESSION['username'] ?? 'admin'));
+            if (!$result['ok']) throw new Exception(strip_tags($result['message']));
+            $msg = strip_tags($result['message']);
+
+        // ── Delete teacher ─────────────────────────────────
+        } elseif ($action === 'delete_teacher') {
+            $teacherId = (int)($_POST['teacher_id'] ?? 0);
+            $result = pcm_delete_teacher($pdo, $teacherId, (string)($_SESSION['username'] ?? 'admin'));
+            if (!$result['ok']) throw new Exception(strip_tags($result['message']));
+            $msg = strip_tags($result['message']);
 
         } else {
             throw new Exception("Unknown action.");
@@ -566,6 +577,13 @@ foreach ($allUsers as $u) {
                                                             <i class="fas fa-toggle-<?= $t['active'] ? 'on' : 'off' ?>" style="font-size:.85rem;color:<?= $t['active'] ? '#1cc88a' : '#adb5bd' ?>;"></i>
                                                         </button>
                                                     </form>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger btn-delete-teacher"
+                                                        data-teacher-id="<?= (int)$t['teacher_id'] ?>"
+                                                        data-name="<?= htmlspecialchars($t['full_name'], ENT_QUOTES) ?>"
+                                                        title="Delete"
+                                                        style="width:32px;height:32px;padding:0;border-radius:8px;line-height:32px;">
+                                                        <i class="fas fa-trash-alt" style="font-size:.75rem;"></i>
+                                                    </button>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -633,6 +651,13 @@ foreach ($allUsers as $u) {
                                                             <i class="fas fa-toggle-<?= $p['status'] === 'Active' ? 'on' : 'off' ?>" style="font-size:.85rem;color:<?= $p['status'] === 'Active' ? '#1cc88a' : '#adb5bd' ?>;"></i>
                                                         </button>
                                                     </form>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger btn-delete-parent"
+                                                        data-parent-id="<?= (int)$p['id'] ?>"
+                                                        data-name="<?= htmlspecialchars($p['full_name'], ENT_QUOTES) ?>"
+                                                        title="Delete"
+                                                        style="width:32px;height:32px;padding:0;border-radius:8px;line-height:32px;">
+                                                        <i class="fas fa-trash-alt" style="font-size:.75rem;"></i>
+                                                    </button>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -796,10 +821,18 @@ foreach ($allUsers as $u) {
     </div>
 </div>
 
-<!-- Hidden delete form -->
+<!-- Hidden delete forms -->
 <form id="deleteUserForm" method="POST" style="display:none;">
     <input type="hidden" name="action" value="delete_user">
     <input type="hidden" name="userid" id="deleteUserId">
+</form>
+<form id="deleteTeacherForm" method="POST" style="display:none;">
+    <input type="hidden" name="action" value="delete_teacher">
+    <input type="hidden" name="teacher_id" id="deleteTeacherId">
+</form>
+<form id="deleteParentForm" method="POST" style="display:none;">
+    <input type="hidden" name="action" value="delete_parent">
+    <input type="hidden" name="parent_id" id="deleteParentId">
 </form>
 
 <script src="vendor/jquery/jquery.min.js"></script>
@@ -807,6 +840,36 @@ foreach ($allUsers as $u) {
 <script src="vendor/datatables/jquery.dataTables.min.js"></script>
 <script src="vendor/datatables/dataTables.bootstrap4.min.js"></script>
 <script>
+// Reusable "type the name to confirm" guard for destructive actions.
+function bbccTypedConfirm(opts) {
+    var expected = String(opts.expected || '');
+    Swal.fire({
+        title: opts.title,
+        html: opts.warningHtml +
+            '<div class="mt-3 text-left"><label class="small font-weight-bold mb-1">Type <code>' +
+            $('<div>').text(expected).html() + '</code> to confirm:</label>' +
+            '<input id="typedConfirmInput" class="swal2-input" style="margin:0;" autocomplete="off"></div>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: opts.confirmColor || '#881b12',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: opts.confirmText || '<i class="fas fa-trash-alt mr-1"></i> Yes, delete',
+        cancelButtonText: 'Cancel',
+        reverseButtons: true,
+        focusConfirm: false,
+        preConfirm: function () {
+            var val = (document.getElementById('typedConfirmInput').value || '').trim();
+            if (val !== expected) {
+                Swal.showValidationMessage('Type the name exactly to confirm.');
+                return false;
+            }
+            return true;
+        }
+    }).then(function (result) {
+        if (result.isConfirmed && typeof opts.onConfirm === 'function') opts.onConfirm();
+    });
+}
+
 $(function () {
     // Restore tab from URL hash
     var hash = window.location.hash || '#pane-all';
@@ -836,24 +899,49 @@ $(function () {
         $('#editUserModal').modal('show');
     });
 
-    // Delete user with confirm
+    // Delete user with typed-name confirmation
     $(document).on('click', '.btn-delete-user', function () {
         var uid  = $(this).data('userid');
-        var uname = $('<span>').text($(this).data('username')).html();
-        Swal.fire({
+        var uname = $(this).data('username');
+        bbccTypedConfirm({
             title: 'Delete User?',
-            html: 'Permanently delete <strong>' + uname + '</strong>?<br><small class="text-danger">This also removes any linked teacher account.</small>',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#881b12',
-            cancelButtonColor: '#6c757d',
-            confirmButtonText: '<i class="fas fa-trash-alt mr-1"></i> Yes, delete',
-            cancelButtonText: 'Cancel',
-            reverseButtons: true
-        }).then(function (r) {
-            if (r.isConfirmed) {
+            expected: uname,
+            warningHtml: 'Permanently delete <strong>' + $('<div>').text(uname).html() + '</strong>? This also removes any linked teacher or parent account and its records. This cannot be undone.',
+            onConfirm: function () {
                 $('#deleteUserId').val(uid);
                 $('#deleteUserForm').submit();
+            }
+        });
+    });
+
+    // Delete teacher with typed-name confirmation
+    $(document).on('click', '.btn-delete-teacher', function () {
+        var tid = $(this).data('teacher-id');
+        var name = $(this).data('name');
+        bbccTypedConfirm({
+            title: 'Delete Teacher?',
+            expected: name,
+            warningHtml: 'This permanently removes <strong>' + $('<div>').text(name).html() + '</strong> and their login account. ' +
+                'Blocked if they are still assigned to any class. This cannot be undone.',
+            onConfirm: function () {
+                $('#deleteTeacherId').val(tid);
+                $('#deleteTeacherForm').submit();
+            }
+        });
+    });
+
+    // Delete parent with typed-name confirmation
+    $(document).on('click', '.btn-delete-parent', function () {
+        var pid = $(this).data('parent-id');
+        var name = $(this).data('name');
+        bbccTypedConfirm({
+            title: 'Delete Parent?',
+            expected: name,
+            warningHtml: 'This permanently removes <strong>' + $('<div>').text(name).html() + '</strong> and their login account. ' +
+                'Blocked if any children are still linked to them. This cannot be undone.',
+            onConfirm: function () {
+                $('#deleteParentId').val(pid);
+                $('#deleteParentForm').submit();
             }
         });
     });

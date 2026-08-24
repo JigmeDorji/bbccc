@@ -1480,3 +1480,241 @@ function pcm_notify_admin_donation(string $donorName, float $amount): void {
         bbcc_mail_log('ADMIN MAIL QUEUED: donation notify to ' . $adminEmail . ' from ' . $donorName);
     }
 }
+
+// ============================================================
+// Careful deletion — student / parent / teacher / user account
+// ============================================================
+
+function pcm_table_exists(PDO $pdo, string $table): bool {
+    static $cache = [];
+    if (array_key_exists($table, $cache)) {
+        return $cache[$table];
+    }
+    try {
+        $stmt = $pdo->query("SHOW TABLES LIKE " . $pdo->quote($table));
+        $cache[$table] = (bool)($stmt && $stmt->fetch(PDO::FETCH_NUM));
+    } catch (Throwable $e) {
+        $cache[$table] = false;
+    }
+    return $cache[$table];
+}
+
+/**
+ * Removes a user's login account and its satellite rows (profile, activation
+ * tokens, module overrides). Does not touch teachers/parents rows -- callers
+ * that own those relationships clean them up first and pass the freed user_id.
+ */
+function pcm_delete_user_account_rows(PDO $pdo, string $userId): void {
+    $userId = trim($userId);
+    if ($userId === '') {
+        return;
+    }
+    if (pcm_table_exists($pdo, 'admin_profiles')) {
+        $pdo->prepare("DELETE FROM admin_profiles WHERE user_id = :uid")->execute([':uid' => $userId]);
+    }
+    if (pcm_table_exists($pdo, 'account_activation_tokens')) {
+        $pdo->prepare("DELETE FROM account_activation_tokens WHERE user_id = :uid")->execute([':uid' => $userId]);
+    }
+    if (pcm_table_exists($pdo, 'user_module_access_overrides')) {
+        $pdo->prepare("DELETE FROM user_module_access_overrides WHERE user_id = :uid")->execute([':uid' => $userId]);
+    }
+    $pdo->prepare("DELETE FROM `user` WHERE userid = :uid")->execute([':uid' => $userId]);
+}
+
+/**
+ * Permanently deletes a student and every record that points at them.
+ * Rows with an enforced ON DELETE CASCADE (pcm_enrolments, pcm_fee_payments,
+ * pcm_kiosk_log, pcm_absence_requests) are cleaned up by the database itself;
+ * everything else is removed here inside one transaction.
+ */
+function pcm_delete_student(PDO $pdo, int $studentId, string $actor): array {
+    if ($studentId <= 0) {
+        return ['ok' => false, 'message' => 'Invalid student.'];
+    }
+    $stmt = $pdo->prepare("SELECT student_name FROM students WHERE id = :id LIMIT 1");
+    $stmt->execute([':id' => $studentId]);
+    $student = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$student) {
+        return ['ok' => false, 'message' => 'Student not found.'];
+    }
+    $name = (string)$student['student_name'];
+
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare("DELETE FROM fees_payments WHERE student_id = :sid")->execute([':sid' => $studentId]);
+        $pdo->prepare("DELETE FROM pcm_fee_payments WHERE student_id = :sid")->execute([':sid' => $studentId]);
+        $pdo->prepare("DELETE FROM pcm_enrolments WHERE student_id = :sid")->execute([':sid' => $studentId]);
+        $pdo->prepare("DELETE FROM class_assignments WHERE student_id = :sid")->execute([':sid' => $studentId]);
+        $pdo->prepare("DELETE FROM attendance WHERE student_id = :sid")->execute([':sid' => $studentId]);
+        $pdo->prepare("DELETE FROM payments WHERE student_id = :sid")->execute([':sid' => $studentId]);
+        $pdo->prepare("DELETE FROM sign_in_out WHERE student_id = :sid")->execute([':sid' => $studentId]);
+        if (pcm_table_exists($pdo, 'classroom_reports')) {
+            if (pcm_table_exists($pdo, 'classroom_report_comments')) {
+                $pdo->prepare("
+                    DELETE FROM classroom_report_comments
+                    WHERE report_id IN (SELECT id FROM classroom_reports WHERE student_id = :sid)
+                ")->execute([':sid' => $studentId]);
+            }
+            $pdo->prepare("DELETE FROM classroom_reports WHERE student_id = :sid")->execute([':sid' => $studentId]);
+        }
+        if (pcm_table_exists($pdo, 'pcm_enrolment_audit')) {
+            $pdo->prepare("DELETE FROM pcm_enrolment_audit WHERE student_id = :sid")->execute([':sid' => $studentId]);
+        }
+        $pdo->prepare("DELETE FROM students WHERE id = :id")->execute([':id' => $studentId]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        return ['ok' => false, 'message' => 'Error deleting student: ' . $e->getMessage()];
+    }
+
+    return ['ok' => true, 'message' => 'Student <strong>' . h($name) . '</strong> and all related records were permanently deleted.'];
+}
+
+/**
+ * Permanently deletes a parent. Refuses if any child is still linked to
+ * them -- reassign or delete those children first. Also removes the
+ * parent's login account, if any.
+ */
+function pcm_delete_parent(PDO $pdo, int $parentId, string $actor): array {
+    if ($parentId <= 0) {
+        return ['ok' => false, 'message' => 'Invalid parent.'];
+    }
+    $stmt = $pdo->prepare("SELECT full_name, user_id FROM parents WHERE id = :id LIMIT 1");
+    $stmt->execute([':id' => $parentId]);
+    $parent = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$parent) {
+        return ['ok' => false, 'message' => 'Parent not found.'];
+    }
+    $name = (string)$parent['full_name'];
+    $userId = (string)($parent['user_id'] ?? '');
+
+    $studentParentExpr = pcm_students_parent_expr($pdo);
+    $childCheck = $pdo->prepare("SELECT COUNT(*) FROM students WHERE {$studentParentExpr} = :id");
+    $childCheck->execute([':id' => $parentId]);
+    $childCount = (int)$childCheck->fetchColumn();
+    if ($childCount > 0) {
+        return ['ok' => false, 'message' => "Cannot delete parent — linked to {$childCount} child(ren). Reassign or delete them first."];
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $pdo->prepare("DELETE FROM parent_profile_update_log WHERE parent_id = :id")->execute([':id' => $parentId]);
+        $pdo->prepare("DELETE FROM payments WHERE parent_id = :id")->execute([':id' => $parentId]);
+        $pdo->prepare("DELETE FROM sign_in_out WHERE parent_id = :id")->execute([':id' => $parentId]);
+        if (pcm_table_exists($pdo, 'classroom_report_comments')) {
+            $pdo->prepare("DELETE FROM classroom_report_comments WHERE parent_id = :id")->execute([':id' => $parentId]);
+        }
+        // pcm_enrolments / pcm_fee_payments / pcm_kiosk_log / pcm_absence_requests cascade via FK.
+        // patrons.parent_id is set NULL via FK.
+        $pdo->prepare("DELETE FROM parents WHERE id = :id")->execute([':id' => $parentId]);
+        pcm_delete_user_account_rows($pdo, $userId);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        return ['ok' => false, 'message' => 'Error deleting parent: ' . $e->getMessage()];
+    }
+
+    return ['ok' => true, 'message' => 'Parent <strong>' . h($name) . '</strong> deleted.'];
+}
+
+/**
+ * Permanently deletes a teacher. Refuses if still assigned to any class --
+ * unassign first. Also removes the teacher's login account, if any, and
+ * clears (does not delete) historical attendance/report rows that name them.
+ */
+function pcm_delete_teacher(PDO $pdo, int $teacherId, string $actor): array {
+    if ($teacherId <= 0) {
+        return ['ok' => false, 'message' => 'Invalid teacher.'];
+    }
+    $stmt = $pdo->prepare("SELECT full_name, user_id FROM teachers WHERE id = :id LIMIT 1");
+    $stmt->execute([':id' => $teacherId]);
+    $teacher = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$teacher) {
+        return ['ok' => false, 'message' => 'Teacher not found.'];
+    }
+    $name = (string)$teacher['full_name'];
+    $userId = (string)($teacher['user_id'] ?? '');
+
+    if (pcm_table_exists($pdo, 'class_teacher_assignments')) {
+        $assignCheck = $pdo->prepare("SELECT COUNT(*) FROM class_teacher_assignments WHERE teacher_id = :id");
+        $assignCheck->execute([':id' => $teacherId]);
+        $assignedCount = (int)$assignCheck->fetchColumn();
+        if ($assignedCount > 0) {
+            return ['ok' => false, 'message' => "Cannot delete teacher — assigned to {$assignedCount} class(es). Unassign first."];
+        }
+    }
+
+    // attendance.teacher_id carries a real ON DELETE CASCADE constraint,
+    // so deleting the teacher row would silently wipe out every attendance
+    // record they ever marked. Block instead of letting that happen quietly.
+    $attendanceCheck = $pdo->prepare("SELECT COUNT(*) FROM attendance WHERE teacher_id = :id");
+    $attendanceCheck->execute([':id' => $teacherId]);
+    $attendanceCount = (int)$attendanceCheck->fetchColumn();
+    if ($attendanceCount > 0) {
+        return ['ok' => false, 'message' => "Cannot delete teacher — they have {$attendanceCount} attendance record(s) on file. Deactivate the account instead to preserve attendance history."];
+    }
+
+    $pdo->beginTransaction();
+    try {
+        if (pcm_table_exists($pdo, 'classroom_reports')) {
+            $pdo->prepare("UPDATE classroom_reports SET teacher_id = NULL WHERE teacher_id = :id")->execute([':id' => $teacherId]);
+        }
+        $pdo->prepare("UPDATE classes SET teacher_id = NULL WHERE teacher_id = :id")->execute([':id' => $teacherId]);
+        $pdo->prepare("DELETE FROM teachers WHERE id = :id")->execute([':id' => $teacherId]);
+        pcm_delete_user_account_rows($pdo, $userId);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        return ['ok' => false, 'message' => 'Error deleting teacher: ' . $e->getMessage()];
+    }
+
+    return ['ok' => true, 'message' => 'Teacher <strong>' . h($name) . '</strong> deleted.'];
+}
+
+/**
+ * Permanently deletes a stand-alone login account (Admin / Website Admin /
+ * teacher / parent role) from the `user` table. If the account is linked to
+ * a teacher or parent record, delegates to the entity-specific delete so
+ * that dependent data is cleaned up consistently instead of orphaned.
+ */
+function pcm_delete_user(PDO $pdo, string $userId, string $actor): array {
+    $userId = trim($userId);
+    if ($userId === '') {
+        return ['ok' => false, 'message' => 'Invalid user.'];
+    }
+    if ($userId === '1') {
+        return ['ok' => false, 'message' => 'The root admin account cannot be deleted.'];
+    }
+
+    $teacherStmt = $pdo->prepare("SELECT id FROM teachers WHERE user_id = :uid LIMIT 1");
+    $teacherStmt->execute([':uid' => $userId]);
+    $teacherId = (int)($teacherStmt->fetchColumn() ?: 0);
+    if ($teacherId > 0) {
+        return pcm_delete_teacher($pdo, $teacherId, $actor);
+    }
+
+    $parentStmt = $pdo->prepare("SELECT id FROM parents WHERE user_id = :uid LIMIT 1");
+    $parentStmt->execute([':uid' => $userId]);
+    $parentId = (int)($parentStmt->fetchColumn() ?: 0);
+    if ($parentId > 0) {
+        return pcm_delete_parent($pdo, $parentId, $actor);
+    }
+
+    $userStmt = $pdo->prepare("SELECT username FROM `user` WHERE userid = :uid LIMIT 1");
+    $userStmt->execute([':uid' => $userId]);
+    $username = (string)($userStmt->fetchColumn() ?: '');
+    if ($username === '') {
+        return ['ok' => false, 'message' => 'User not found.'];
+    }
+
+    $pdo->beginTransaction();
+    try {
+        pcm_delete_user_account_rows($pdo, $userId);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        return ['ok' => false, 'message' => 'Error deleting user: ' . $e->getMessage()];
+    }
+
+    return ['ok' => true, 'message' => 'User <strong>' . h($username) . '</strong> deleted.'];
+}

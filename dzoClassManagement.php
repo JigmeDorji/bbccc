@@ -114,25 +114,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ok = true;
 
             } elseif ($action === 'delete') {
-                $stu = $pdo->prepare("SELECT student_name FROM students WHERE id = :id LIMIT 1");
-                $stu->execute([':id' => $studentDbId]);
-                $student = $stu->fetch(PDO::FETCH_ASSOC);
-                if (!$student) {
-                    throw new Exception("Student not found.");
-                }
-
-                $pdo->beginTransaction();
-                // Delete fees (both old + PCM)
-                $pdo->prepare("DELETE FROM fees_payments WHERE student_id = :sid")->execute([':sid' => (string)$studentDbId]);
-                $pdo->prepare("DELETE FROM pcm_fee_payments WHERE student_id = :sid")->execute([':sid' => $studentDbId]);
-                // Delete enrolment record
-                $pdo->prepare("DELETE FROM pcm_enrolments WHERE student_id = :sid")->execute([':sid' => $studentDbId]);
-                // Delete student
-                $pdo->prepare("DELETE FROM students WHERE id = :id")->execute([':id' => $studentDbId]);
-                $pdo->commit();
-                $flash = 'Student record deleted.';
-                $ok = true;
-
+                $result = pcm_delete_student($pdo, $studentDbId, (string)$reviewer);
+                $flash = $result['message'];
+                $ok = $result['ok'];
             }
         } catch (Exception $ex) {
             if ($pdo->inTransaction()) {
@@ -712,6 +696,35 @@ document.addEventListener('DOMContentLoaded', () => {
 </form>
 
 <script>
+// Reusable "type the name to confirm" guard for destructive actions.
+function bbccTypedConfirm(opts) {
+    var expected = String(opts.expected || '');
+    Swal.fire({
+        title: opts.title,
+        html: opts.warningHtml +
+            '<div class="mt-3 text-left"><label class="small font-weight-bold mb-1">Type <code>' +
+            $('<div>').text(expected).html() + '</code> to confirm:</label>' +
+            '<input id="typedConfirmInput" class="swal2-input" style="margin:0;" autocomplete="off"></div>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: opts.confirmColor || '#e74a3b',
+        cancelButtonColor: '#858796',
+        confirmButtonText: opts.confirmText || '<i class="fas fa-trash-alt mr-1"></i> Delete',
+        cancelButtonText: 'Cancel',
+        focusConfirm: false,
+        preConfirm: function () {
+            var val = (document.getElementById('typedConfirmInput').value || '').trim();
+            if (val !== expected) {
+                Swal.showValidationMessage('Type the name exactly to confirm.');
+                return false;
+            }
+            return true;
+        }
+    }).then(function (result) {
+        if (result.isConfirmed && typeof opts.onConfirm === 'function') opts.onConfirm();
+    });
+}
+
 $(function(){
     // DataTable
     var dt = $('#enrolTable').DataTable({
@@ -870,22 +883,17 @@ $(function(){
         });
     });
 
-    // Delete with SweetAlert
+    // Delete with typed-name confirmation
     $(document).on('click', '.delete-btn', function(e){
         e.preventDefault();
         var id = $(this).data('id');
         var name = $(this).data('name');
-        Swal.fire({
-            title: 'Delete Enrolment?',
-            html: 'Permanently remove <strong>' + name + '</strong> and all related records?',
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#e74a3b',
-            cancelButtonColor: '#858796',
-            confirmButtonText: '<i class="fas fa-trash-alt mr-1"></i> Delete',
-            cancelButtonText: 'Cancel'
-        }).then(function(result){
-            if (result.isConfirmed) {
+        bbccTypedConfirm({
+            title: 'Delete Student?',
+            expected: name,
+            warningHtml: 'This permanently removes <strong>' + $('<div>').text(name).html() + '</strong> and all related records ' +
+                '(fees, attendance, enrollment, payments, class assignment, sign-in history). This cannot be undone.',
+            onConfirm: function () {
                 $('#deleteStudentId').val(id);
                 $('#deleteForm').submit();
             }
