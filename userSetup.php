@@ -267,6 +267,8 @@ foreach ($allUsers as $u) {
         .nav-tabs .nav-link.active { border-bottom:3px solid var(--brand); color:var(--brand); font-weight:600; }
         .nav-tabs .nav-link { color:#555; }
         .role-badge { border-radius:10px; padding:3px 10px; font-size:.76rem; font-weight:600; }
+        .act-group { display:inline-flex; gap:4px; align-items:center; white-space:nowrap; }
+        .act-group .btn, .act-group form { margin:0; }
         .role-admin    { background:#fef3f2; color:var(--brand); border:1px solid #f7c6c3; }
         .role-webadmin { background:#fff3cd; color:#7c5c00; border:1px solid #ffe08a; }
         .role-teacher  { background:#e8f4fd; color:#1a6c9c; border:1px solid #b8dcf2; }
@@ -407,6 +409,7 @@ foreach ($allUsers as $u) {
                                                 </td>
                                                 <td style="font-size:.84rem;color:#888;"><?= $u['createdDate'] ? htmlspecialchars(date('d M Y', strtotime($u['createdDate']))) : '—' ?></td>
                                                 <td class="text-center">
+                                                    <div class="act-group">
                                                     <a
                                                         href="user-profile-view?type=user&userid=<?= urlencode((string)$u['userid']) ?>"
                                                         class="btn btn-sm btn-outline-info"
@@ -434,6 +437,7 @@ foreach ($allUsers as $u) {
                                                     </button>
                                                     <?php endif; ?>
                                                     <?php endif; ?>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -485,6 +489,7 @@ foreach ($allUsers as $u) {
                                                 </td>
                                                 <td style="font-size:.84rem;color:#888;"><?= $u['createdDate'] ? htmlspecialchars(date('d M Y', strtotime($u['createdDate']))) : '—' ?></td>
                                                 <td class="text-center">
+                                                    <div class="act-group">
                                                     <a
                                                         href="user-profile-view?type=user&userid=<?= urlencode((string)$u['userid']) ?>"
                                                         class="btn btn-sm btn-outline-info"
@@ -510,6 +515,7 @@ foreach ($allUsers as $u) {
                                                         <i class="fas fa-trash-alt" style="font-size:.75rem;"></i>
                                                     </button>
                                                     <?php endif; ?>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -541,7 +547,7 @@ foreach ($allUsers as $u) {
                                             <th>Email</th>
                                             <th>Phone</th>
                                             <th>Status</th>
-                                            <th style="width:120px;text-align:center;">Actions</th>
+                                            <th style="width:150px;text-align:center;">Actions</th>
                                         </tr>
                                         </thead>
                                         <tbody>
@@ -562,6 +568,7 @@ foreach ($allUsers as $u) {
                                                     <?php endif; ?>
                                                 </td>
                                                 <td class="text-center">
+                                                    <div class="act-group">
                                                     <a
                                                         href="user-profile-view?type=teacher&teacher_id=<?= (int)$t['teacher_id'] ?>"
                                                         class="btn btn-sm btn-outline-info"
@@ -584,6 +591,7 @@ foreach ($allUsers as $u) {
                                                         style="width:32px;height:32px;padding:0;border-radius:8px;line-height:32px;">
                                                         <i class="fas fa-trash-alt" style="font-size:.75rem;"></i>
                                                     </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -610,7 +618,7 @@ foreach ($allUsers as $u) {
                                             <th>Phone</th>
                                             <th>Status</th>
                                             <th>Joined</th>
-                                            <th style="width:120px;text-align:center;">Actions</th>
+                                            <th style="width:150px;text-align:center;">Actions</th>
                                         </tr>
                                         </thead>
                                         <tbody>
@@ -636,6 +644,7 @@ foreach ($allUsers as $u) {
                                                 </td>
                                                 <td style="font-size:.84rem;color:#888;"><?= htmlspecialchars(date('d M Y', strtotime($p['created_at']))) ?></td>
                                                 <td class="text-center">
+                                                    <div class="act-group">
                                                     <a
                                                         href="user-profile-view?type=parent&parent_id=<?= (int)$p['id'] ?>"
                                                         class="btn btn-sm btn-outline-info"
@@ -658,6 +667,7 @@ foreach ($allUsers as $u) {
                                                         style="width:32px;height:32px;padding:0;border-radius:8px;line-height:32px;">
                                                         <i class="fas fa-trash-alt" style="font-size:.75rem;"></i>
                                                     </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
