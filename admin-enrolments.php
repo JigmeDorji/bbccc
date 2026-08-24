@@ -143,11 +143,17 @@ function bbcc_render_enrolment_rows(array $rows, array $campusChoices, array $al
 }
 
 // ── POST actions ──
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['approve','reject','request_changes','assign_class','manual_enrol','enrol_registered_child','reject_registration','save_age_settings'], true)) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['approve','reject','request_changes','assign_class','manual_enrol','enrol_registered_child','reject_registration','delete_registration','save_age_settings'], true)) {
     verify_csrf();
     $action = $_POST['action'];
 
-    if ($action === 'reject_registration') {
+    if ($action === 'delete_registration') {
+        $studentDbId = (int)($_POST['student_id'] ?? 0);
+        $result = pcm_delete_student($pdo, $studentDbId, $currentActor);
+        $flash = $result['message'];
+        $ok = $result['ok'];
+
+    } elseif ($action === 'reject_registration') {
         $studentDbId = (int)($_POST['student_id'] ?? 0);
         $note = trim((string)($_POST['admin_note'] ?? ''));
         if ($studentDbId <= 0) {
@@ -1031,6 +1037,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                             <?php endif; ?>
                         </td>
                         <td>
+                            <div class="d-flex flex-wrap" style="gap:4px;">
                             <button
                                 type="button"
                                 class="btn btn-sm btn-primary js-enrol-registered-btn"
@@ -1045,6 +1052,10 @@ document.addEventListener('DOMContentLoaded',()=>{
                                 <i class="fas fa-times mr-1"></i> Reject
                             </button>
                             <?php endif; ?>
+                            <button type="button" class="btn btn-sm btn-outline-secondary js-delete-registration-btn" data-student-id="<?= (int)$rc['id'] ?>" data-student-name="<?= h((string)($rc['student_name'] ?? '')) ?>" title="Permanently delete this child record">
+                                <i class="fas fa-trash-alt mr-1"></i> Delete
+                            </button>
+                            </div>
                         </td>
                     </tr>
                 <?php endforeach; ?>
@@ -1282,6 +1293,12 @@ document.addEventListener('DOMContentLoaded',()=>{
     </div></div>
 </div>
 
+<form id="deleteRegistrationForm" method="POST" style="display:none;">
+    <?= csrf_field() ?>
+    <input type="hidden" name="action" value="delete_registration">
+    <input type="hidden" name="student_id" id="deleteRegistrationStudentId" value="">
+</form>
+
 <script>
 var bbccEnrolHistory = <?= json_encode($auditForJs, JSON_HEX_TAG | JSON_HEX_APOS) ?>;
 </script>
@@ -1367,6 +1384,35 @@ var bbccEnrolHistory = <?= json_encode($auditForJs, JSON_HEX_TAG | JSON_HEX_APOS
 </div>
 
 <script>
+// Reusable "type the name to confirm" guard for destructive actions.
+function bbccTypedConfirm(opts) {
+    var expected = String(opts.expected || '');
+    Swal.fire({
+        title: opts.title,
+        html: opts.warningHtml +
+            '<div class="mt-3 text-left"><label class="small font-weight-bold mb-1">Type <code>' +
+            $('<div>').text(expected).html() + '</code> to confirm:</label>' +
+            '<input id="typedConfirmInput" class="swal2-input" style="margin:0;" autocomplete="off"></div>',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: opts.confirmColor || '#e74a3b',
+        cancelButtonColor: '#858796',
+        confirmButtonText: opts.confirmText || '<i class="fas fa-trash-alt mr-1"></i> Delete',
+        cancelButtonText: 'Cancel',
+        focusConfirm: false,
+        preConfirm: function () {
+            var val = (document.getElementById('typedConfirmInput').value || '').trim();
+            if (val !== expected) {
+                Swal.showValidationMessage('Type the name exactly to confirm.');
+                return false;
+            }
+            return true;
+        }
+    }).then(function (result) {
+        if (result.isConfirmed && typeof opts.onConfirm === 'function') opts.onConfirm();
+    });
+}
+
 $(function(){
     var dt = $('#enrolTable').DataTable({
         pageLength: 25,
@@ -1568,6 +1614,21 @@ $(function(){
         $('#rejectRegStudentId').val($(this).data('student-id'));
         $('#rejectRegStudentName').text($(this).data('student-name') || '');
         $('#rejectRegModal').modal('show');
+    });
+
+    $(document).on('click', '.js-delete-registration-btn', function(){
+        var sid = $(this).data('student-id');
+        var name = $(this).data('student-name');
+        bbccTypedConfirm({
+            title: 'Delete Child Record?',
+            expected: name,
+            warningHtml: 'This permanently removes <strong>' + $('<div>').text(name).html() + '</strong> and all related records ' +
+                '(registration, fees, attendance, payments). This cannot be undone.',
+            onConfirm: function () {
+                $('#deleteRegistrationStudentId').val(sid);
+                $('#deleteRegistrationForm').submit();
+            }
+        });
     });
 
     $(document).on('click', '.js-history-btn', function(){
