@@ -903,7 +903,7 @@ document.addEventListener('DOMContentLoaded',()=>{
                 <div class="modal-body">
                     <?php if ($prefillParent): ?>
                     <div class="alert alert-info py-2 small mb-3">
-                        <i class="fas fa-info-circle mr-1"></i> Adding a child under this existing parent account. Parent details below are locked to avoid creating a duplicate account.
+                        <i class="fas fa-info-circle mr-1"></i> Adding a child under <strong><?= h((string)$prefillParent['full_name']) ?></strong> &mdash; their name and email are locked below so this new child links to the same account. Fill in the child's details and continue.
                     </div>
                     <?php endif; ?>
                     <div class="row">
