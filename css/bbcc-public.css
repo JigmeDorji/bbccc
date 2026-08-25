@@ -196,33 +196,46 @@ body.bbcc-public {
 /* Invisible bridge over the visual gap below the trigger link, so moving
    the mouse straight down into the submenu doesn't drop out of :hover. */
 .bbcc-nav__has-submenu::after {
-    content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 10px;
+    content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 14px;
 }
 .bbcc-nav__submenu {
     position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
-    min-width: 220px;
+    top: calc(100% + 12px);
+    left: 50%;
+    min-width: 200px;
     list-style: none;
     margin: 0;
     padding: 8px;
     border-radius: var(--radius-md);
-    border: 1px solid var(--gray-200);
+    border: none;
     background: var(--white);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-lg);
     z-index: 1200;
     opacity: 0;
     visibility: hidden;
-    transform: translateY(-8px);
-    transition: opacity .18s ease, transform .18s ease, visibility 0s linear .18s;
+    transform: translateX(-50%) translateY(-6px);
+    transition: opacity .25s cubic-bezier(.4,0,.2,1), transform .25s cubic-bezier(.4,0,.2,1), visibility 0s linear .25s;
     pointer-events: none;
+}
+/* Small caret connecting the menu back to its trigger, so it reads as
+   one continuous surface instead of an unrelated floating box. */
+.bbcc-nav__submenu::before {
+    content: '';
+    position: absolute;
+    top: -5px;
+    left: 50%;
+    width: 10px; height: 10px;
+    background: var(--white);
+    transform: translateX(-50%) rotate(45deg);
+    border-radius: 2px 0 0 0;
+    box-shadow: -1px -1px 2px rgba(0,0,0,.03);
 }
 .bbcc-nav__has-submenu:hover .bbcc-nav__submenu,
 .bbcc-nav__has-submenu:focus-within .bbcc-nav__submenu {
     opacity: 1;
     visibility: visible;
-    transform: translateY(0);
-    transition: opacity .18s ease, transform .18s ease;
+    transform: translateX(-50%) translateY(0);
+    transition: opacity .25s cubic-bezier(.4,0,.2,1), transform .25s cubic-bezier(.4,0,.2,1);
     pointer-events: auto;
 }
 .bbcc-nav__submenu li a { padding: 10px 12px; }
@@ -260,6 +273,7 @@ body.bbcc-public {
     .bbcc-nav li.active a::after { display: none; }
     .bbcc-nav__login { margin-top: 8px; justify-content: center; }
     .bbcc-nav__has-submenu::after { display: none; }
+    .bbcc-nav__submenu::before { display: none; }
     .bbcc-nav__submenu {
         position: static;
         min-width: 0;
