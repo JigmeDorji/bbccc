@@ -231,23 +231,26 @@ try {
                 <h1><?= htmlspecialchars($banner['title']) ?></h1>
                 <p><?= htmlspecialchars($banner['subtitle']) ?></p>
                 <div class="bbcc-hero__actions">
-                    <a href="about-us" class="bbcc-btn bbcc-btn--outline" aria-label="Learn about the Bhutanese Buddhist and Cultural Centre">
-                        Learn About BBCC <i class="fa-solid fa-arrow-right"></i>
+                    <a href="banner-detail?id=<?= (int)$banner['id'] ?>" class="bbcc-hero__more-link">
+                        Click here for more <i class="fa-solid fa-arrow-right"></i>
                     </a>
                 </div>
             </div>
             <div class="bbcc-hero__image">
-                <?= bbcc_render_responsive_picture(
-                    (string)$banner['imgUrl'],
-                    (string)$banner['title'],
-                    [
-                        'sizes' => '(max-width: 991px) 100vw, 45vw',
-                        'loading' => ($i === 0 ? 'eager' : 'lazy'),
-                        'decoding' => 'async',
-                        'fetchpriority' => ($i === 0 ? 'high' : 'auto'),
-                        'widths' => [640, 960, 1280, 1600],
-                    ]
-                ) ?>
+                <a href="banner-detail?id=<?= (int)$banner['id'] ?>" class="bbcc-hero__image-link" aria-label="View full image and description: <?= htmlspecialchars($banner['title']) ?>">
+                    <?= bbcc_render_responsive_picture(
+                        (string)$banner['imgUrl'],
+                        (string)$banner['title'],
+                        [
+                            'sizes' => '(max-width: 991px) 100vw, 45vw',
+                            'loading' => ($i === 0 ? 'eager' : 'lazy'),
+                            'decoding' => 'async',
+                            'fetchpriority' => ($i === 0 ? 'high' : 'auto'),
+                            'widths' => [640, 960, 1280, 1600],
+                        ]
+                    ) ?>
+                    <span class="bbcc-hero__image-overlay"><i class="fa-solid fa-expand"></i> View Details</span>
+                </a>
             </div>
         </div>
     </div>

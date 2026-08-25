@@ -350,6 +350,24 @@ body.bbcc-public {
     width: 100%; height: 480px; object-fit: cover; border-radius: var(--radius-xl);
     box-shadow: var(--shadow-xl);
 }
+.bbcc-hero__image-link {
+    display: block; position: relative; border-radius: var(--radius-xl); overflow: hidden;
+}
+.bbcc-hero__image-overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    background: rgba(26,26,46,.5);
+    color: #fff; font-weight: 700; font-size: .95rem; letter-spacing: .3px;
+    opacity: 0; transition: var(--transition-fast);
+    pointer-events: none;
+}
+.bbcc-hero__image-link:hover .bbcc-hero__image-overlay,
+.bbcc-hero__image-link:focus-visible .bbcc-hero__image-overlay {
+    opacity: 1;
+}
+.bbcc-hero__image-link:focus-visible {
+    outline: 2px solid var(--brand); outline-offset: 3px;
+}
 .bbcc-hero__image::before {
     content: ''; position: absolute; top: -20px; right: -20px; width: 120px; height: 120px;
     background: var(--brand-bg); border-radius: 50%; z-index: -1;
@@ -474,7 +492,14 @@ body.bbcc-public {
 .bbcc-public a.bbcc-btn--white:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); color: var(--brand-dark); }
 .bbcc-btn--sm { padding: 10px 22px; font-size: .85rem; }
 .bbcc-btn--lg { padding: 16px 40px; font-size: 1.05rem; }
-.bbcc-hero__actions { display: flex; gap: 16px; flex-wrap: wrap; }
+.bbcc-hero__actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.bbcc-hero__more-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-weight: 600; font-size: .92rem; color: var(--brand);
+}
+.bbcc-hero__more-link i { font-size: .75rem; transition: var(--transition-fast); }
+.bbcc-hero__more-link:hover { color: var(--brand-dark); }
+.bbcc-hero__more-link:hover i { transform: translateX(3px); }
 
 /* ═══════════════════════════════════════════════════════════════
    FEATURE CARDS
