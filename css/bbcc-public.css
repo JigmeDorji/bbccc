@@ -293,31 +293,23 @@ body.bbcc-public {
    HERO SECTION
    ═══════════════════════════════════════════════════════════════ */
 .bbcc-hero {
-    position: relative; width: 100%; height: 600px; overflow: hidden;
+    position: relative; width: 100%; min-height: 600px; overflow: hidden;
     background: linear-gradient(135deg, #fef3f2 0%, #fff 50%, #f8f9fa 100%);
 }
 .bbcc-hero__slide {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    position: absolute; top: 0; left: 0; width: 100%; min-height: 600px;
     opacity: 0; transition: opacity .8s ease;
 }
 .bbcc-hero__slide.active { opacity: 1; position: relative; }
 .bbcc-hero__container {
-    display: flex; align-items: center; height: 100%; max-width: 1200px; margin: 0 auto; padding: 0 24px;
+    display: flex; align-items: center; min-height: 600px; max-width: 1200px; margin: 0 auto; padding: 0 24px;
 }
 .bbcc-hero__content {
     flex: 1; padding: 60px 0; padding-right: 60px;
 }
-.bbcc-hero__content .hero-badge {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: var(--brand-bg); color: var(--brand); font-weight: 600; font-size: .8rem;
-    padding: 8px 20px; border-radius: var(--radius-full); margin-bottom: 24px;
-    border: 1px solid rgba(136,27,18,.15);
-}
-.bbcc-hero__content .hero-badge i { font-size: .7rem; }
 .bbcc-hero__content h1 {
-    font-size: 3.2rem; font-weight: 900; color: var(--gray-900); line-height: 1.12;
+    font-size: 2.5rem; font-weight: 900; color: var(--gray-900); line-height: 1.15;
     margin: 0 0 20px;
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
 }
 .bbcc-hero__content h1 span { color: var(--brand); }
 .bbcc-hero__content p {
@@ -343,40 +335,89 @@ body.bbcc-public {
 /* Hero Animations: keep subtle motion, but avoid hiding LCP text/image on first paint */
 @keyframes heroSlideUp { from { transform:translateY(16px); } to { transform:translateY(0); } }
 @keyframes heroScaleIn { from { transform:scale(1.03); } to { transform:scale(1); } }
-.bbcc-hero__slide.active .hero-badge { animation: heroSlideUp .35s .03s both; }
 .bbcc-hero__slide.active h1 { animation: heroSlideUp .4s .05s both; }
 .bbcc-hero__slide.active p { animation: heroSlideUp .45s .1s both; }
 .bbcc-hero__slide.active .bbcc-hero__actions { animation: heroSlideUp .5s .12s both; }
 .bbcc-hero__slide.active .bbcc-hero__image img { animation: heroScaleIn .9s .05s both; }
 
-/* Hero Dots */
-.bbcc-hero__dots {
+/* Hero Dots + Controls */
+.bbcc-hero__controls {
     position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%);
-    display: flex; gap: 10px; z-index: 10;
+    display: flex; align-items: center; gap: 18px; z-index: 10;
 }
+.bbcc-hero__dots { display: flex; gap: 10px; }
 .bbcc-hero__dots .dot {
     width: 10px; height: 10px; border-radius: 50%; background: var(--gray-400);
     cursor: pointer; transition: var(--transition-fast);
+    border: none; padding: 0; appearance: none;
 }
 .bbcc-hero__dots .dot:hover { background: var(--brand-light); }
 .bbcc-hero__dots .dot.active { background: var(--brand); width: 28px; border-radius: 10px; }
+.bbcc-hero__dots .dot:focus-visible,
+.bbcc-hero__arrow:focus-visible,
+.bbcc-hero__pause:focus-visible {
+    outline: 2px solid var(--brand); outline-offset: 2px;
+}
+
+.bbcc-hero__pause {
+    width: 30px; height: 30px; border-radius: 50%; border: none;
+    background: rgba(0,0,0,.08); color: var(--gray-700);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: var(--transition-fast); font-size: .72rem;
+}
+.bbcc-hero__pause:hover { background: var(--brand); color: var(--white); }
+
+/* Hero Prev/Next Arrows */
+.bbcc-hero__arrow {
+    position: absolute; top: 50%; transform: translateY(-50%); z-index: 10;
+    width: 44px; height: 44px; border-radius: 50%; border: none;
+    background: rgba(255,255,255,.9); color: var(--brand);
+    box-shadow: var(--shadow-md);
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: var(--transition-fast); font-size: .9rem;
+}
+.bbcc-hero__arrow:hover { background: var(--brand); color: var(--white); }
+.bbcc-hero__arrow--prev { left: 24px; }
+.bbcc-hero__arrow--next { right: 24px; }
+
+/* Screen-reader-only utility */
+.sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* Respect reduced-motion preference: no entrance animation */
+@media (prefers-reduced-motion: reduce) {
+    .bbcc-hero__slide.active h1,
+    .bbcc-hero__slide.active p,
+    .bbcc-hero__slide.active .bbcc-hero__actions,
+    .bbcc-hero__slide.active .bbcc-hero__image img {
+        animation: none;
+    }
+    .bbcc-hero__slide { transition: none; }
+}
 
 /* Hero Responsive */
 @media (max-width: 991px) {
     .bbcc-hero { height: auto; min-height: auto; }
+    .bbcc-hero__slide { min-height: auto; }
     .bbcc-hero__container { flex-direction: column; height: auto; min-height: auto; padding: 40px 24px; text-align: center; }
     .bbcc-hero__content { padding: 0; padding-right: 0; }
-    .bbcc-hero__content h1 { font-size: 2.2rem; }
+    .bbcc-hero__content h1 { font-size: 2rem; }
     .bbcc-hero__content p { max-width: 100%; font-size: 1rem; margin-left: auto; margin-right: auto; }
     .bbcc-hero__image { flex: none; width: 100%; margin-top: 32px; }
     .bbcc-hero__image img { height: 300px; }
     .bbcc-hero__image::before, .bbcc-hero__image::after { display: none; }
     .bbcc-hero__actions { justify-content: center; }
-    .bbcc-hero__dots { bottom: 16px; }
+    .bbcc-hero__controls { bottom: 16px; }
+    .bbcc-hero__arrow { width: 36px; height: 36px; }
+    .bbcc-hero__arrow--prev { left: 10px; }
+    .bbcc-hero__arrow--next { right: 10px; }
 }
 @media (max-width: 576px) {
-    .bbcc-hero__content h1 { font-size: 1.8rem; }
+    .bbcc-hero__content h1 { font-size: 1.6rem; }
     .bbcc-hero__image img { height: 220px; border-radius: var(--radius-lg); }
+    .bbcc-hero__arrow { display: none; }
 }
 
 /* ── Buttons ── */

@@ -220,13 +220,14 @@ try {
 <?php include_once 'include/nav.php'; ?>
 
 <!-- ═══ HERO SLIDER ═══ -->
-<section class="bbcc-hero" id="bbccHero">
+<section class="bbcc-hero" id="bbccHero" <?= count($banners) > 1 ? 'role="region" aria-roledescription="carousel" aria-label="Featured highlights"' : '' ?>>
     <?php if (!empty($banners)): ?>
+    <?php $bannerCount = count($banners); ?>
     <?php foreach ($banners as $i => $banner): ?>
-    <div class="bbcc-hero__slide <?= $i === 0 ? 'active' : '' ?>">
+    <div class="bbcc-hero__slide <?= $i === 0 ? 'active' : '' ?>"
+         <?php if ($bannerCount > 1): ?>role="group" aria-roledescription="slide" aria-label="<?= $i + 1 ?> of <?= $bannerCount ?>" aria-hidden="<?= $i === 0 ? 'false' : 'true' ?>"<?php endif; ?>>
         <div class="bbcc-hero__container">
             <div class="bbcc-hero__content">
-                <span class="hero-badge"><i class="fa-solid fa-dharma-wheel"></i> Welcome to BBCC</span>
                 <h1><?= htmlspecialchars($banner['title']) ?></h1>
                 <p><?= htmlspecialchars($banner['subtitle']) ?></p>
                 <div class="bbcc-hero__actions">
@@ -241,7 +242,7 @@ try {
                     (string)$banner['title'],
                     [
                         'sizes' => '(max-width: 991px) 100vw, 45vw',
-                        'loading' => 'eager',
+                        'loading' => ($i === 0 ? 'eager' : 'lazy'),
                         'decoding' => 'async',
                         'fetchpriority' => ($i === 0 ? 'high' : 'auto'),
                         'widths' => [640, 960, 1280, 1600],
@@ -252,11 +253,28 @@ try {
     </div>
     <?php endforeach; ?>
 
-    <div class="bbcc-hero__dots">
-        <?php foreach ($banners as $i => $banner): ?>
-        <span class="dot <?= $i === 0 ? 'active' : '' ?>" data-slide="<?= $i ?>"></span>
-        <?php endforeach; ?>
+    <?php if ($bannerCount > 1): ?>
+    <button type="button" class="bbcc-hero__arrow bbcc-hero__arrow--prev" aria-label="Previous slide">
+        <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+    </button>
+    <button type="button" class="bbcc-hero__arrow bbcc-hero__arrow--next" aria-label="Next slide">
+        <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+    </button>
+
+    <div class="bbcc-hero__controls">
+        <div class="bbcc-hero__dots" role="group" aria-label="Slide navigation">
+            <?php foreach ($banners as $i => $banner): ?>
+            <button type="button" class="dot <?= $i === 0 ? 'active' : '' ?>" data-slide="<?= $i ?>"
+                    aria-label="Go to slide <?= $i + 1 ?> of <?= $bannerCount ?>" aria-current="<?= $i === 0 ? 'true' : 'false' ?>"></button>
+            <?php endforeach; ?>
+        </div>
+        <button type="button" class="bbcc-hero__pause" id="bbccHeroPause" aria-label="Pause slideshow" aria-pressed="false">
+            <i class="fa-solid fa-pause" aria-hidden="true"></i>
+        </button>
     </div>
+
+    <span class="sr-only" id="bbccHeroLive" aria-live="polite"></span>
+    <?php endif; ?>
     <?php endif; ?>
 </section>
 
@@ -577,24 +595,86 @@ try {
 <!-- Hero Slider JS -->
 <script>
 (function() {
+    var hero = document.getElementById("bbccHero");
     var slides = document.querySelectorAll(".bbcc-hero__slide");
     var dots = document.querySelectorAll(".bbcc-hero__dots .dot");
-    if (!slides.length) return;
+    var prevBtn = document.querySelector(".bbcc-hero__arrow--prev");
+    var nextBtn = document.querySelector(".bbcc-hero__arrow--next");
+    var pauseBtn = document.getElementById("bbccHeroPause");
+    var liveRegion = document.getElementById("bbccHeroLive");
+    if (!slides.length || slides.length < 2) return;
+
     var idx = 0;
+    var timer = null;
+    var paused = false;
+    var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var AUTO_ADVANCE_MS = 7000;
 
     function goTo(n) {
         slides[idx].classList.remove("active");
-        if (dots[idx]) dots[idx].classList.remove("active");
-        idx = n % slides.length;
+        slides[idx].setAttribute("aria-hidden", "true");
+        if (dots[idx]) { dots[idx].classList.remove("active"); dots[idx].setAttribute("aria-current", "false"); }
+
+        idx = (n + slides.length) % slides.length;
+
         slides[idx].classList.add("active");
-        if (dots[idx]) dots[idx].classList.add("active");
+        slides[idx].setAttribute("aria-hidden", "false");
+        if (dots[idx]) { dots[idx].classList.add("active"); dots[idx].setAttribute("aria-current", "true"); }
+
+        if (liveRegion) {
+            var label = slides[idx].getAttribute("aria-label") || ("Slide " + (idx + 1));
+            liveRegion.textContent = "Showing " + label;
+        }
+    }
+
+    function restartTimer() {
+        if (timer) clearInterval(timer);
+        if (paused) return;
+        timer = setInterval(function() { goTo(idx + 1); }, AUTO_ADVANCE_MS);
+    }
+
+    function userNav(n) {
+        goTo(n);
+        restartTimer();
     }
 
     dots.forEach(function(d, i) {
-        d.addEventListener("click", function() { goTo(i); });
+        d.addEventListener("click", function() { userNav(i); });
     });
+    if (prevBtn) prevBtn.addEventListener("click", function() { userNav(idx - 1); });
+    if (nextBtn) nextBtn.addEventListener("click", function() { userNav(idx + 1); });
 
-    setInterval(function() { goTo(idx + 1); }, 7000);
+    if (pauseBtn) {
+        pauseBtn.addEventListener("click", function() {
+            paused = !paused;
+            pauseBtn.setAttribute("aria-pressed", paused ? "true" : "false");
+            pauseBtn.setAttribute("aria-label", paused ? "Play slideshow" : "Pause slideshow");
+            pauseBtn.querySelector("i").className = paused ? "fa-solid fa-play" : "fa-solid fa-pause";
+            restartTimer();
+        });
+    }
+
+    // Swipe support
+    if (hero) {
+        var touchStartX = null;
+        hero.addEventListener("touchstart", function(e) {
+            touchStartX = e.changedTouches[0].clientX;
+        }, { passive: true });
+        hero.addEventListener("touchend", function(e) {
+            if (touchStartX === null) return;
+            var dx = e.changedTouches[0].clientX - touchStartX;
+            touchStartX = null;
+            if (Math.abs(dx) < 40) return;
+            userNav(dx < 0 ? idx + 1 : idx - 1);
+        }, { passive: true });
+    }
+
+    // Reduced-motion users get manual navigation only, no autoplay.
+    if (!reduceMotion) {
+        restartTimer();
+    } else if (pauseBtn) {
+        pauseBtn.style.display = "none";
+    }
 })();
 </script>
 
