@@ -192,26 +192,35 @@ body.bbcc-public {
     width: 20px; height: 3px; background: var(--brand); border-radius: 3px;
 }
 
-.bbcc-nav__has-submenu { position: relative; }
-/* No gap between the trigger and the menu -- it should read as the
-   navbar's own surface extending down, not a separate card floating
-   near it. Flush top, rounded only where it stops being attached. */
+.bbcc-nav__has-submenu { position: static; }
+/* Apple-style full-width panel: spans the entire navbar edge-to-edge
+   instead of a small box under the trigger, with no rounded corners --
+   flush and continuous with the navbar above. The links themselves are
+   centered within that full-width strip via flexbox, matching the
+   max-width content column visually without needing a separate
+   wrapper element. */
 .bbcc-nav__submenu {
+    /* Positions relative to .bbcc-navbar (nearest positioned ancestor,
+       via its position:sticky) rather than a hardcoded pixel offset --
+       stays correctly flush against it whether the page is scrolled
+       to the top (topbar still visible above the navbar) or the
+       navbar is stuck at the very top of the viewport. */
     position: absolute;
     top: 100%;
-    left: 50%;
-    min-width: 200px;
+    left: 0;
+    right: 0;
+    width: 100%;
     list-style: none;
-    margin: 0;
-    padding: 8px;
-    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    padding: 22px 24px;
+    display: flex;
+    justify-content: center;
+    gap: 40px;
     background: var(--white);
     box-shadow: var(--shadow-lg);
     z-index: 1200;
     opacity: 0;
     visibility: hidden;
-    transform: translateX(-50%) translateY(-4px);
-    transform-origin: top center;
+    transform: translateY(-6px);
     transition: opacity .2s cubic-bezier(.4,0,.2,1), transform .2s cubic-bezier(.4,0,.2,1), visibility 0s linear .2s;
     pointer-events: none;
 }
@@ -219,11 +228,11 @@ body.bbcc-public {
 .bbcc-nav__has-submenu:focus-within .bbcc-nav__submenu {
     opacity: 1;
     visibility: visible;
-    transform: translateX(-50%) translateY(0);
+    transform: translateY(0);
     transition: opacity .2s cubic-bezier(.4,0,.2,1), transform .2s cubic-bezier(.4,0,.2,1);
     pointer-events: auto;
 }
-.bbcc-nav__submenu li a { padding: 10px 12px; }
+.bbcc-nav__submenu li a { padding: 10px 20px; font-size: 1rem; }
 
 .bbcc-nav__login {
     display: inline-flex; align-items: center; gap: 8px;
@@ -259,9 +268,11 @@ body.bbcc-public {
     .bbcc-nav__login { margin-top: 8px; justify-content: center; }
     .bbcc-nav__submenu {
         position: static;
-        min-width: 0;
+        display: block;
+        width: auto;
         margin: 6px 0 0 12px;
         padding: 0;
+        gap: 0;
         border: 0;
         box-shadow: none;
         background: transparent;
@@ -271,7 +282,7 @@ body.bbcc-public {
         pointer-events: auto;
         transition: none;
     }
-    .bbcc-nav__submenu li a { padding: 10px 14px; }
+    .bbcc-nav__submenu li a { padding: 10px 14px; font-size: .92rem; }
 }
 @media (max-width: 576px) {
     .bbcc-topbar { display: block; padding: 6px 0; }
