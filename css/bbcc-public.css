@@ -193,49 +193,34 @@ body.bbcc-public {
 }
 
 .bbcc-nav__has-submenu { position: relative; }
-/* Invisible bridge over the visual gap below the trigger link, so moving
-   the mouse straight down into the submenu doesn't drop out of :hover. */
-.bbcc-nav__has-submenu::after {
-    content: ''; position: absolute; top: 100%; left: 0; right: 0; height: 14px;
-}
+/* No gap between the trigger and the menu -- it should read as the
+   navbar's own surface extending down, not a separate card floating
+   near it. Flush top, rounded only where it stops being attached. */
 .bbcc-nav__submenu {
     position: absolute;
-    top: calc(100% + 12px);
+    top: 100%;
     left: 50%;
     min-width: 200px;
     list-style: none;
     margin: 0;
     padding: 8px;
-    border-radius: var(--radius-md);
-    border: none;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
     background: var(--white);
     box-shadow: var(--shadow-lg);
     z-index: 1200;
     opacity: 0;
     visibility: hidden;
-    transform: translateX(-50%) translateY(-6px);
-    transition: opacity .25s cubic-bezier(.4,0,.2,1), transform .25s cubic-bezier(.4,0,.2,1), visibility 0s linear .25s;
+    transform: translateX(-50%) translateY(-4px);
+    transform-origin: top center;
+    transition: opacity .2s cubic-bezier(.4,0,.2,1), transform .2s cubic-bezier(.4,0,.2,1), visibility 0s linear .2s;
     pointer-events: none;
-}
-/* Small caret connecting the menu back to its trigger, so it reads as
-   one continuous surface instead of an unrelated floating box. */
-.bbcc-nav__submenu::before {
-    content: '';
-    position: absolute;
-    top: -5px;
-    left: 50%;
-    width: 10px; height: 10px;
-    background: var(--white);
-    transform: translateX(-50%) rotate(45deg);
-    border-radius: 2px 0 0 0;
-    box-shadow: -1px -1px 2px rgba(0,0,0,.03);
 }
 .bbcc-nav__has-submenu:hover .bbcc-nav__submenu,
 .bbcc-nav__has-submenu:focus-within .bbcc-nav__submenu {
     opacity: 1;
     visibility: visible;
     transform: translateX(-50%) translateY(0);
-    transition: opacity .25s cubic-bezier(.4,0,.2,1), transform .25s cubic-bezier(.4,0,.2,1);
+    transition: opacity .2s cubic-bezier(.4,0,.2,1), transform .2s cubic-bezier(.4,0,.2,1);
     pointer-events: auto;
 }
 .bbcc-nav__submenu li a { padding: 10px 12px; }
@@ -272,8 +257,6 @@ body.bbcc-public {
     .bbcc-nav li a { padding: 14px 16px; border-radius: var(--radius-sm); }
     .bbcc-nav li.active a::after { display: none; }
     .bbcc-nav__login { margin-top: 8px; justify-content: center; }
-    .bbcc-nav__has-submenu::after { display: none; }
-    .bbcc-nav__submenu::before { display: none; }
     .bbcc-nav__submenu {
         position: static;
         min-width: 0;
