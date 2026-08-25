@@ -232,7 +232,7 @@ try {
                 <p><?= htmlspecialchars($banner['subtitle']) ?></p>
                 <div class="bbcc-hero__actions">
                     <a href="banner-detail?id=<?= (int)$banner['id'] ?>" class="bbcc-hero__more-link">
-                        Click here for more <i class="fa-solid fa-arrow-right"></i>
+                        Read here for more <i class="fa-solid fa-arrow-right"></i>
                     </a>
                 </div>
             </div>

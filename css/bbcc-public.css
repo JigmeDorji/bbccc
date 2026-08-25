@@ -326,8 +326,9 @@ body.bbcc-public {
 .bbcc-hero__slide {
     position: absolute; top: 0; left: 0; width: 100%; min-height: 600px;
     opacity: 0; transition: opacity .8s ease;
+    pointer-events: none;
 }
-.bbcc-hero__slide.active { opacity: 1; position: relative; }
+.bbcc-hero__slide.active { opacity: 1; position: relative; pointer-events: auto; }
 .bbcc-hero__container {
     display: flex; align-items: center; min-height: 600px; max-width: 1200px; margin: 0 auto; padding: 0 24px;
 }
