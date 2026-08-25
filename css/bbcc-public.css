@@ -164,7 +164,7 @@ body.bbcc-public {
     transition: var(--transition);
 }
 .bbcc-navbar__inner {
-    display: flex; align-items: center; justify-content: space-between; height: 80px;
+    display: flex; align-items: stretch; justify-content: space-between; height: 80px;
 }
 .bbcc-navbar__brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
 .bbcc-navbar__brand img {
@@ -192,7 +192,16 @@ body.bbcc-public {
     width: 20px; height: 3px; background: var(--brand); border-radius: 3px;
 }
 
-.bbcc-nav__has-submenu { position: static; }
+/* Stretched to the navbar's full height (not just the link's own
+   compact height) so there's no dead vertical gap between the "About"
+   text and where the full-width panel begins below it -- otherwise
+   moving the mouse straight down drops out of :hover partway there. */
+.bbcc-nav__has-submenu {
+    position: static;
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+}
 /* Apple-style full-width panel: spans the entire navbar edge-to-edge
    instead of a small box under the trigger, with no rounded corners --
    flush and continuous with the navbar above. The links themselves are
