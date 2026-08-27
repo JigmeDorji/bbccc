@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+Disallow: /admin-
+Disallow: /adminProfile.php
+Disallow: /index-admin.php
+Disallow: /login.php
+Disallow: /logout.php
+Disallow: /parent-
+Disallow: /parentAccountSetup.php
+Disallow: /kiosk
+Disallow: /kiosk-
+Disallow: /export
+Disallow: /import_migration_xlsx.php
+Disallow: /run-migration.php
+Disallow: /fix_encoding.php
+Disallow: /include/
+
+Sitemap: https://www.bhutanesecentre.org/sitemap.xml
