@@ -37,7 +37,7 @@ $sponsorText = [
 try {
     $pdo = new PDO("mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME . ";charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+        Pdo\Mysql::ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
 
     // Fetch banner data
@@ -123,13 +123,20 @@ try {
 <head>
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <title>Buddhist Temple Canberra | Bhutanese Buddhist &amp; Cultural Centre</title>
-    <meta name="description" content="Bhutanese Buddhist and Cultural Centre Canberra (BBCC), a Buddhist temple in Canberra offering spiritual services, Dzongkha classes, cultural programs and community support.">
-    <meta name="keywords" content="Buddhist Temple Canberra, Buddhist Centre, Bhutanese Centre, Bhutanese Buddhist and Cultural Centre Canberra, Buddhist Canberra, Bhutanese in Canberra">
-    <meta property="og:title" content="Buddhist Temple Canberra | Bhutanese Buddhist &amp; Cultural Centre">
-    <meta property="og:description" content="Buddhist temple and Bhutanese Buddhist centre in Canberra offering spiritual guidance, cultural preservation and community services.">
+    <title>Bhutanese Buddhist &amp; Cultural Centre Canberra | BBCC</title>
+    <meta name="description" content="Bhutanese Buddhist and Cultural Centre Canberra (BBCC) supports the Bhutanese community in Canberra and ACT with Buddhist prayers, meditation, spiritual services, Dzongkha classes and cultural events.">
+    <meta name="keywords" content="Bhutanese centre Canberra, Bhutanese community Canberra, Bhutanese in Canberra, Buddhist centre Canberra, Buddhism in Canberra, Bhutanese Buddhist centre Canberra, Bhutanese association Canberra, Bhutanese cultural centre Canberra, Bhutanese community association ACT, Bhutanese events Canberra, Dzongkha classes Canberra, Bhutanese language classes Canberra, Bhutanese cultural events Canberra, Bhutanese temple Canberra, Buddhist meditation Canberra, Buddhist prayers Canberra">
+    <link rel="canonical" href="https://www.bhutanesecentre.org/">
+    <meta property="og:site_name" content="Bhutanese Buddhist &amp; Cultural Centre Canberra">
+    <meta property="og:title" content="Bhutanese Buddhist &amp; Cultural Centre Canberra | BBCC">
+    <meta property="og:description" content="Buddhist prayers, meditation, Dzongkha classes, cultural programs and community events for Bhutanese families and the wider Canberra community.">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://www.bhutanesecentre.org/">
+    <meta property="og:image" content="https://www.bhutanesecentre.org/bbccassests/img/logo/logo5.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Bhutanese Buddhist &amp; Cultural Centre Canberra | BBCC">
+    <meta name="twitter:description" content="Buddhist prayers, meditation, Dzongkha classes, cultural programs and community events in Canberra.">
+    <meta name="twitter:image" content="https://www.bhutanesecentre.org/bbccassests/img/logo/logo5.jpg">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script type="application/ld+json">
     {
@@ -139,7 +146,16 @@ try {
       "alternateName": "BBCC",
       "url": "https://www.bhutanesecentre.org/",
       "description": "Buddhist temple in Canberra offering spiritual services, Dzongkha classes and Bhutanese cultural programs.",
-      "areaServed": "Canberra, ACT"
+            "areaServed": "Canberra, ACT",
+            "address": {
+                "@type": "PostalAddress",
+                "addressLocality": "Canberra",
+                "addressRegion": "ACT",
+                "addressCountry": "AU"
+            },
+            "telephone": "+61 434 522 720",
+            "email": "bhutanesecentrecanberra@gmail.com",
+            "sameAs": ["https://www.facebook.com/profile?id=100084018901076"]
     }
     </script>
     <?php include_once 'include/global_css.php'; ?>

@@ -15,7 +15,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     try {
         $pdo = new PDO("mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME . ";charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+            Pdo\Mysql::ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
         ]);
 
         $name = trim($_POST['name'] ?? '');
@@ -87,8 +87,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Contact Us — Buddhist Temple Canberra | BBCC</title>
-    <meta name="description" content="Contact BBCC, a Bhutanese Buddhist temple in Canberra, for spiritual services, Dzongkha classes and community support.">
+    <title>Contact Bhutanese Buddhist Centre Canberra | BBCC</title>
+    <meta name="description" content="Contact the Bhutanese Buddhist and Cultural Centre Canberra about Buddhist prayers, meditation, Dzongkha classes, cultural events and community support.">
+    <link rel="canonical" href="https://www.bhutanesecentre.org/contact-us">
     <?php include_once 'include/global_css.php'; ?>
 </head>
 <body class="bbcc-public">

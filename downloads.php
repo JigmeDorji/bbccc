@@ -6,7 +6,7 @@ $downloadItems = [];
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+        Pdo\Mysql::ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
     try {
         $downloadItems = $pdo->query("SELECT title, description, original_name, file_path, image_path FROM download_files ORDER BY id DESC")->fetchAll(PDO::FETCH_ASSOC);

@@ -10,7 +10,7 @@ $executiveMembers = [];
 try {
     $pdo = new PDO("mysql:host=" . $DB_HOST . ";dbname=" . $DB_NAME . ";charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+        Pdo\Mysql::ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
 
     $stmt = $pdo->prepare("SELECT * FROM about ORDER BY id DESC LIMIT 1");
@@ -39,8 +39,9 @@ try {
 <head>
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <title>About Us — Buddhist Temple Canberra | BBCC</title>
-    <meta name="description" content="Learn about BBCC, a Bhutanese Buddhist temple in Canberra dedicated to spiritual guidance, Dzongkha language and cultural preservation.">
+    <title>About BBCC | Bhutanese Community Association Canberra</title>
+    <meta name="description" content="Learn about the Bhutanese Buddhist and Cultural Centre Canberra, a Bhutanese community association supporting spiritual life, cultural preservation and community connection in the ACT.">
+    <link rel="canonical" href="https://www.bhutanesecentre.org/about-us">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <?php include_once 'include/global_css.php'; ?>
 </head>

@@ -6,8 +6,9 @@ require_once "include/config.php";
 <head>
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <title>Community Events — BBCC</title>
-    <meta name="description" content="Community events and observances organized by BBCC to strengthen unity and shared values.">
+    <title>Bhutanese Community Events Canberra | BBCC</title>
+    <meta name="description" content="Bhutanese community events, cultural celebrations, Buddhist observances and gatherings that bring Canberra and ACT families together.">
+    <link rel="canonical" href="https://www.bhutanesecentre.org/community-events">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <?php include_once 'include/global_css.php'; ?>
 </head>

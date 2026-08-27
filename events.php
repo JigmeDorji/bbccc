@@ -33,7 +33,7 @@ try {
         $DB_PASSWORD,
         [
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+            Pdo\Mysql::ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
         ]
     );
 
@@ -156,8 +156,9 @@ $monthName   = $firstDayObj->format('F');
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Events — BBCC</title>
-    <meta name="description" content="Browse upcoming events and ceremonies at BBCC Canberra.">
+    <title>Bhutanese Cultural &amp; Buddhist Events Canberra | BBCC</title>
+    <meta name="description" content="Find upcoming Bhutanese cultural events, Buddhist ceremonies, prayers and community gatherings in Canberra hosted by BBCC.">
+    <link rel="canonical" href="https://www.bhutanesecentre.org/events">
     <?php include_once 'include/global_css.php'; ?>
 
     <style>

@@ -19,7 +19,7 @@ $dateLines = [];
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+        Pdo\Mysql::ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
     $blcsSchedule = bbcc_blcs_load_schedule($pdo);
     $stmt = $pdo->prepare("SELECT stats_heading, students_count, teachers_count, campuses_count, year_levels FROM school_content ORDER BY id DESC LIMIT 1");
@@ -193,8 +193,9 @@ if (empty($termColumns) || (count($termColumns) > 0 && array_sum(array_map(fn($t
 <head>
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <title>Bhutanese Language and Culture School — BBCC</title>
-    <meta name="description" content="Bhutanese Language and Culture School at BBCC teaching Dzongkha, Bhutanese culture and values.">
+    <title>Dzongkha &amp; Bhutanese Language Classes Canberra | BBCC</title>
+    <meta name="description" content="Bhutanese language classes and Dzongkha lessons in Canberra for children and adults, with Bhutanese culture, traditions and values at BBCC.">
+    <link rel="canonical" href="https://www.bhutanesecentre.org/bhutanese-language-and-culture-school">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <?php include_once 'include/global_css.php'; ?>
     <style>

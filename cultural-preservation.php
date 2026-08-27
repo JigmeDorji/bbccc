@@ -6,8 +6,9 @@ require_once "include/config.php";
 <head>
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <title>Cultural Preservation — BBCC</title>
-    <meta name="description" content="Cultural preservation activities by BBCC including language, traditions and community heritage programs.">
+    <title>Bhutanese Cultural Centre Canberra | BBCC</title>
+    <meta name="description" content="Preserving Bhutanese language, traditions, identity and heritage through cultural programs, language learning and community activities in Canberra.">
+    <link rel="canonical" href="https://www.bhutanesecentre.org/cultural-preservation">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <?php include_once 'include/global_css.php'; ?>
 </head>

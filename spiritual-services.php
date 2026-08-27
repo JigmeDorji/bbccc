@@ -6,8 +6,9 @@ require_once "include/config.php";
 <head>
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <title>Spiritual Services — BBCC</title>
-    <meta name="description" content="Spiritual services at BBCC Canberra including pujas, rituals, meditation and Dharma teachings.">
+    <title>Buddhist Prayers &amp; Meditation Canberra | BBCC</title>
+    <meta name="description" content="Join Buddhist prayers, pujas, rituals, meditation sessions and Dharma teachings at the Bhutanese Buddhist and Cultural Centre in Canberra.">
+    <link rel="canonical" href="https://www.bhutanesecentre.org/spiritual-services">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <?php include_once 'include/global_css.php'; ?>
 </head>

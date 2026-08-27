@@ -10,7 +10,7 @@ $servicePrograms = [
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+        Pdo\Mysql::ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
     $rows = $pdo->query("SELECT icon, image_url, title, description, link_url FROM service_programs ORDER BY sort_order ASC")->fetchAll(PDO::FETCH_ASSOC);
     if ($rows) {
@@ -25,8 +25,9 @@ try {
 <head>
     <meta charset="utf-8">
     <meta http-equiv="x-ua-compatible" content="ie=edge">
-    <title>Services — Buddhist Temple Canberra | BBCC</title>
-    <meta name="description" content="Spiritual services, pastoral care, cultural preservation and community events offered by BBCC, a Buddhist temple in Canberra.">
+    <title>Spiritual &amp; Cultural Services Canberra | BBCC</title>
+    <meta name="description" content="Explore Buddhist prayers, meditation, spiritual services, pastoral care, Dzongkha classes and cultural programs at the Bhutanese Buddhist and Cultural Centre Canberra.">
+    <link rel="canonical" href="https://www.bhutanesecentre.org/services">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <?php include_once 'include/global_css.php'; ?>
 </head>

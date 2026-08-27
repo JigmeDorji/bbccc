@@ -34,7 +34,7 @@ if (isset($_SESSION['ched_tshog_setup_flash']) && is_array($_SESSION['ched_tshog
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+        Pdo\Mysql::ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
 
     $stmt = $pdo->prepare("SELECT * FROM ched_tshog_content ORDER BY id DESC LIMIT 1");
