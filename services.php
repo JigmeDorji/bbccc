@@ -10,7 +10,7 @@ $servicePrograms = [
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        Pdo\Mysql::ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+        (defined("Pdo\Mysql::ATTR_INIT_COMMAND") ? Pdo\Mysql::ATTR_INIT_COMMAND : PDO::MYSQL_ATTR_INIT_COMMAND) => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
     $rows = $pdo->query("SELECT icon, image_url, title, description, link_url FROM service_programs ORDER BY sort_order ASC")->fetchAll(PDO::FETCH_ASSOC);
     if ($rows) {

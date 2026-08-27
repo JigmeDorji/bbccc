@@ -43,7 +43,7 @@ if (isset($_SESSION['sponsor_setup_flash']) && is_array($_SESSION['sponsor_setup
 try {
     $pdo = new PDO("mysql:host=$DB_HOST;dbname=$DB_NAME;charset=utf8mb4", $DB_USER, $DB_PASSWORD, [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        Pdo\Mysql::ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+        (defined("Pdo\Mysql::ATTR_INIT_COMMAND") ? Pdo\Mysql::ATTR_INIT_COMMAND : PDO::MYSQL_ATTR_INIT_COMMAND) => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
     ]);
 
         $load = $pdo->prepare("SELECT * FROM sponsor_settings WHERE id = 1 LIMIT 1");
