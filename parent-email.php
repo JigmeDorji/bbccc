@@ -7,6 +7,19 @@ require_once "include/csrf.php";
 require_once "include/mail_queue.php";
 require_login();
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['email_action'] ?? '') === 'upload_inline_image') {
+    verify_csrf();
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+        $image = pe_store_inline_image((array)($_FILES['newsletter_image'] ?? []));
+        echo json_encode(['ok' => true, 'url' => $image['url'], 'name' => $image['name']]);
+    } catch (Throwable $e) {
+        http_response_code(400);
+        echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+    }
+    exit;
+}
+
 function pe_h(string $v): string {
     return htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
 }
@@ -31,6 +44,16 @@ function pe_presets(): array {
             'subject' => 'Class Update - Bhutanese Language and Culture School',
             'body' => "Dear {PARENT_NAME},\n\nThis is a class update from Bhutanese Language and Culture School.\nPlease check your child portal for recent announcements, schedule updates, and upcoming learning activities.\n\nThank you for your continued support.",
         ],
+        'semester_update' => [
+            'label' => 'Semester Update',
+            'subject' => 'Semester Update - Bhutanese Language and Culture School',
+            'body' => "Dear {PARENT_NAME},\n\nWe are pleased to share the latest school updates for the {SEMESTER_NAME} of {SCHOOL_YEAR}. This letter provides important announcements, new teacher introductions, leadership updates, and key reminders for the coming weeks.\n\nWe would like to welcome our new teachers and thank all families for their continued support. Please keep an eye on the school portal for upcoming events, class updates, and schedule changes.\n\nWe are grateful for your partnership in supporting our students and strengthening the school community.\n\nWarm regards,\n{PRINCIPAL_NAME}\n{SCHOOL_NAME}",
+        ],
+        'general_info_note' => [
+            'label' => 'Info Note / General Update',
+            'subject' => 'School Update - Information Note',
+            'body' => "Dear {PARENT_NAME},\n\nThis is an important information note from {SCHOOL_NAME}. We would like to share the latest school updates for the semester, including announcements, new staff introductions, important reminders, and upcoming activities.\n\nPlease take note of the following:\n- school updates and announcements\n- welcome to new teachers and staff\n- principal and leadership updates\n- upcoming semester dates and key reminders\n\nWe thank you for your continued support and partnership in helping our children thrive.\n\nKind regards,\n{PRINCIPAL_NAME}",
+        ],
         'fee_reminder' => [
             'label' => 'Fee Reminder',
             'subject' => 'Fee Reminder - Bhutanese Language and Culture School',
@@ -44,12 +67,55 @@ function pe_presets(): array {
     ];
 }
 
+function pe_ensure_info_note_table(PDO $pdo): void {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS parent_email_templates (
+        template_key VARCHAR(80) NOT NULL PRIMARY KEY,
+        subject VARCHAR(200) NOT NULL,
+        body MEDIUMTEXT NOT NULL,
+        updated_by VARCHAR(50) DEFAULT NULL,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
+function pe_load_info_note(PDO $pdo, array $presets): array {
+    try {
+        pe_ensure_info_note_table($pdo);
+        $stmt = $pdo->prepare("SELECT subject, body FROM parent_email_templates WHERE template_key = 'general_info_note' LIMIT 1");
+        $stmt->execute();
+        $saved = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($saved) {
+            $presets['general_info_note']['subject'] = (string)$saved['subject'];
+            $presets['general_info_note']['body'] = (string)$saved['body'];
+            $presets['general_info_note']['body_is_html'] = true;
+        }
+    } catch (Throwable $e) {
+        error_log('[Parent Email] Could not load saved Info Note: ' . $e->getMessage());
+    }
+    return $presets;
+}
+
 function pe_apply_tokens(string $text, string $recipientName): string {
-    $name = trim($recipientName) !== '' ? $recipientName : 'Parent';
-    return strtr($text, [
+    $nameParts = preg_split('/\s+/', trim($recipientName), 2);
+    $name = !empty($nameParts[0]) ? $nameParts[0] : 'Parent';
+    $schoolName = 'Bhutanese Language and Culture School';
+    $principalName = trim((string)($_SESSION['principal_name'] ?? 'Principal')) ?: 'Principal';
+    $semesterName = trim((string)($_SESSION['semester_name'] ?? 'Semester')) ?: 'Semester';
+    $schoolYear = trim((string)($_SESSION['school_year'] ?? date('Y')));
+
+    $replacements = [
         '{PARENT_NAME}' => $name,
-        '{SCHOOL_NAME}' => 'Bhutanese Language and Culture School',
-    ]);
+        '{parent_name}' => $name,
+        '{SCHOOL_NAME}' => $schoolName,
+        '{school_name}' => $schoolName,
+        '{PRINCIPAL_NAME}' => $principalName,
+        '{principal_name}' => $principalName,
+        '{SEMESTER_NAME}' => $semesterName,
+        '{semester_name}' => $semesterName,
+        '{SCHOOL_YEAR}' => $schoolYear,
+        '{school_year}' => $schoolYear,
+    ];
+
+    return strtr($text, $replacements);
 }
 
 function pe_sanitize_email_html(string $html): string {
@@ -64,7 +130,7 @@ function pe_sanitize_email_html(string $html): string {
     $allowedTags = [
         'p', 'div', 'br', 'strong', 'b', 'em', 'i', 'u', 's',
         'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'blockquote',
-        'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'a', 'span',
+        'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'a', 'span', 'img',
     ];
     if (!class_exists('DOMDocument')) {
         // Preserve safety on minimal PHP installations even if formatting
@@ -101,12 +167,22 @@ function pe_sanitize_email_html(string $html): string {
                 $allowedAttributes = match ($tag) {
                     'a' => ['href', 'target'],
                     'td', 'th' => ['colspan', 'rowspan'],
+                    'img' => ['src', 'alt', 'title'],
                     default => [],
                 };
                 foreach (iterator_to_array($child->attributes) as $attribute) {
                     if (!in_array(strtolower($attribute->name), $allowedAttributes, true)) {
                         $child->removeAttribute($attribute->name);
                     }
+                }
+                if ($tag === 'img') {
+                    $src = trim((string)$child->getAttribute('src'));
+                    if (!preg_match('~^https?://~i', $src)) {
+                        $node->removeChild($child);
+                        $child = $next;
+                        continue;
+                    }
+                    $child->setAttribute('style', 'display:block;max-width:100%;height:auto;border:1px solid #e5e7eb;margin:14px auto;');
                 }
                 if ($tag === 'a') {
                     $href = trim((string)$child->getAttribute('href'));
@@ -174,9 +250,73 @@ function pe_store_attachment(array $file): ?array {
     return ['path' => $storedPath, 'name' => $originalName, 'mime' => $mime];
 }
 
-function pe_build_email_html(string $recipientName, string $subject, string $body, string $senderName): string {
+function pe_store_inline_image(array $file): array {
+    if ((int)($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        throw new RuntimeException('Choose an image to insert.');
+    }
+    $tmpPath = (string)($file['tmp_name'] ?? '');
+    $size = (int)($file['size'] ?? 0);
+    if ($tmpPath === '' || !is_uploaded_file($tmpPath) || $size <= 0 || $size > 5 * 1024 * 1024) {
+        throw new RuntimeException('Image must be smaller than 5 MB.');
+    }
+
+    $imageInfo = @getimagesize($tmpPath);
+    $mime = is_array($imageInfo) ? (string)($imageInfo['mime'] ?? '') : '';
+    $extensions = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif'];
+    if (!isset($extensions[$mime])) {
+        throw new RuntimeException('Use a JPG, PNG, or GIF image.');
+    }
+
+    $directory = __DIR__ . '/uploads/email-newsletter';
+    if (!is_dir($directory) && !mkdir($directory, 0750, true) && !is_dir($directory)) {
+        throw new RuntimeException('Unable to create image storage.');
+    }
+    $filename = bin2hex(random_bytes(16)) . '.' . $extensions[$mime];
+    if (!move_uploaded_file($tmpPath, $directory . '/' . $filename)) {
+        throw new RuntimeException('Unable to save the image.');
+    }
+
+    $relativePath = 'uploads/email-newsletter/' . $filename;
+    $baseUrl = rtrim((string)BASE_URL, '/');
+    $configuredHost = strtolower((string)parse_url($baseUrl, PHP_URL_HOST));
+    $requestHost = trim((string)($_SERVER['HTTP_HOST'] ?? ''));
+    if ($requestHost !== '' && in_array($configuredHost, ['localhost', '127.0.0.1'], true)) {
+        $scheme = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'http';
+        $appPath = trim(str_replace('\\', '/', dirname((string)($_SERVER['SCRIPT_NAME'] ?? ''))), '/.');
+        $baseUrl = $scheme . '://' . $requestHost . ($appPath !== '' ? '/' . $appPath : '');
+    }
+    return [
+        'url' => $baseUrl . '/' . $relativePath,
+        'name' => basename((string)($file['name'] ?? 'newsletter-image')),
+    ];
+}
+
+function pe_build_email_html(string $recipientName, string $subject, string $body, string $senderName, string $style = 'standard'): string {
     $safeSubject = pe_h($subject);
     $safeBody = pe_sanitize_email_html($body);
+    $schoolName = 'Bhutanese Language and Culture School';
+    $isNewsletter = $style === 'newsletter';
+    $isSchoolLetter = $style === 'school_letter';
+    $headingText = $isNewsletter ? 'Information Note' : ($isSchoolLetter ? 'School Update' : 'Parent Communication');
+    $subtitleText = $isNewsletter
+        ? 'School Newsletter  |  ' . date('F Y')
+        : ($isSchoolLetter ? 'Semester Update & Community News' : 'Official Communication');
+    $mastheadStyle = $isNewsletter
+        ? 'background:#881b12;padding:24px 30px;border-bottom:4px solid #d5a84b;'
+        : 'background:#f8f4ef;padding:22px 28px;border-bottom:1px solid #e5d7c8;';
+    $mastheadNameStyle = $isNewsletter
+        ? 'font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#f4dfac;font-weight:bold;'
+        : 'font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#7a4a2d;font-weight:bold;';
+    $mastheadHeadingStyle = $isNewsletter
+        ? 'font-size:30px;font-weight:bold;color:#fff;line-height:1.2;margin-top:10px;'
+        : 'font-size:30px;font-weight:bold;color:#1f2937;line-height:1.2;margin-top:8px;';
+    $signature = ($isSchoolLetter || $isNewsletter)
+        ? '<div style="margin-top:22px;padding-top:16px;border-top:1px solid #e5e7eb;">'
+            . '<div style="font-size:12px;color:#6b7280;letter-spacing:.08em;text-transform:uppercase;">Warm regards</div>'
+            . '<div style="font-size:18px;font-weight:bold;color:#111827;">' . pe_h($senderName ?: 'School Administration') . '</div>'
+            . '<div style="font-size:13px;color:#6b7280;">' . pe_h($schoolName) . '</div>'
+            . '</div>'
+        : '';
 
     return '
 <!doctype html>
@@ -189,32 +329,28 @@ function pe_build_email_html(string $recipientName, string $subject, string $bod
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f4f6;padding:24px 0;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:700px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
           <tr>
-            <td style="background:#881b12;padding:18px 24px;color:#ffffff;">
-              <div style="font-size:13px;opacity:.9;letter-spacing:.04em;text-transform:uppercase;">Bhutanese Language and Culture School</div>
-              <div style="font-size:22px;font-weight:bold;line-height:1.2;margin-top:6px;">Parent Communication</div>
+                        <td style="' . $mastheadStyle . '">
+                            <div style="' . $mastheadNameStyle . '">' . pe_h($schoolName) . '</div>
+                            <div style="' . $mastheadHeadingStyle . '">' . pe_h($headingText) . '</div>
+                            <div style="font-size:13px;color:' . ($isNewsletter ? '#f5e6c5' : '#6b7280') . ';margin-top:7px;">' . pe_h($subtitleText) . '</div>
             </td>
           </tr>
           <tr>
-            <td style="padding:22px 24px 10px 24px;">
-              <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">Subject</div>
+            <td style="padding:24px 28px 10px 28px;">
+              <div style="font-size:13px;color:#6b7280;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em;">Subject</div>
               <div style="font-size:20px;font-weight:bold;color:#111827;line-height:1.3;">' . $safeSubject . '</div>
             </td>
           </tr>
           <tr>
-            <td style="padding:8px 24px 10px 24px;font-size:15px;line-height:1.7;color:#1f2937;">
+            <td style="padding:8px 28px 10px 28px;font-size:15px;line-height:1.7;color:#1f2937;">
               <div style="margin:0 0 14px 0;">' . $safeBody . '</div>
-              <style>
-                table{border-collapse:collapse;width:100%;margin:12px 0}
-                th,td{border:1px solid #d1d5db;padding:8px;text-align:left;vertical-align:top}
-                th{background:#f3f4f6;font-weight:bold}
-                blockquote{border-left:4px solid #881b12;margin:12px 0;padding:8px 14px;color:#4b5563}
-              </style>
+              ' . $signature . '
             </td>
           </tr>
           <tr>
-            <td style="padding:16px 24px 22px 24px;">
+            <td style="padding:16px 28px 22px 28px;">
               <div style="height:1px;background:#e5e7eb;margin:0 0 10px 0;"></div>
               <div style="font-size:12px;color:#6b7280;line-height:1.5;">
                 This is an official communication from Bhutanese Language and Culture School.
@@ -344,8 +480,9 @@ if ($isAdmin) {
 
 $result = null;
 $message = '';
-$presets = pe_presets();
+$presets = pe_load_info_note($pdo, pe_presets());
 $presetId = trim((string)($_POST['preset_id'] ?? ''));
+$templateStyle = trim((string)($_POST['template_style'] ?? 'standard'));
 $mode = (string)($_POST['mode'] ?? 'all');
 $subject = trim((string)($_POST['subject'] ?? ''));
 $body = trim((string)($_POST['body'] ?? ''));
@@ -354,6 +491,9 @@ $previewHtml = '';
 $previewSubject = '';
 $previewCount = 0;
 $deliveryReport = null;
+if ($templateStyle !== 'school_letter' && $presetId === 'semester_update') {
+    $templateStyle = 'school_letter';
+}
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' && isset($_SESSION['parent_email_flash'])) {
     $flash = (array)$_SESSION['parent_email_flash'];
@@ -375,6 +515,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($body === '') {
             $body = (string)$presets[$presetId]['body'];
         }
+    }
+
+    if ($emailAction === 'save_info_note') {
+        $result = 'success';
+        if (!$isAdmin) {
+            $result = 'error';
+            $message = 'Only administrators can save the shared Info Note template.';
+        } elseif ($subject === '' || $body === '') {
+            $result = 'error';
+            $message = 'Add a subject and message before saving the Info Note.';
+        } else {
+            try {
+                $safeBody = pe_sanitize_email_html($body);
+                $saveTemplate = $pdo->prepare("INSERT INTO parent_email_templates (template_key, subject, body, updated_by)
+                    VALUES ('general_info_note', :subject, :body, :updated_by)
+                    ON DUPLICATE KEY UPDATE subject = VALUES(subject), body = VALUES(body), updated_by = VALUES(updated_by)");
+                $saveTemplate->execute([
+                    ':subject' => $subject,
+                    ':body' => $safeBody,
+                    ':updated_by' => $sessionUserId,
+                ]);
+                $message = 'Info Note template saved. Select it from Quick Preset to use it again.';
+            } catch (Throwable $e) {
+                error_log('[Parent Email] Could not save Info Note: ' . $e->getMessage());
+                $result = 'error';
+                $message = 'The Info Note could not be saved. Please try again.';
+            }
+        }
+        $_SESSION['parent_email_flash'] = ['result' => $result, 'message' => $message];
+        header('Location: parent-email');
+        exit;
     }
 
     $recipients = [];
@@ -404,7 +575,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $previewBodyRaw = $body !== '' ? $body : "This is a sample message preview.\nPlease update message before sending.";
         $previewSubject = pe_apply_tokens($previewSubjectRaw, $sampleRecipient);
         $previewBody = pe_apply_tokens($previewBodyRaw, $sampleRecipient);
-        $previewHtml = pe_build_email_html($sampleRecipient, $previewSubject, $previewBody, $senderName);
+        $previewHtml = pe_build_email_html($sampleRecipient, $previewSubject, $previewBody, $senderName, in_array($templateStyle, ['school_letter', 'newsletter'], true) ? $templateStyle : 'standard');
         $previewCount = count($recipients);
         if ($result !== 'error') {
             $result = 'success';
@@ -452,7 +623,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $subjectFinal = pe_apply_tokens($subject, $name);
                 $bodyFinal = pe_apply_tokens($body, $name);
-                $html = pe_build_email_html($name, $subjectFinal, $bodyFinal, $senderName);
+                $html = pe_build_email_html($name, $subjectFinal, $bodyFinal, $senderName, in_array($templateStyle, ['school_letter', 'newsletter'], true) ? $templateStyle : 'standard');
 
                 if ($queueEnabled) {
                     if (bbcc_queue_mail($email, $name, $subjectFinal, $html, 5, $attachment, $queueMetadata)) {
@@ -604,10 +775,12 @@ if (!$isAdmin) {
             min-width:60px;
         }
         .email-rich-editor th { background:#f1f3f5; }
+        .email-rich-editor img { max-width:100%;height:auto;display:block;margin:14px auto;border:1px solid #e5e7eb; }
         #previewEmailContent table { width:100%;border-collapse:collapse;margin:12px 0; }
         #previewEmailContent th, #previewEmailContent td { border:1px solid #d1d5db;padding:8px;text-align:left;vertical-align:top; }
         #previewEmailContent th { background:#f3f4f6;font-weight:bold; }
         #previewEmailContent blockquote { border-left:4px solid #881b12;margin:12px 0;padding:8px 14px;color:#4b5563; }
+        #previewEmailContent img { max-width:100%;height:auto;display:block;margin:14px auto;border:1px solid #e5e7eb; }
     </style>
 </head>
 <body id="page-top">
@@ -679,7 +852,7 @@ if (!$isAdmin) {
                                         </option>
                                     </select>
                                 </div>
-                                <div class="form-group col-md-5">
+                                <div class="form-group col-md-4">
                                     <label>Quick Preset</label>
                                     <select name="preset_id" id="presetSelect" class="form-control">
                                         <option value="">-- Select preset (optional) --</option>
@@ -688,6 +861,14 @@ if (!$isAdmin) {
                                                 <?= pe_h((string)$p['label']) ?>
                                             </option>
                                         <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="form-group col-md-4">
+                                    <label>Template Style</label>
+                                    <select name="template_style" id="templateStyle" class="form-control">
+                                        <option value="standard" <?= $templateStyle === 'standard' ? 'selected' : '' ?>>Standard Parent Email</option>
+                                        <option value="school_letter" <?= $templateStyle === 'school_letter' || $presetId === 'semester_update' ? 'selected' : '' ?>>School Letterhead</option>
+                                        <option value="newsletter" <?= $templateStyle === 'newsletter' || $presetId === 'general_info_note' ? 'selected' : '' ?>>School Newsletter</option>
                                     </select>
                                 </div>
                             </div>
@@ -742,12 +923,14 @@ if (!$isAdmin) {
                                         <option value="blockquote">Quote</option>
                                     </select>
                                     <button type="button" class="btn btn-sm btn-light" id="editorLinkButton" title="Insert link"><i class="fas fa-link"></i></button>
+                                    <button type="button" class="btn btn-sm btn-light" id="insertNewsletterImageButton" title="Insert image"><i class="fas fa-image"></i></button>
                                     <button type="button" class="btn btn-sm btn-light" id="editorTableButton" title="Insert table"><i class="fas fa-table"></i></button>
                                     <button type="button" class="btn btn-sm btn-light editor-command" data-command="removeFormat" title="Clear formatting"><i class="fas fa-eraser"></i></button>
                                 </div>
                                 <div id="bodyEditor" class="email-rich-editor" contenteditable="true" role="textbox" aria-multiline="true"><?= pe_sanitize_email_html($body) ?></div>
                                 <textarea name="body" id="bodyInput" class="d-none" aria-hidden="true"><?= pe_h($body) ?></textarea>
-                                <small class="text-muted">Formatting is preserved in Preview and in the delivered email.</small>
+                                <input type="file" id="newsletterImageInput" accept="image/jpeg,image/png,image/gif" class="d-none">
+                                <small class="text-muted" id="newsletterImageStatus">Formatting and inserted images appear in Preview and in the delivered email. Images: JPG, PNG, or GIF up to 5 MB; delivered email images use the configured BASE_URL.</small>
                             </div>
                             <div class="form-group">
                                 <label for="attachmentInput">Attachment <span class="text-muted">(optional)</span></label>
@@ -761,6 +944,11 @@ if (!$isAdmin) {
                             <button type="button" id="previewEmailButton" class="btn btn-outline-primary" <?= empty($parents) ? 'disabled' : '' ?>>
                                 <i class="fas fa-eye mr-1"></i> Preview Email
                             </button>
+                            <?php if ($isAdmin): ?>
+                                <button type="submit" name="email_action" value="save_info_note" class="btn btn-outline-secondary">
+                                    <i class="fas fa-save mr-1"></i> Save Info Note
+                                </button>
+                            <?php endif; ?>
                             <button type="submit" name="email_action" value="send" class="btn btn-primary" <?= empty($parents) ? 'disabled' : '' ?>>
                                 <i class="fas fa-paper-plane mr-1"></i> Send Email
                             </button>
@@ -849,7 +1037,7 @@ if (!$isAdmin) {
 <script src="vendor/jquery/jquery.min.js"></script>
 <script>
 $(function () {
-    var presets = <?= json_encode($presets, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    var presets = <?= json_encode($presets, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var allParents = <?= json_encode(array_map(static function (array $parent): array {
         return [
             'id' => (int)($parent['id'] ?? 0),
@@ -862,9 +1050,22 @@ $(function () {
     }
 
     function applyPreviewTokens(value, parentName) {
+        var schoolName = 'Bhutanese Language and Culture School';
+        var principalName = 'Principal';
+        var semesterName = 'Semester';
+        var schoolYear = new Date().getFullYear();
+
         return String(value || '')
             .split('{PARENT_NAME}').join(parentName || 'Parent')
-            .split('{SCHOOL_NAME}').join('Bhutanese Language and Culture School');
+            .split('{parent_name}').join(parentName || 'Parent')
+            .split('{SCHOOL_NAME}').join(schoolName)
+            .split('{school_name}').join(schoolName)
+            .split('{PRINCIPAL_NAME}').join(principalName)
+            .split('{principal_name}').join(principalName)
+            .split('{SEMESTER_NAME}').join(semesterName)
+            .split('{semester_name}').join(semesterName)
+            .split('{SCHOOL_YEAR}').join(String(schoolYear))
+            .split('{school_year}').join(String(schoolYear));
     }
 
     function syncEditorBody() {
@@ -880,7 +1081,7 @@ $(function () {
     function cleanPreviewHtml(html) {
         var template = document.createElement('template');
         template.innerHTML = String(html || '');
-        var allowed = ['P','DIV','BR','STRONG','B','EM','I','U','S','H1','H2','H3','H4','UL','OL','LI','BLOCKQUOTE','TABLE','THEAD','TBODY','TFOOT','TR','TH','TD','A','SPAN'];
+        var allowed = ['P','DIV','BR','STRONG','B','EM','I','U','S','H1','H2','H3','H4','UL','OL','LI','BLOCKQUOTE','TABLE','THEAD','TBODY','TFOOT','TR','TH','TD','A','SPAN','IMG'];
         Array.from(template.content.querySelectorAll('*')).forEach(function (node) {
             if (allowed.indexOf(node.tagName) === -1) {
                 node.replaceWith.apply(node, Array.from(node.childNodes));
@@ -888,6 +1089,7 @@ $(function () {
             }
             Array.from(node.attributes).forEach(function (attribute) {
                 var permitted = (node.tagName === 'A' && ['href','target'].indexOf(attribute.name.toLowerCase()) !== -1) ||
+                    (node.tagName === 'IMG' && ['src','alt','title'].indexOf(attribute.name.toLowerCase()) !== -1) ||
                     (['TD','TH'].indexOf(node.tagName) !== -1 && ['colspan','rowspan'].indexOf(attribute.name.toLowerCase()) !== -1);
                 if (!permitted) node.removeAttribute(attribute.name);
             });
@@ -896,6 +1098,7 @@ $(function () {
                 if (!/^(https?:\/\/|mailto:)/i.test(href)) node.removeAttribute('href');
                 else node.setAttribute('target', '_blank');
             }
+            if (node.tagName === 'IMG' && !/^https?:\/\//i.test(node.getAttribute('src') || '')) node.remove();
         });
         return template.innerHTML;
     }
@@ -914,14 +1117,20 @@ $(function () {
         return selected;
     }
 
-    function buildPreviewHtml(subject, bodyHtml) {
+    function buildPreviewHtml(subject, bodyHtml, style) {
         var safeSubject = escapeHtml(subject);
         var safeBody = cleanPreviewHtml(bodyHtml);
+        var newsletter = style === 'newsletter';
+        var heading = newsletter ? 'Information Note' : 'Parent Communication';
+        var subtitle = newsletter ? 'School Newsletter  |  ' + new Date().toLocaleDateString(undefined, {month:'long', year:'numeric'}) : 'Official Communication';
+        var headerBackground = newsletter ? '#881b12' : '#881b12';
+        var headerAccent = newsletter ? 'border-bottom:4px solid #d5a84b;' : '';
         return '<div style="margin:0;padding:24px 0;background:#f3f4f6;font-family:Arial,sans-serif;color:#1f2937;">' +
             '<div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">' +
-                '<div style="background:#881b12;padding:18px 24px;color:#fff;">' +
+                '<div style="background:' + headerBackground + ';padding:18px 24px;color:#fff;' + headerAccent + '">' +
                     '<div style="font-size:13px;opacity:.9;letter-spacing:.04em;text-transform:uppercase;">Bhutanese Language and Culture School</div>' +
-                    '<div style="font-size:22px;font-weight:bold;line-height:1.2;margin-top:6px;">Parent Communication</div>' +
+                    '<div style="font-size:22px;font-weight:bold;line-height:1.2;margin-top:6px;">' + heading + '</div>' +
+                    '<div style="font-size:13px;color:#f5e6c5;margin-top:6px;">' + subtitle + '</div>' +
                 '</div>' +
                 '<div style="padding:22px 24px 10px;">' +
                     '<div style="font-size:13px;color:#6b7280;margin-bottom:8px;">Subject</div>' +
@@ -944,8 +1153,20 @@ $(function () {
         var key = $(this).val();
         if (!key || !presets[key]) return;
         $('#subjectInput').val(presets[key].subject || '');
-        $('#bodyEditor').html(plainTextToEditorHtml(presets[key].body || ''));
+        var presetBody = presets[key].body || '';
+        $('#bodyEditor').html(presets[key].body_is_html ? presetBody : plainTextToEditorHtml(presetBody));
         syncEditorBody();
+        if (key === 'semester_update') {
+            $('#templateStyle').val('school_letter');
+        } else if (key === 'general_info_note') {
+            $('#templateStyle').val('newsletter');
+        }
+    });
+
+    $('#templateStyle').on('change', function () {
+        if ($(this).val() === 'school_letter') {
+            $('#previewEmailCard').hide();
+        }
     });
 
     $('#attachmentInput').on('change', function () {
@@ -975,6 +1196,48 @@ $(function () {
         document.getElementById('bodyEditor').focus();
         document.execCommand('createLink', false, url);
         syncEditorBody();
+    });
+
+    var savedEditorRange = null;
+    $('#insertNewsletterImageButton').on('click', function () {
+        var editor = document.getElementById('bodyEditor');
+        var selection = window.getSelection();
+        if (selection && selection.rangeCount && editor.contains(selection.anchorNode)) {
+            savedEditorRange = selection.getRangeAt(0).cloneRange();
+        }
+        $('#newsletterImageInput').trigger('click');
+    });
+
+    $('#newsletterImageInput').on('change', function () {
+        var file = this.files && this.files[0];
+        if (!file) return;
+        var formData = new FormData();
+        formData.append('email_action', 'upload_inline_image');
+        formData.append('_csrf', $('input[name="_csrf"]').val() || '');
+        formData.append('newsletter_image', file);
+        $('#newsletterImageStatus').text('Uploading image...');
+        fetch(window.location.href, {method:'POST', body:formData, credentials:'same-origin'})
+            .then(function (response) { return response.json(); })
+            .then(function (result) {
+                if (!result.ok) throw new Error(result.error || 'Image upload failed.');
+                var editor = document.getElementById('bodyEditor');
+                editor.focus();
+                var selection = window.getSelection();
+                if (selection && savedEditorRange) {
+                    selection.removeAllRanges();
+                    selection.addRange(savedEditorRange);
+                }
+                document.execCommand('insertHTML', false, '<p><img src="' + escapeHtml(result.url) + '" alt="' + escapeHtml(file.name) + '"></p>');
+                syncEditorBody();
+                $('#newsletterImageStatus').text('Image added to the message.');
+            })
+            .catch(function (error) {
+                $('#newsletterImageStatus').text(error.message || 'Image upload failed.');
+            })
+            .finally(function () {
+                $('#newsletterImageInput').val('');
+                savedEditorRange = null;
+            });
     });
 
     $('#editorTableButton').on('click', function () {
@@ -1022,7 +1285,7 @@ $(function () {
 
         $('#previewSubjectText').text(subject);
         $('#previewRecipientCount').text('Recipients in scope: ' + recipients.length);
-        $('#previewEmailContent').html(buildPreviewHtml(subject, bodyHtml));
+        $('#previewEmailContent').html(buildPreviewHtml(subject, bodyHtml, $('#templateStyle').val()));
         $('#emailPreviewCard').show();
 
         var previewTop = $('#emailPreviewCard').offset();
