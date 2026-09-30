@@ -56,12 +56,13 @@ function pe_presets(): array {
 }
 
 function pe_masthead_defaults(string $style): array {
+    $currentMonth = (new DateTimeImmutable('now', bbcc_app_timezone()))->format('F Y');
     return [
         'name' => 'Bhutanese Language and Culture School',
         'title' => $style === 'newspaper' ? 'The Semester Review' : ($style === 'newsletter' ? 'Information Note' : 'Parent Communication'),
         'subtitle' => $style === 'newspaper'
-            ? 'SEMESTER EDITION  |  ' . date('F Y')
-            : ($style === 'newsletter' ? 'School Newsletter  |  ' . date('F Y') : 'Official Communication'),
+            ? 'SEMESTER EDITION  |  ' . $currentMonth
+            : ($style === 'newsletter' ? 'School Newsletter  |  ' . $currentMonth : 'Official Communication'),
         'headline_label' => $style === 'newspaper' ? 'LEAD STORY' : 'Subject',
         'footer' => 'This is an official communication from Bhutanese Language and Culture School. Please do not reply to this email if sent from a no-reply address.',
     ];

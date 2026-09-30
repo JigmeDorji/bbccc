@@ -88,31 +88,15 @@ try {
         $schoolStats['year_levels'] = trim((string)($schoolContent['year_levels'] ?? '')) !== '' ? (string)$schoolContent['year_levels'] : $schoolStats['year_levels'];
     }
 
-    // Fetch all menu/event data first, then filter upcoming in PHP.
-    // This avoids SQL DATE parsing edge cases across mixed datetime formats.
-    $stmt = $pdo->prepare("SELECT * FROM menu ORDER BY id DESC");
-    $stmt->execute();
-    $allMenus = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $menus = [];
-    $todayStartTs = strtotime(date('Y-m-d 00:00:00'));
-
-    foreach ($allMenus as $menuRow) {
-        $rawDate = trim((string)($menuRow['eventStartDateTime'] ?? ''));
-        if ($rawDate === '') {
-            // Keep undated legacy rows visible for backward compatibility.
-            $menus[] = $menuRow;
-            continue;
-        }
-        $eventTs = strtotime($rawDate);
-        if ($eventTs === false) {
-            // If stored format is unusual, keep it visible rather than dropping it.
-            $menus[] = $menuRow;
-            continue;
-        }
-        if ($eventTs >= $todayStartTs) {
-            $menus[] = $menuRow;
-        }
-    }
+    // Keep upcoming and undated legacy events without fetching past rows into PHP.
+    $todayStart = date('Y-m-d 00:00:00');
+    $stmt = $pdo->prepare("SELECT * FROM menu
+        WHERE eventStartDateTime IS NULL
+           OR eventStartDateTime >= :today_start
+           OR eventStartDateTime < '1000-01-01 00:00:00'
+        ORDER BY id DESC");
+    $stmt->execute([':today_start' => $todayStart]);
+    $menus = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 } catch (Exception $e) {
     $message = "Error: " . $e->getMessage();
