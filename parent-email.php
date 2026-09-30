@@ -269,8 +269,18 @@ function pe_store_attachment(array $file): ?array {
 }
 
 function pe_store_inline_image(array $file): array {
-    if ((int)($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-        throw new RuntimeException('Choose an image to insert.');
+    $uploadError = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($uploadError !== UPLOAD_ERR_OK) {
+        $uploadMessages = [
+            UPLOAD_ERR_NO_FILE => 'Choose an image to upload.',
+            UPLOAD_ERR_INI_SIZE => 'Image exceeds the server upload_max_filesize limit. Raise it to at least 5 MB in cPanel.',
+            UPLOAD_ERR_FORM_SIZE => 'Image exceeds the upload form size limit.',
+            UPLOAD_ERR_PARTIAL => 'Image upload was interrupted. Please try again.',
+            UPLOAD_ERR_NO_TMP_DIR => 'The server has no temporary upload folder configured.',
+            UPLOAD_ERR_CANT_WRITE => 'The server could not write the uploaded image. Check the uploads folder permissions.',
+            UPLOAD_ERR_EXTENSION => 'A PHP extension stopped the image upload.',
+        ];
+        throw new RuntimeException($uploadMessages[$uploadError] ?? 'Image upload failed. Please try again.');
     }
     $tmpPath = (string)($file['tmp_name'] ?? '');
     $size = (int)($file['size'] ?? 0);
@@ -280,18 +290,35 @@ function pe_store_inline_image(array $file): array {
 
     $imageInfo = @getimagesize($tmpPath);
     $mime = is_array($imageInfo) ? (string)($imageInfo['mime'] ?? '') : '';
-    $extensions = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif'];
+    $extensions = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif', 'image/webp' => 'webp'];
     if (!isset($extensions[$mime])) {
-        throw new RuntimeException('Use a JPG, PNG, or GIF image.');
+        throw new RuntimeException('Use a JPG, PNG, GIF, or WebP image.');
     }
 
     $directory = __DIR__ . '/uploads/email-newsletter';
-    if (!is_dir($directory) && !mkdir($directory, 0750, true) && !is_dir($directory)) {
+    if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) {
         throw new RuntimeException('Unable to create image storage.');
     }
+    @chmod($directory, 0755);
+    clearstatcache(true, $directory);
+    $directoryPermissions = @fileperms($directory);
+    if ($directoryPermissions === false || ($directoryPermissions & 0005) !== 0005) {
+        throw new RuntimeException('The image folder must be publicly readable. Set uploads/email-newsletter to permission 755 in cPanel.');
+    }
+    if (!is_writable($directory)) {
+        throw new RuntimeException('The newsletter image folder is not writable by PHP. Check its cPanel folder ownership and permissions.');
+    }
     $filename = bin2hex(random_bytes(16)) . '.' . $extensions[$mime];
-    if (!move_uploaded_file($tmpPath, $directory . '/' . $filename)) {
+    $destination = $directory . '/' . $filename;
+    if (!move_uploaded_file($tmpPath, $destination)) {
         throw new RuntimeException('Unable to save the image.');
+    }
+    @chmod($destination, 0644);
+    clearstatcache(true, $destination);
+    $filePermissions = @fileperms($destination);
+    if ($filePermissions === false || ($filePermissions & 0004) !== 0004) {
+        @unlink($destination);
+        throw new RuntimeException('The uploaded image is not publicly readable. Check cPanel file permissions.');
     }
 
     $relativePath = 'uploads/email-newsletter/' . $filename;
@@ -317,7 +344,7 @@ function pe_safe_newsletter_asset_url(string $url): string {
     }
     $path = (string)($parts['path'] ?? '');
     if (isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment'])
-        || !preg_match('~(?:^|/)uploads/email-newsletter/[a-f0-9]{32}\.(jpg|png|gif)$~i', $path)) {
+        || !preg_match('~(?:^|/)uploads/email-newsletter/[a-f0-9]{32}\.(jpg|png|gif|webp)$~i', $path)) {
         return '';
     }
 
@@ -997,12 +1024,12 @@ if (!$isAdmin) {
                                     <div class="d-flex align-items-center flex-wrap" style="gap:10px;">
                                         <button type="button" id="headerLogoButton" class="btn btn-sm btn-outline-secondary"><i class="fas fa-image mr-1"></i> Add logo</button>
                                         <button type="button" id="removeHeaderLogoButton" class="btn btn-sm btn-outline-danger" <?= $masthead['logo'] === '' ? 'hidden' : '' ?>><i class="fas fa-times mr-1"></i> Remove</button>
-                                        <input type="file" id="headerLogoInput" accept="image/jpeg,image/png,image/gif" class="d-none">
+                                        <input type="file" id="headerLogoInput" accept="image/jpeg,image/png,image/gif,image/webp" class="d-none">
                                         <input type="hidden" name="masthead_logo_url" id="mastheadLogoUrl" value="<?= pe_h($masthead['logo']) ?>">
                                         <div id="headerLogoPreview" style="<?= $masthead['logo'] === '' ? 'display:none;' : '' ?>padding:8px 12px;border:1px solid #d8d3c8;background:#fff;">
                                             <img src="<?= pe_h($masthead['logo']) ?>" alt="Header logo preview" style="display:block;max-width:140px;max-height:72px;width:auto;height:auto;">
                                         </div>
-                                        <small id="headerLogoStatus" class="text-muted">JPG, PNG or GIF, up to 5 MB.</small>
+                                        <small id="headerLogoStatus" class="text-muted">JPG, PNG, GIF or WebP, up to 5 MB.</small>
                                     </div>
                                 </div>
                                 <div class="form-group mt-3 mb-0">
@@ -1010,9 +1037,9 @@ if (!$isAdmin) {
                                     <div class="d-flex align-items-center flex-wrap" style="gap:10px;">
                                         <button type="button" id="headerImageButton" class="btn btn-sm btn-outline-secondary"><i class="fas fa-panorama mr-1"></i> Add header image</button>
                                         <button type="button" id="removeHeaderImageButton" class="btn btn-sm btn-outline-danger" <?= $masthead['header_image'] === '' ? 'hidden' : '' ?>><i class="fas fa-times mr-1"></i> Remove</button>
-                                        <input type="file" id="headerImageInput" accept="image/jpeg,image/png,image/gif" class="d-none">
+                                        <input type="file" id="headerImageInput" accept="image/jpeg,image/png,image/gif,image/webp" class="d-none">
                                         <input type="hidden" name="masthead_header_image_url" id="mastheadHeaderImageUrl" value="<?= pe_h($masthead['header_image']) ?>">
-                                        <small id="headerImageStatus" class="text-muted">JPG, PNG or GIF, up to 5 MB.</small>
+                                        <small id="headerImageStatus" class="text-muted">JPG, PNG, GIF or WebP, up to 5 MB.</small>
                                     </div>
                                     <div id="headerImagePreview" class="mt-2" style="<?= $masthead['header_image'] === '' ? 'display:none;' : '' ?>max-width:656px;padding:8px;border:1px solid #d8d3c8;background:#fff;">
                                         <img src="<?= pe_h($masthead['header_image']) ?>" alt="Header image preview" style="display:block;width:100%;max-width:640px;max-height:160px;height:auto;object-fit:cover;">
@@ -1084,7 +1111,7 @@ if (!$isAdmin) {
                                 <div id="bodyEditor" class="email-rich-editor <?= $templateStyle === 'newspaper' ? 'newspaper-editor' : '' ?>" contenteditable="true" role="textbox" aria-multiline="true"><?= pe_sanitize_email_html($body) ?></div>
                                 <textarea name="body" id="bodyInput" class="d-none" aria-hidden="true"><?= pe_h($body) ?></textarea>
                                 <input type="file" id="newsletterImageInput" accept="image/jpeg,image/png,image/gif" class="d-none">
-                                <small class="text-muted" id="newsletterImageStatus">Click a photo, then choose Small, Medium or Large. New photos start at Medium. JPG, PNG or GIF up to 5 MB.</small>
+                                <small class="text-muted" id="newsletterImageStatus">Click a photo, then choose Small, Medium or Large. New photos start at Medium. JPG, PNG, GIF or WebP up to 5 MB.</small>
                             </div>
                             <div class="form-group">
                                 <label for="attachmentInput">Attachment <span class="text-muted">(optional)</span></label>
@@ -1206,6 +1233,19 @@ $(function () {
 
     function escapeHtml(value) {
         return $('<div>').text(value == null ? '' : String(value)).html();
+    }
+
+    function parseImageUploadResponse(response) {
+        return response.text().then(function (text) {
+            try {
+                return JSON.parse(text);
+            } catch (error) {
+                if (response.status === 413 || text === '') {
+                    throw new Error('The image upload exceeded the server request limit. Raise cPanel post_max_size to at least 6 MB.');
+                }
+                throw new Error('The upload handler returned a page instead of an image result. Check that parent-email.php is deployed and review the cPanel PHP error log.');
+            }
+        });
     }
 
     function applyPreviewTokens(value, parentName) {
@@ -1383,7 +1423,7 @@ $(function () {
         formData.append('newsletter_logo', file);
         $('#headerLogoStatus').text('Uploading logo...');
         fetch(window.location.href, {method:'POST', body:formData, credentials:'same-origin'})
-            .then(function (response) { return response.json(); })
+            .then(parseImageUploadResponse)
             .then(function (result) {
                 if (!result.ok) throw new Error(result.error || 'Logo upload failed.');
                 $('#mastheadLogoUrl').val(result.url);
@@ -1427,7 +1467,7 @@ $(function () {
         formData.append('newsletter_header', file);
         $('#headerImageStatus').text('Uploading header image...');
         fetch(window.location.href, {method:'POST', body:formData, credentials:'same-origin'})
-            .then(function (response) { return response.json(); })
+            .then(parseImageUploadResponse)
             .then(function (result) {
                 if (!result.ok) throw new Error(result.error || 'Header image upload failed.');
                 $('#mastheadHeaderImageUrl').val(result.url);
@@ -1550,7 +1590,7 @@ $(function () {
         formData.append('newsletter_image', file);
         $('#newsletterImageStatus').text('Uploading image...');
         fetch(window.location.href, {method:'POST', body:formData, credentials:'same-origin'})
-            .then(function (response) { return response.json(); })
+            .then(parseImageUploadResponse)
             .then(function (result) {
                 if (!result.ok) throw new Error(result.error || 'Image upload failed.');
                 var editor = document.getElementById('bodyEditor');
