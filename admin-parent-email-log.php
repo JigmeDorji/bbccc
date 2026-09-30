@@ -26,7 +26,7 @@ $rows = $pdo->query("
     LIMIT 500
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-$counts = ['sent' => 0, 'queued' => 0, 'retry' => 0, 'failed' => 0];
+$counts = ['sent' => 0, 'sending' => 0, 'queued' => 0, 'retry' => 0, 'failed' => 0];
 $senders = [];
 foreach ($rows as $r) {
     $status = strtolower((string)($r['status'] ?? 'queued'));
@@ -73,7 +73,7 @@ $pageScripts = [
         <div class="card border-left-success shadow py-2"><div class="card-body"><div class="text-xs font-weight-bold text-success text-uppercase mb-1">Sent</div><div class="h5 mb-0 font-weight-bold"><?= (int)$counts['sent'] ?></div></div></div>
     </div>
     <div class="col-md-3 mb-3">
-        <div class="card border-left-warning shadow py-2"><div class="card-body"><div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Queued / Retrying</div><div class="h5 mb-0 font-weight-bold"><?= (int)($counts['queued'] + $counts['retry']) ?></div></div></div>
+        <div class="card border-left-warning shadow py-2"><div class="card-body"><div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Sending / Queued / Retrying</div><div class="h5 mb-0 font-weight-bold"><?= (int)($counts['sending'] + $counts['queued'] + $counts['retry']) ?></div></div></div>
     </div>
     <div class="col-md-3 mb-3">
         <div class="card border-left-danger shadow py-2"><div class="card-body"><div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Failed</div><div class="h5 mb-0 font-weight-bold"><?= (int)$counts['failed'] ?></div></div></div>
@@ -87,6 +87,7 @@ $pageScripts = [
 <div class="mb-3">
     <button class="btn btn-sm btn-primary filter-btn active" data-filter="all">All</button>
     <button class="btn btn-sm btn-outline-success filter-btn" data-filter="sent">Sent</button>
+    <button class="btn btn-sm btn-outline-info filter-btn" data-filter="sending">Sending</button>
     <button class="btn btn-sm btn-outline-warning filter-btn" data-filter="queued">Queued</button>
     <button class="btn btn-sm btn-outline-warning filter-btn" data-filter="retry">Retrying</button>
     <button class="btn btn-sm btn-outline-danger filter-btn" data-filter="failed">Failed</button>
@@ -114,12 +115,14 @@ $pageScripts = [
                     $status = strtolower((string)($r['status'] ?? 'queued'));
                     $label = match ($status) {
                         'sent' => 'Sent',
+                        'sending' => 'Sending',
                         'retry' => 'Retrying',
                         'failed' => 'Failed',
                         default => 'Queued',
                     };
                     $badge = match ($status) {
                         'sent' => 'success',
+                        'sending' => 'info',
                         'retry' => 'warning',
                         'failed' => 'danger',
                         default => 'secondary',

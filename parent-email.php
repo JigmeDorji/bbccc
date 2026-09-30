@@ -751,12 +751,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $skipped++;
                     }
                 } else {
+                    $historyId = bbcc_record_direct_mail($email, $name, $subjectFinal, $html, $attachment, $queueMetadata);
+                    if ($historyId === null) {
+                        $failedDirect++;
+                        bbcc_mail_log('PARENT EMAIL DIRECT SEND SKIPPED: unable to create history record for ' . $email);
+                        continue;
+                    }
+
                     $attachments = $attachment ? [$attachment] : [];
                     if (send_mail($email, $name, $subjectFinal, $html, 10, $attachments)) {
                         $sentDirect++;
+                        if (!bbcc_finish_direct_mail_record($historyId, true)) {
+                            bbcc_mail_log('PARENT EMAIL DIRECT SEND HISTORY UPDATE FAIL for row ' . $historyId);
+                        }
                     } else {
                         $failedDirect++;
-                        bbcc_mail_log('PARENT EMAIL DIRECT SEND FAIL to ' . $email . ': ' . bbcc_last_mail_error());
+                        $sendError = bbcc_last_mail_error();
+                        bbcc_finish_direct_mail_record($historyId, false, $sendError);
+                        bbcc_mail_log('PARENT EMAIL DIRECT SEND FAIL to ' . $email . ': ' . $sendError);
                     }
                 }
             }
@@ -1181,12 +1193,14 @@ if (!$isAdmin) {
                                         $deliveryStatus = strtolower((string)($delivery['status'] ?? 'queued'));
                                         $deliveryLabel = match ($deliveryStatus) {
                                             'sent' => 'Sent',
+                                            'sending' => 'Sending',
                                             'retry' => 'Retrying',
                                             'failed' => 'Failed',
                                             default => 'Queued',
                                         };
                                         $deliveryBadge = match ($deliveryStatus) {
                                             'sent' => 'success',
+                                            'sending' => 'info',
                                             'retry' => 'warning',
                                             'failed' => 'danger',
                                             default => 'secondary',

@@ -132,6 +132,63 @@ function bbcc_queue_mail(string $toEmail, string $toName, string $subject, strin
     }
 }
 
+function bbcc_record_direct_mail(string $toEmail, string $toName, string $subject, string $htmlBody, ?array $attachment = null, array $metadata = []): ?int {
+    $toEmail = trim($toEmail);
+    if ($toEmail === '' || !filter_var($toEmail, FILTER_VALIDATE_EMAIL) || !bbcc_mail_queue_ensure_table()) {
+        return null;
+    }
+
+    $pdo = bbcc_mail_queue_pdo();
+    if (!$pdo) return null;
+
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO mail_queue
+                (to_email, to_name, subject, html_body, attachment_name, attachment_mime, source, created_by, batch_id, attempts, max_attempts, status)
+            VALUES
+                (:to_email, :to_name, :subject, :html_body, :attachment_name, :attachment_mime, :source, :created_by, :batch_id, 0, 1, 'sending')
+        ");
+        $stmt->execute([
+            ':to_email' => $toEmail,
+            ':to_name' => trim($toName) !== '' ? $toName : null,
+            ':subject' => $subject,
+            ':html_body' => $htmlBody,
+            ':attachment_name' => !empty($attachment['name']) ? (string)$attachment['name'] : null,
+            ':attachment_mime' => !empty($attachment['mime']) ? (string)$attachment['mime'] : null,
+            ':source' => !empty($metadata['source']) ? substr((string)$metadata['source'], 0, 50) : null,
+            ':created_by' => !empty($metadata['created_by']) ? substr((string)$metadata['created_by'], 0, 100) : null,
+            ':batch_id' => !empty($metadata['batch_id']) ? substr((string)$metadata['batch_id'], 0, 64) : null,
+        ]);
+        return (int)$pdo->lastInsertId();
+    } catch (Throwable $e) {
+        bbcc_mail_log('DIRECT MAIL HISTORY INSERT ERROR: ' . $e->getMessage());
+        return null;
+    }
+}
+
+function bbcc_finish_direct_mail_record(int $recordId, bool $sent, string $error = ''): bool {
+    if ($recordId <= 0) return false;
+    $pdo = bbcc_mail_queue_pdo();
+    if (!$pdo) return false;
+
+    try {
+        if ($sent) {
+            $stmt = $pdo->prepare("UPDATE mail_queue SET status='sent', attempts=1, sent_at=NOW(), last_error=NULL WHERE id=:id");
+            $stmt->execute([':id' => $recordId]);
+        } else {
+            $stmt = $pdo->prepare("UPDATE mail_queue SET status='failed', attempts=1, last_error=:error WHERE id=:id");
+            $stmt->execute([
+                ':error' => trim($error) !== '' ? $error : 'Direct mail send failed.',
+                ':id' => $recordId,
+            ]);
+        }
+        return $stmt->rowCount() === 1;
+    } catch (Throwable $e) {
+        bbcc_mail_log('DIRECT MAIL HISTORY UPDATE ERROR for row ' . $recordId . ': ' . $e->getMessage());
+        return false;
+    }
+}
+
 function bbcc_schedule_mail_queue_drain(int $limit = 3): void {
     static $scheduled = false;
     if ($scheduled) {
