@@ -56,7 +56,7 @@ function pe_presets(): array {
 }
 
 function pe_masthead_defaults(string $style): array {
-    $currentMonth = (new DateTimeImmutable('now', bbcc_app_timezone()))->format('F Y');
+    $currentMonth = (new DateTimeImmutable('now', new DateTimeZone('Australia/Sydney')))->format('F Y');
     return [
         'name' => 'Bhutanese Language and Culture School',
         'title' => $style === 'newspaper' ? 'The Semester Review' : ($style === 'newsletter' ? 'Information Note' : 'Parent Communication'),
