@@ -468,8 +468,6 @@ try {
 } catch (Throwable $e) {
     bbcc_fail_db($e);
 }
-bbcc_ensure_class_teacher_schema($pdo);
-
 $sessionUsername = trim((string)($_SESSION['username'] ?? ''));
 $senderDisplayName = pe_pretty_name_from_username($sessionUsername);
 $sessionUserId = trim((string)($_SESSION['userid'] ?? ''));
