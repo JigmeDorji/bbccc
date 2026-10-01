@@ -357,6 +357,50 @@ function pe_safe_newsletter_asset_url(string $url): string {
     return in_array($host, array_filter($allowedHosts), true) ? $url : '';
 }
 
+function pe_embed_pdf_upload_images(string $html): string {
+    if (!class_exists('DOMDocument')) {
+        throw new RuntimeException('PDF export requires the PHP DOM extension.');
+    }
+
+    $doc = new DOMDocument('1.0', 'UTF-8');
+    $previous = libxml_use_internal_errors(true);
+    $doc->loadHTML('<?xml encoding="utf-8"?><div id="pdf-upload-root">' . $html . '</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD | LIBXML_NONET);
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+
+    $root = $doc->getElementById('pdf-upload-root');
+    if (!$root) return '';
+
+    $uploadRoot = realpath(__DIR__ . '/uploads/email-newsletter');
+    foreach (iterator_to_array($root->getElementsByTagName('img')) as $image) {
+        if (!$image instanceof DOMElement) continue;
+
+        $assetUrl = pe_safe_newsletter_asset_url((string)$image->getAttribute('src'));
+        $filename = basename((string)parse_url($assetUrl, PHP_URL_PATH));
+        $assetPath = $uploadRoot !== false && preg_match('/^[a-f0-9]{32}\.(jpg|png|gif|webp)$/i', $filename)
+            ? realpath($uploadRoot . DIRECTORY_SEPARATOR . $filename)
+            : false;
+        if ($assetPath === false || !str_starts_with($assetPath, $uploadRoot . DIRECTORY_SEPARATOR)) {
+            $image->parentNode?->removeChild($image);
+            continue;
+        }
+
+        $imageInfo = @getimagesize($assetPath);
+        $imageContents = @file_get_contents($assetPath);
+        $mime = is_array($imageInfo) ? (string)($imageInfo['mime'] ?? '') : '';
+        if ($imageContents === false || !in_array($mime, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
+            throw new RuntimeException('An uploaded image could not be included in the PDF.');
+        }
+        $image->setAttribute('src', 'data:' . $mime . ';base64,' . base64_encode($imageContents));
+    }
+
+    $fragment = '';
+    foreach ($root->childNodes as $child) {
+        $fragment .= $doc->saveHTML($child);
+    }
+    return $fragment;
+}
+
 function pe_build_email_html(string $recipientName, string $subject, string $body, string $senderName, string $style = 'standard', array $masthead = []): string {
     $safeSubject = pe_h($subject);
     $safeBody = pe_sanitize_email_html($body, $style);
@@ -632,7 +676,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' && isset($_SESSION['parent_email_flash
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf();
-    $emailAction = (string)($_POST['email_action'] ?? 'send');
+    $emailAction = (string)($_POST['email_action'] ?? '');
     if ($presetId !== '' && isset($presets[$presetId])) {
         if ($subject === '') {
             $subject = (string)$presets[$presetId]['subject'];
@@ -671,6 +715,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['parent_email_flash'] = ['result' => $result, 'message' => $message];
         header('Location: parent-email');
         exit;
+    }
+
+    if (in_array($emailAction, ['download_pdf', 'download_semester_pdf'], true)) {
+        if ($subject === '' || $body === '') {
+            http_response_code(400);
+            exit('Add a subject and message before downloading the PDF.');
+        }
+        try {
+            $senderName = $senderNameInput;
+            $pdfSubject = pe_apply_tokens($subject, 'Parent', $senderName);
+            $pdfBody = pe_sanitize_email_html(pe_apply_tokens($body, 'Parent', $senderName), $templateStyle);
+            $pdfBrand = trim((string)$masthead['name']);
+            $pdfTitle = trim((string)$masthead['title']);
+            $pdfSubtitle = trim((string)$masthead['subtitle']);
+            $pdfHeadlineLabel = trim((string)$masthead['headline_label']);
+            $pdfFooter = trim((string)$masthead['footer']);
+            $pdfHeaderImage = pe_safe_newsletter_asset_url((string)$masthead['header_image']);
+            $pdfLogo = pe_safe_newsletter_asset_url((string)$masthead['logo']);
+            $mastheadImage = $pdfHeaderImage !== ''
+                ? '<img class="header-image" src="' . pe_h($pdfHeaderImage) . '" alt="School newsletter header">'
+                : ($pdfLogo !== '' ? '<img class="school-logo" src="' . pe_h($pdfLogo) . '" alt="School logo">' : '');
+            $pdfMarkup = $mastheadImage
+                . '<header class="masthead">'
+                . ($pdfBrand !== '' ? '<div class="school-name">' . pe_h($pdfBrand) . '</div>' : '')
+                . ($pdfTitle !== '' ? '<h1>' . pe_h($pdfTitle) . '</h1>' : '')
+                . ($pdfSubtitle !== '' ? '<div class="edition">' . pe_h($pdfSubtitle) . '</div>' : '')
+                . '</header>'
+                . '<main><div class="subject-label">' . pe_h($pdfHeadlineLabel) . '</div><h2 class="subject">' . pe_h($pdfSubject) . '</h2>'
+                . '<section class="message">' . $pdfBody . '</section>'
+                . '<div class="signature"><div class="regards">Warm regards</div><strong>' . pe_h($senderName) . '</strong><div>' . pe_h($pdfBrand !== '' ? $pdfBrand : 'Bhutanese Language and Culture School') . '</div></div></main>'
+                . ($pdfFooter !== '' ? '<footer>' . pe_h($pdfFooter) . '</footer>' : '');
+            $pdfMarkup = pe_embed_pdf_upload_images($pdfMarkup);
+            $pdfHtml = '<!doctype html><html><head><meta charset="utf-8"><style>
+                @page { margin: 32px 38px; }
+                body { margin: 0; font-family: DejaVu Sans, sans-serif; color: #293b38; font-size: 11pt; line-height: 1.6; }
+                .header-image { display: block; width: 100%; height: auto; margin: 0 0 0; }
+                .school-logo { display: block; max-width: 140px; max-height: 72px; margin: 0 0 14px; }
+                .masthead { background: #174b46; color: #fff; padding: 18px 24px 20px; border-top: 4px solid #c8a85b; margin-bottom: 24px; }
+                .school-name { color: #e7c987; font-size: 9pt; font-weight: bold; text-transform: uppercase; }
+                h1 { color: #fff; font: bold 26pt Georgia, serif; line-height: 1.2; margin: 8px 0 0; }
+                .edition { color: #d7e7e3; font-size: 9pt; margin-top: 8px; }
+                .subject-label { color: #80652f; font-size: 8pt; font-weight: bold; text-transform: uppercase; }
+                .subject { color: #203b37; font: bold 19pt Georgia, serif; border-bottom: 1px solid #d3e0dd; padding-bottom: 10px; margin: 6px 0 18px; }
+                h2, h3, h4 { page-break-after: avoid; }
+                p, li, blockquote { orphans: 3; widows: 3; }
+                ul, ol, blockquote, table { page-break-inside: auto; }
+                tr, img { page-break-inside: avoid; }
+                img { max-width: 100%; height: auto; }
+                .message h2 { color: #203b37; font: bold 16pt Georgia, serif; border-bottom: 1px solid #d3e0dd; padding-bottom: 5px; margin: 20px 0 8px; }
+                .message h3 { color: #80652f; font-size: 10pt; text-transform: uppercase; }
+                .signature { border-top: 1px solid #d3e0dd; margin-top: 24px; padding-top: 14px; }
+                .regards { color: #6b7280; font-size: 9pt; text-transform: uppercase; }
+                .signature strong { display: block; font-size: 14pt; margin-top: 4px; }
+                footer { border-top: 1px solid #dce5e3; color: #6b7280; font-size: 8pt; margin-top: 24px; padding-top: 10px; }
+                a { color: #174b46; text-decoration: underline; }
+            </style></head><body>' . $pdfMarkup . '</body></html>';
+            $pdf = new Dompdf\Dompdf(['isRemoteEnabled' => false]);
+            $pdf->setPaper('A4', 'portrait');
+            $pdf->loadHtml($pdfHtml, 'UTF-8');
+            $pdf->render();
+            $filename = 'parent-email-' . date('Y-m-d') . '.pdf';
+            header('Content-Type: application/pdf');
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('Cache-Control: private, no-store, max-age=0');
+            echo $pdf->output();
+            exit;
+        } catch (Throwable $e) {
+            error_log('[Parent Email] PDF export failed: ' . $e->getMessage());
+            http_response_code(500);
+            exit('The PDF could not be generated. Please check the server error log.');
+        }
+    }
+
+    if (!in_array($emailAction, ['preview', 'send'], true)) {
+        http_response_code(400);
+        exit('Choose Preview Email, Download PDF, or Send Email.');
     }
 
     $recipients = [];
@@ -1145,6 +1265,9 @@ if (!$isAdmin) {
 
                             <button type="button" id="previewEmailButton" class="btn btn-outline-primary" <?= empty($parents) ? 'disabled' : '' ?>>
                                 <i class="fas fa-eye mr-1"></i> Preview Email
+                            </button>
+                            <button type="submit" id="downloadPdfButton" name="email_action" value="download_pdf" class="btn btn-outline-success">
+                                <i class="fas fa-file-pdf mr-1"></i> Download PDF
                             </button>
                             <?php if ($isAdmin): ?>
                                 <button type="submit" name="email_action" value="save_info_note" class="btn btn-outline-secondary">
@@ -1667,6 +1790,18 @@ $(function () {
     $('#bodyEditor').on('input blur', syncEditorBody);
     $('form[method="POST"]').on('submit', function () {
         if ($(this).find('#bodyEditor').length) syncEditorBody();
+    });
+
+    $('#downloadPdfButton').on('click', function (event) {
+        event.preventDefault();
+        var form = this.form;
+        syncEditorBody();
+        var actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'email_action';
+        actionInput.value = 'download_pdf';
+        form.appendChild(actionInput);
+        HTMLFormElement.prototype.submit.call(form);
     });
 
     $('#previewEmailButton').on('click', function () {

@@ -26,7 +26,7 @@ $rows = $pdo->query("
     LIMIT 500
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-$counts = ['sent' => 0, 'sending' => 0, 'queued' => 0, 'retry' => 0, 'failed' => 0];
+$counts = ['sent' => 0, 'sending' => 0, 'queued' => 0, 'retry' => 0, 'failed' => 0, 'cancelled' => 0];
 $senders = [];
 foreach ($rows as $r) {
     $status = strtolower((string)($r['status'] ?? 'queued'));
@@ -69,16 +69,19 @@ $pageScripts = [
 
 <!-- Summary -->
 <div class="row mb-3">
-    <div class="col-md-3 mb-3">
+    <div class="col-md mb-3">
         <div class="card border-left-success shadow py-2"><div class="card-body"><div class="text-xs font-weight-bold text-success text-uppercase mb-1">Sent</div><div class="h5 mb-0 font-weight-bold"><?= (int)$counts['sent'] ?></div></div></div>
     </div>
-    <div class="col-md-3 mb-3">
+    <div class="col-md mb-3">
         <div class="card border-left-warning shadow py-2"><div class="card-body"><div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Sending / Queued / Retrying</div><div class="h5 mb-0 font-weight-bold"><?= (int)($counts['sending'] + $counts['queued'] + $counts['retry']) ?></div></div></div>
     </div>
-    <div class="col-md-3 mb-3">
+    <div class="col-md mb-3">
         <div class="card border-left-danger shadow py-2"><div class="card-body"><div class="text-xs font-weight-bold text-danger text-uppercase mb-1">Failed</div><div class="h5 mb-0 font-weight-bold"><?= (int)$counts['failed'] ?></div></div></div>
     </div>
-    <div class="col-md-3 mb-3">
+    <div class="col-md mb-3">
+        <div class="card border-left-secondary shadow py-2"><div class="card-body"><div class="text-xs font-weight-bold text-secondary text-uppercase mb-1">Canceled</div><div class="h5 mb-0 font-weight-bold"><?= (int)$counts['cancelled'] ?></div></div></div>
+    </div>
+    <div class="col-md mb-3">
         <div class="card border-left-primary shadow py-2"><div class="card-body"><div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total (last 500)</div><div class="h5 mb-0 font-weight-bold"><?= count($rows) ?></div></div></div>
     </div>
 </div>
@@ -91,6 +94,7 @@ $pageScripts = [
     <button class="btn btn-sm btn-outline-warning filter-btn" data-filter="queued">Queued</button>
     <button class="btn btn-sm btn-outline-warning filter-btn" data-filter="retry">Retrying</button>
     <button class="btn btn-sm btn-outline-danger filter-btn" data-filter="failed">Failed</button>
+    <button class="btn btn-sm btn-outline-secondary filter-btn" data-filter="cancelled">Canceled</button>
 </div>
 <div class="mb-3" style="max-width:280px;">
     <label class="small text-muted mb-1">Filter by Sender</label>
@@ -118,6 +122,7 @@ $pageScripts = [
                         'sending' => 'Sending',
                         'retry' => 'Retrying',
                         'failed' => 'Failed',
+                        'cancelled' => 'Canceled',
                         default => 'Queued',
                     };
                     $badge = match ($status) {
@@ -125,6 +130,7 @@ $pageScripts = [
                         'sending' => 'info',
                         'retry' => 'warning',
                         'failed' => 'danger',
+                        'cancelled' => 'secondary',
                         default => 'secondary',
                     };
                 ?>
