@@ -488,11 +488,11 @@ function pe_build_email_html(string $recipientName, string $subject, string $bod
             </td>
           </tr>
           <tr>
-            <td style="padding:16px 28px 22px 28px;">
-              <div style="height:1px;background:#e5e7eb;margin:0 0 10px 0;"></div>
-              <div style="font-size:12px;color:#6b7280;line-height:1.5;">
-                ' . pe_h($footerText) . '
-              </div>
+                        <td style="padding:0;background:#174b46;border-top:4px solid #c8a85b;">
+                            <div style="padding:16px 28px 20px;">
+                                <div style="font-size:11px;color:#e7c987;font-weight:bold;text-transform:uppercase;">' . pe_h($brandName !== '' ? $brandName : $schoolName) . '</div>
+                                <div style="font-size:12px;color:#d7e7e3;line-height:1.6;margin-top:6px;">' . pe_h($footerText) . '</div>
+                            </div>
             </td>
           </tr>
         </table>
@@ -745,7 +745,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 . '<main><div class="subject-label">' . pe_h($pdfHeadlineLabel) . '</div><h2 class="subject">' . pe_h($pdfSubject) . '</h2>'
                 . '<section class="message">' . $pdfBody . '</section>'
                 . '<div class="signature"><div class="regards">Warm regards</div><strong>' . pe_h($senderName) . '</strong><div>' . pe_h($pdfBrand !== '' ? $pdfBrand : 'Bhutanese Language and Culture School') . '</div></div></main>'
-                . ($pdfFooter !== '' ? '<footer>' . pe_h($pdfFooter) . '</footer>' : '');
+                . '<footer><strong>' . pe_h($pdfBrand !== '' ? $pdfBrand : 'Bhutanese Language and Culture School') . '</strong>'
+                . ($pdfFooter !== '' ? '<div>' . pe_h($pdfFooter) . '</div>' : '') . '</footer>';
             $pdfMarkup = pe_embed_pdf_upload_images($pdfMarkup);
             $pdfHtml = '<!doctype html><html><head><meta charset="utf-8"><style>
                 @page { margin: 32px 38px; }
@@ -768,7 +769,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 .signature { border-top: 1px solid #d3e0dd; margin-top: 24px; padding-top: 14px; }
                 .regards { color: #6b7280; font-size: 9pt; text-transform: uppercase; }
                 .signature strong { display: block; font-size: 14pt; margin-top: 4px; }
-                footer { border-top: 1px solid #dce5e3; color: #6b7280; font-size: 8pt; margin-top: 24px; padding-top: 10px; }
+                footer { background: #174b46; border-top: 4px solid #c8a85b; color: #d7e7e3; font-size: 8pt; margin-top: 24px; padding: 14px 18px 16px; }
+                footer strong { color: #e7c987; display: block; font-size: 8pt; text-transform: uppercase; }
+                footer div { margin-top: 5px; }
                 a { color: #174b46; text-decoration: underline; }
             </style></head><body>' . $pdfMarkup . '</body></html>';
             $pdf = new Dompdf\Dompdf(['isRemoteEnabled' => false]);
@@ -1525,9 +1528,9 @@ $(function () {
                     '<div style="' + headlineStyle + '">' + safeSubject + '</div>' +
                 '</div>' +
                 '<div style="' + contentStyle + '"><div style="margin:0 0 14px;">' + safeBody + '</div>' + signature + '</div>' +
-                '<div style="padding:16px 24px 22px;">' +
-                    '<div style="height:1px;background:#e5e7eb;margin-bottom:10px;"></div>' +
-                    '<div style="font-size:12px;color:#6b7280;line-height:1.5;">' + escapeHtml(footerText) + '</div>' +
+                '<div style="background:#174b46;border-top:4px solid #c8a85b;padding:14px 24px 18px;">' +
+                    '<div style="font-size:11px;color:#e7c987;font-weight:bold;text-transform:uppercase;">' + escapeHtml(brandName || 'Bhutanese Language and Culture School') + '</div>' +
+                    '<div style="font-size:12px;color:#d7e7e3;line-height:1.6;margin-top:6px;">' + escapeHtml(footerText) + '</div>' +
                 '</div>' +
             '</div>' +
         '</div>';
