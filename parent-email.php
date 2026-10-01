@@ -440,6 +440,10 @@ function pe_build_email_html(string $recipientName, string $subject, string $bod
     $subtitleColor = $isNewspaper ? '#4c4942' : ($isNewsletter ? '#f5e6c5' : '#6b7280');
     $subjectLabel = trim((string)($masthead['headline_label'] ?? $defaults['headline_label']));
     $footerText = trim((string)($masthead['footer'] ?? $defaults['footer']));
+    $footerBackground = $isNewspaper ? '#174b46' : ($isNewsletter ? '#741f1b' : '#f7faf9');
+    $footerAccent = $isNewspaper ? '#c8a85b' : ($isNewsletter ? '#d5a84b' : '#e1e9e7');
+    $footerBrandColor = $isNewspaper ? '#e7c987' : ($isNewsletter ? '#f4dfac' : '#6f2521');
+    $footerTextColor = $isNewspaper ? '#d7e7e3' : ($isNewsletter ? '#f5e6c5' : '#6b7280');
     $subjectStyle = $isNewspaper
                 ? 'font-family:Georgia,serif;font-size:28px;font-weight:bold;color:#203b37;line-height:1.2;border-bottom:1px solid #d3e0dd;padding-bottom:14px;'
         : 'font-size:20px;font-weight:bold;color:#111827;line-height:1.3;';
@@ -488,10 +492,10 @@ function pe_build_email_html(string $recipientName, string $subject, string $bod
             </td>
           </tr>
           <tr>
-                        <td style="padding:0;background:#174b46;border-top:4px solid #c8a85b;">
+                        <td style="padding:0;background:' . $footerBackground . ';border-top:4px solid ' . $footerAccent . ';">
                             <div style="padding:16px 28px 20px;">
-                                <div style="font-size:11px;color:#e7c987;font-weight:bold;text-transform:uppercase;">' . pe_h($brandName !== '' ? $brandName : $schoolName) . '</div>
-                                <div style="font-size:12px;color:#d7e7e3;line-height:1.6;margin-top:6px;">' . pe_h($footerText) . '</div>
+                                <div style="font-size:11px;color:' . $footerBrandColor . ';font-weight:bold;text-transform:uppercase;">' . pe_h($brandName !== '' ? $brandName : $schoolName) . '</div>
+                                <div style="font-size:12px;color:' . $footerTextColor . ';line-height:1.6;margin-top:6px;">' . pe_h($footerText) . '</div>
                             </div>
             </td>
           </tr>
@@ -1131,6 +1135,12 @@ if (!$isAdmin) {
                                 </div>
                             </div>
 
+                            <div class="d-flex justify-content-end mb-3">
+                                <button type="submit" name="email_action" value="download_pdf" class="btn btn-success download-pdf-button">
+                                    <i class="fas fa-file-pdf mr-1"></i> Download PDF
+                                </button>
+                            </div>
+
                             <div id="mastheadControls" class="border rounded p-3 mb-3" style="<?= $templateStyle === 'newspaper' ? '' : 'display:none;' ?>background:#f1f6f4;border-color:#d3e0dd !important;">
                                 <h6 class="font-weight-bold mb-3">Newspaper Masthead</h6>
                                 <div class="form-row">
@@ -1269,7 +1279,7 @@ if (!$isAdmin) {
                             <button type="button" id="previewEmailButton" class="btn btn-outline-primary" <?= empty($parents) ? 'disabled' : '' ?>>
                                 <i class="fas fa-eye mr-1"></i> Preview Email
                             </button>
-                            <button type="submit" id="downloadPdfButton" name="email_action" value="download_pdf" class="btn btn-outline-success">
+                            <button type="submit" id="downloadPdfButton" name="email_action" value="download_pdf" class="btn btn-outline-success download-pdf-button">
                                 <i class="fas fa-file-pdf mr-1"></i> Download PDF
                             </button>
                             <?php if ($isAdmin): ?>
@@ -1497,6 +1507,10 @@ $(function () {
         var mastheadFont = newspaper ? 'font-family:Georgia,serif;' : '';
         var headlineLabel = masthead.headline_label == null ? defaults.headline_label : String(masthead.headline_label);
         var footerText = masthead.footer == null ? defaults.footer : String(masthead.footer);
+        var footerBackground = newspaper ? '#174b46' : (newsletter ? '#741f1b' : '#f7faf9');
+        var footerAccent = newspaper ? '#c8a85b' : (newsletter ? '#d5a84b' : '#e1e9e7');
+        var footerBrandColor = newspaper ? '#e7c987' : (newsletter ? '#f4dfac' : '#6f2521');
+        var footerTextColor = newspaper ? '#d7e7e3' : (newsletter ? '#f5e6c5' : '#6b7280');
         var headlineStyle = newspaper
             ? 'font-family:Georgia,serif;font-size:28px;font-weight:bold;color:#203b37;line-height:1.2;border-bottom:1px solid #d3e0dd;padding-bottom:14px;'
             : 'font-size:20px;font-weight:bold;color:#111827;line-height:1.3;';
@@ -1528,9 +1542,9 @@ $(function () {
                     '<div style="' + headlineStyle + '">' + safeSubject + '</div>' +
                 '</div>' +
                 '<div style="' + contentStyle + '"><div style="margin:0 0 14px;">' + safeBody + '</div>' + signature + '</div>' +
-                '<div style="background:#174b46;border-top:4px solid #c8a85b;padding:14px 24px 18px;">' +
-                    '<div style="font-size:11px;color:#e7c987;font-weight:bold;text-transform:uppercase;">' + escapeHtml(brandName || 'Bhutanese Language and Culture School') + '</div>' +
-                    '<div style="font-size:12px;color:#d7e7e3;line-height:1.6;margin-top:6px;">' + escapeHtml(footerText) + '</div>' +
+                '<div style="background:' + footerBackground + ';border-top:4px solid ' + footerAccent + ';padding:14px 24px 18px;">' +
+                    '<div style="font-size:11px;color:' + footerBrandColor + ';font-weight:bold;text-transform:uppercase;">' + escapeHtml(brandName || 'Bhutanese Language and Culture School') + '</div>' +
+                    '<div style="font-size:12px;color:' + footerTextColor + ';line-height:1.6;margin-top:6px;">' + escapeHtml(footerText) + '</div>' +
                 '</div>' +
             '</div>' +
         '</div>';
@@ -1795,7 +1809,7 @@ $(function () {
         if ($(this).find('#bodyEditor').length) syncEditorBody();
     });
 
-    $('#downloadPdfButton').on('click', function (event) {
+    $('.download-pdf-button').on('click', function (event) {
         event.preventDefault();
         var form = this.form;
         syncEditorBody();
