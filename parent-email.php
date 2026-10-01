@@ -95,11 +95,11 @@ function pe_load_info_note(PDO $pdo, array $presets): array {
     return $presets;
 }
 
-function pe_apply_tokens(string $text, string $recipientName): string {
+function pe_apply_tokens(string $text, string $recipientName, string $senderName = ''): string {
     $nameParts = preg_split('/\s+/', trim($recipientName), 2);
     $name = !empty($nameParts[0]) ? $nameParts[0] : 'Parent';
     $schoolName = 'Bhutanese Language and Culture School';
-    $principalName = trim((string)($_SESSION['principal_name'] ?? 'Principal')) ?: 'Principal';
+    $principalName = trim($senderName) ?: (trim((string)($_SESSION['principal_name'] ?? 'Principal')) ?: 'Principal');
     $semesterName = trim((string)($_SESSION['semester_name'] ?? 'Semester')) ?: 'Semester';
     $schoolYear = trim((string)($_SESSION['school_year'] ?? date('Y')));
 
@@ -189,10 +189,10 @@ function pe_sanitize_email_html(string $html, string $style = 'standard'): strin
                     $child->setAttribute('style', 'display:block;width:100%;max-width:' . $imageWidth . 'px;max-height:420px;height:auto;object-fit:cover;border:1px solid #d3cec3;margin:14px auto 6px;');
                 }
                 if ($style === 'newspaper' && $tag === 'h2') {
-                    $child->setAttribute('style', 'font-family:Georgia,serif;font-size:22px;line-height:1.3;color:#292722;border-bottom:1px solid #c9c3b7;padding-bottom:6px;margin:24px 0 10px;');
+                    $child->setAttribute('style', 'font-family:Georgia,serif;font-size:22px;line-height:1.3;color:#203b37;border-bottom:1px solid #d3e0dd;padding-bottom:6px;margin:24px 0 10px;');
                 }
                 if ($style === 'newspaper' && $tag === 'h3') {
-                    $child->setAttribute('style', 'font-family:Arial,sans-serif;font-size:13px;color:#7b1f1a;text-transform:uppercase;letter-spacing:.08em;margin:20px 0 8px;');
+                    $child->setAttribute('style', 'font-family:Arial,sans-serif;font-size:13px;color:#80652f;text-transform:uppercase;letter-spacing:.08em;margin:20px 0 8px;');
                 }
                 if ($tag === 'p') {
                     $previous = $child->previousSibling;
@@ -373,31 +373,34 @@ function pe_build_email_html(string $recipientName, string $subject, string $bod
     $logoMarkup = $logoUrl !== ''
         ? '<div style="margin-bottom:12px;"><img src="' . pe_h($logoUrl) . '" width="140" alt="School logo" style="display:block;width:auto;max-width:140px;max-height:72px;height:auto;border:0;margin:0;"></div>'
         : '';
+    $hasFullHeaderImage = $headerImageUrl !== '';
     $headerImageMarkup = $headerImageUrl !== ''
-        ? '<div style="margin:0 0 14px;"><img src="' . pe_h($headerImageUrl) . '" width="656" alt="School newsletter header" style="display:block;width:100%;max-width:656px;max-height:180px;height:auto;object-fit:cover;border:0;margin:0;"></div>'
+        ? '<img src="' . pe_h($headerImageUrl) . '" width="720" alt="School newsletter header" style="display:block;width:100%;max-width:720px;height:auto;border:0;margin:0;">'
         : '';
     $mastheadImageMarkup = $headerImageMarkup !== '' ? $headerImageMarkup : $logoMarkup;
-    $pageBackground = $isNewspaper ? '#e9e5db' : '#f3f4f6';
+        $pageBackground = $isNewspaper ? '#eaf1ef' : '#eef3f2';
     $paperStyle = $isNewspaper
-        ? 'max-width:720px;background:#fffdf7;border:1px solid #c9c3b7;border-radius:0;overflow:hidden;'
-        : 'max-width:700px;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;';
-    $mastheadStyle = $isNewspaper
-        ? 'background:#fffdf7;padding:24px 32px 18px;border-bottom:5px double #292722;'
-        : ($isNewsletter ? 'background:#881b12;padding:24px 30px;border-bottom:4px solid #d5a84b;' : 'background:#f8f4ef;padding:22px 28px;border-bottom:1px solid #e5d7c8;');
+                ? 'max-width:720px;background:#ffffff;border:1px solid #cddbd8;border-radius:10px;overflow:hidden;box-shadow:0 12px 36px rgba(31,55,52,.09);'
+        : 'max-width:700px;background:#ffffff;border:1px solid #dce5e3;border-radius:16px;overflow:hidden;box-shadow:0 12px 36px rgba(31,55,52,.09);';
+    $mastheadStyle = $hasFullHeaderImage
+        ? 'background:#174b46;padding:0;'
+        : ($isNewspaper
+                ? 'background:#174b46;padding:28px 32px 22px;border-bottom:4px solid #c8a85b;'
+        : ($isNewsletter ? 'background:#741f1b;padding:24px 30px;border-bottom:4px solid #d5a84b;' : 'background:#f7faf9;padding:22px 28px;border-bottom:1px solid #e1e9e7;'));
     $mastheadNameStyle = $isNewspaper
-        ? 'font-family:Arial,sans-serif;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#7b1f1a;font-weight:bold;'
-        : ($isNewsletter ? 'font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#f4dfac;font-weight:bold;' : 'font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#7a4a2d;font-weight:bold;');
+                ? 'font-family:Arial,sans-serif;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#e7c987;font-weight:bold;'
+        : ($isNewsletter ? 'font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#f4dfac;font-weight:bold;' : 'font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#6f2521;font-weight:bold;');
     $mastheadHeadingStyle = $isNewspaper
-        ? 'font-family:Georgia,serif;font-size:36px;font-weight:bold;color:#24221f;line-height:1.1;margin-top:9px;'
+                ? 'font-family:Georgia,serif;font-size:36px;font-weight:bold;color:#ffffff;line-height:1.1;margin-top:9px;'
         : ($isNewsletter ? 'font-size:30px;font-weight:bold;color:#fff;line-height:1.2;margin-top:10px;' : 'font-size:30px;font-weight:bold;color:#1f2937;line-height:1.2;margin-top:8px;');
     $subtitleColor = $isNewspaper ? '#4c4942' : ($isNewsletter ? '#f5e6c5' : '#6b7280');
     $subjectLabel = trim((string)($masthead['headline_label'] ?? $defaults['headline_label']));
     $footerText = trim((string)($masthead['footer'] ?? $defaults['footer']));
     $subjectStyle = $isNewspaper
-        ? 'font-family:Georgia,serif;font-size:28px;font-weight:bold;color:#24221f;line-height:1.2;border-bottom:1px solid #c9c3b7;padding-bottom:14px;'
+                ? 'font-family:Georgia,serif;font-size:28px;font-weight:bold;color:#203b37;line-height:1.2;border-bottom:1px solid #d3e0dd;padding-bottom:14px;'
         : 'font-size:20px;font-weight:bold;color:#111827;line-height:1.3;';
     $contentStyle = $isNewspaper
-        ? 'padding:8px 32px 10px;font-family:Georgia,serif;font-size:16px;line-height:1.75;color:#292722;'
+                ? 'padding:8px 32px 10px;font-family:Georgia,serif;font-size:16px;line-height:1.75;color:#293b38;'
         : 'padding:8px 28px 10px;font-size:15px;line-height:1.7;color:#1f2937;';
     $signature = ($isSchoolLetter || $isNewsletter || $isNewspaper)
         ? '<div style="margin-top:22px;padding-top:16px;border-top:1px solid #e5e7eb;">'
@@ -422,14 +425,15 @@ function pe_build_email_html(string $recipientName, string $subject, string $bod
           <tr>
                         <td style="' . $mastheadStyle . '">
                             ' . $mastheadImageMarkup . '
-                            ' . ($brandName !== '' ? '<div style="' . $mastheadNameStyle . '">' . pe_h($brandName) . '</div>' : '') . '
-                            ' . ($headingText !== '' ? '<div style="' . $mastheadHeadingStyle . '">' . pe_h($headingText) . '</div>' : '') . '
-                            ' . ($subtitleText !== '' ? '<div style="font-family:Arial,sans-serif;font-size:12px;letter-spacing:.08em;color:' . $subtitleColor . ';margin-top:8px;">' . pe_h($subtitleText) . '</div>' : '') . '
+                            ' . ($hasFullHeaderImage ? '<div style="background:#174b46;padding:18px 28px 22px;border-top:4px solid #c8a85b;">' . ($brandName !== '' ? '<div style="' . $mastheadNameStyle . '">' . pe_h($brandName) . '</div>' : '') . ($headingText !== '' ? '<div style="' . $mastheadHeadingStyle . '">' . pe_h($headingText) . '</div>' : '') . ($subtitleText !== '' ? '<div style="font-family:Arial,sans-serif;font-size:12px;letter-spacing:.08em;color:#d7e7e3;margin-top:8px;">' . pe_h($subtitleText) . '</div>' : '') . '</div>' : '') . '
+                            ' . (!$hasFullHeaderImage && $brandName !== '' ? '<div style="' . $mastheadNameStyle . '">' . pe_h($brandName) . '</div>' : '') . '
+                            ' . (!$hasFullHeaderImage && $headingText !== '' ? '<div style="' . $mastheadHeadingStyle . '">' . pe_h($headingText) . '</div>' : '') . '
+                            ' . (!$hasFullHeaderImage && $subtitleText !== '' ? '<div style="font-family:Arial,sans-serif;font-size:12px;letter-spacing:.08em;color:' . $subtitleColor . ';margin-top:8px;">' . pe_h($subtitleText) . '</div>' : '') . '
             </td>
           </tr>
           <tr>
                         <td style="padding:' . ($isNewspaper ? '22px 32px 14px' : '24px 28px 10px') . ';">
-                            <div style="font-family:Arial,sans-serif;font-size:11px;color:#7b1f1a;margin-bottom:8px;text-transform:uppercase;letter-spacing:.14em;font-weight:bold;">' . pe_h($subjectLabel) . '</div>
+                            <div style="font-family:Arial,sans-serif;font-size:11px;color:' . ($isNewspaper ? '#80652f' : '#7b1f1a') . ';margin-bottom:8px;text-transform:uppercase;letter-spacing:.14em;font-weight:bold;">' . pe_h($subjectLabel) . '</div>
                             <div style="' . $subjectStyle . '">' . $safeSubject . '</div>
             </td>
           </tr>
@@ -608,6 +612,8 @@ $masthead = [
 $mode = (string)($_POST['mode'] ?? 'all');
 $subject = trim((string)($_POST['subject'] ?? ''));
 $body = trim((string)($_POST['body'] ?? ''));
+$senderNameInput = array_key_exists('sender_name', $_POST) ? trim(strip_tags((string)$_POST['sender_name'])) : $senderDisplayName;
+$senderNameInput = $senderNameInput !== '' ? $senderNameInput : $senderDisplayName;
 $selectedIds = array_map('intval', (array)($_POST['parent_ids'] ?? []));
 $previewHtml = '';
 $previewSubject = '';
@@ -684,16 +690,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $recipients = $parents;
     }
 
-    $senderName = $isAdmin
-        ? $senderDisplayName
-        : ($teacherName !== '' ? $teacherName : $senderDisplayName);
+    $senderName = $senderNameInput;
 
     if ($emailAction === 'preview') {
         $sampleRecipient = trim((string)(($recipients[0]['full_name'] ?? 'Parent')));
         $previewSubjectRaw = $subject !== '' ? $subject : 'Sample Subject';
         $previewBodyRaw = $body !== '' ? $body : "This is a sample message preview.\nPlease update message before sending.";
-        $previewSubject = pe_apply_tokens($previewSubjectRaw, $sampleRecipient);
-        $previewBody = pe_apply_tokens($previewBodyRaw, $sampleRecipient);
+        $previewSubject = pe_apply_tokens($previewSubjectRaw, $sampleRecipient, $senderName);
+        $previewBody = pe_apply_tokens($previewBodyRaw, $sampleRecipient, $senderName);
         $previewHtml = pe_build_email_html($sampleRecipient, $previewSubject, $previewBody, $senderName, in_array($templateStyle, ['school_letter', 'newsletter', 'newspaper'], true) ? $templateStyle : 'standard', $masthead);
         $previewCount = count($recipients);
         if ($result !== 'error') {
@@ -740,8 +744,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     continue;
                 }
 
-                $subjectFinal = pe_apply_tokens($subject, $name);
-                $bodyFinal = pe_apply_tokens($body, $name);
+                $subjectFinal = pe_apply_tokens($subject, $name, $senderName);
+                $bodyFinal = pe_apply_tokens($body, $name, $senderName);
                 $html = pe_build_email_html($name, $subjectFinal, $bodyFinal, $senderName, in_array($templateStyle, ['school_letter', 'newsletter', 'newspaper'], true) ? $templateStyle : 'standard', $masthead);
 
                 if ($queueEnabled) {
@@ -909,16 +913,16 @@ if (!$isAdmin) {
         .email-rich-editor img { display:block;width:100%;max-width:560px;max-height:420px;height:auto;object-fit:cover;margin:14px auto 6px;border:1px solid #d3cec3; }
         .email-rich-editor img.image-size-selected { outline:2px solid #881b12;outline-offset:2px; }
         .email-rich-editor > p:has(img) + p { color:#6b6861;font-size:12px;text-align:center;font-style:italic;margin:0 0 18px; }
-        .email-rich-editor.newspaper-editor { font-family:Georgia,serif;background:#fffdf7; }
-        .email-rich-editor.newspaper-editor h2 { font-family:Georgia,serif;font-size:22px;color:#292722;border-bottom:1px solid #c9c3b7;padding-bottom:6px;margin:24px 0 10px; }
-        .email-rich-editor.newspaper-editor h3 { font-family:Arial,sans-serif;font-size:13px;color:#7b1f1a;text-transform:uppercase;letter-spacing:.08em;margin:20px 0 8px; }
+        .email-rich-editor.newspaper-editor { font-family:Georgia,serif;background:#fff; }
+        .email-rich-editor.newspaper-editor h2 { font-family:Georgia,serif;font-size:22px;color:#203b37;border-bottom:1px solid #d3e0dd;padding-bottom:6px;margin:24px 0 10px; }
+        .email-rich-editor.newspaper-editor h3 { font-family:Arial,sans-serif;font-size:13px;color:#80652f;text-transform:uppercase;letter-spacing:.08em;margin:20px 0 8px; }
         .email-rich-editor.newspaper-editor p { margin:0 0 14px; }
         #previewEmailContent table { width:100%;border-collapse:collapse;margin:12px 0; }
         #previewEmailContent th, #previewEmailContent td { border:1px solid #d1d5db;padding:8px;text-align:left;vertical-align:top; }
         #previewEmailContent th { background:#f3f4f6;font-weight:bold; }
         #previewEmailContent blockquote { border-left:4px solid #881b12;margin:12px 0;padding:8px 14px;color:#4b5563; }
         #previewEmailContent img { display:block;width:100%;max-width:560px;max-height:420px;height:auto;object-fit:cover;margin:14px auto 6px;border:1px solid #d3cec3; }
-        #previewEmailContent h2 { font-family:Georgia,serif;font-size:22px;color:#292722;border-bottom:1px solid #c9c3b7;padding-bottom:6px;margin:24px 0 10px; }
+        #previewEmailContent h2 { font-family:Georgia,serif;font-size:22px;color:#203b37;border-bottom:1px solid #d3e0dd;padding-bottom:6px;margin:24px 0 10px; }
         #previewEmailContent p:has(img) + p { color:#6b6861;font-size:12px;text-align:center;font-style:italic;margin:0 0 18px; }
     </style>
 </head>
@@ -1004,7 +1008,7 @@ if (!$isAdmin) {
                                 </div>
                             </div>
 
-                            <div id="mastheadControls" class="border rounded p-3 mb-3" style="<?= $templateStyle === 'newspaper' ? '' : 'display:none;' ?>background:#fffdf7;">
+                            <div id="mastheadControls" class="border rounded p-3 mb-3" style="<?= $templateStyle === 'newspaper' ? '' : 'display:none;' ?>background:#f1f6f4;border-color:#d3e0dd !important;">
                                 <h6 class="font-weight-bold mb-3">Newspaper Masthead</h6>
                                 <div class="form-row">
                                     <div class="form-group col-md-4">
@@ -1044,16 +1048,16 @@ if (!$isAdmin) {
                                     </div>
                                 </div>
                                 <div class="form-group mt-3 mb-0">
-                                    <label>Header image <span class="text-muted">(replaces the logo in the email header)</span></label>
+                                    <label>Header image <span class="text-muted">(full-width; masthead wording stays below)</span></label>
                                     <div class="d-flex align-items-center flex-wrap" style="gap:10px;">
                                         <button type="button" id="headerImageButton" class="btn btn-sm btn-outline-secondary"><i class="fas fa-panorama mr-1"></i> Add header image</button>
                                         <button type="button" id="removeHeaderImageButton" class="btn btn-sm btn-outline-danger" <?= $masthead['header_image'] === '' ? 'hidden' : '' ?>><i class="fas fa-times mr-1"></i> Remove</button>
                                         <input type="file" id="headerImageInput" accept="image/jpeg,image/png,image/gif,image/webp" class="d-none">
                                         <input type="hidden" name="masthead_header_image_url" id="mastheadHeaderImageUrl" value="<?= pe_h($masthead['header_image']) ?>">
-                                        <small id="headerImageStatus" class="text-muted">JPG, PNG, GIF or WebP, up to 5 MB.</small>
+                                        <small id="headerImageStatus" class="text-muted">Editable school name, title and edition line appear in a green band below the image. JPG, PNG, GIF or WebP, up to 5 MB.</small>
                                     </div>
                                     <div id="headerImagePreview" class="mt-2" style="<?= $masthead['header_image'] === '' ? 'display:none;' : '' ?>max-width:656px;padding:8px;border:1px solid #d8d3c8;background:#fff;">
-                                        <img src="<?= pe_h($masthead['header_image']) ?>" alt="Header image preview" style="display:block;width:100%;max-width:640px;max-height:160px;height:auto;object-fit:cover;">
+                                        <img src="<?= pe_h($masthead['header_image']) ?>" alt="Header image preview" style="display:block;width:100%;max-width:640px;height:auto;">
                                     </div>
                                 </div>
                             </div>
@@ -1087,6 +1091,12 @@ if (!$isAdmin) {
                                         <?php endforeach; ?>
                                     <?php endif; ?>
                                 </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="senderNameInput">Sender name</label>
+                                <input type="text" name="sender_name" id="senderNameInput" class="form-control" maxlength="120" value="<?= pe_h($senderNameInput) ?>">
+                                <small class="form-text text-muted">Shown beneath “Warm regards” in newsletter and semester templates.</small>
                             </div>
 
                             <div class="form-group">
@@ -1261,10 +1271,10 @@ $(function () {
         });
     }
 
-    function applyPreviewTokens(value, parentName) {
+    function applyPreviewTokens(value, parentName, senderName) {
         var firstName = String(parentName || '').trim().split(/\s+/)[0] || 'Parent';
         var schoolName = 'Bhutanese Language and Culture School';
-        var principalName = 'Principal';
+        var principalName = String(senderName || '').trim() || 'Principal';
         var semesterName = 'Semester';
         var schoolYear = new Date().getFullYear();
 
@@ -1344,7 +1354,7 @@ $(function () {
         return selected;
     }
 
-    function buildPreviewHtml(subject, bodyHtml, style, masthead) {
+    function buildPreviewHtml(subject, bodyHtml, style, masthead, senderName) {
         var safeSubject = escapeHtml(subject);
         var safeBody = cleanPreviewHtml(bodyHtml);
         masthead = masthead || {};
@@ -1354,39 +1364,44 @@ $(function () {
         var subtitle = masthead.subtitle == null ? defaults.subtitle : String(masthead.subtitle);
         var newsletter = style === 'newsletter';
         var newspaper = style === 'newspaper';
-        var pageBackground = newspaper ? '#e9e5db' : '#f3f4f6';
-        var mastheadBackground = newspaper ? '#fffdf7' : '#881b12';
-        var mastheadColor = newspaper ? '#24221f' : '#fff';
-        var mastheadRule = newspaper ? 'border-bottom:5px double #292722;' : (newsletter ? 'border-bottom:4px solid #d5a84b;' : '');
+        var pageBackground = newspaper ? '#eaf1ef' : '#eef3f2';
+        var mastheadBackground = newspaper ? '#174b46' : (newsletter ? '#741f1b' : '#f7faf9');
+        var mastheadColor = newspaper ? '#fff' : (newsletter ? '#fff' : '#1f3734');
+        var mastheadRule = newspaper ? 'border-bottom:4px solid #c8a85b;' : (newsletter ? 'border-bottom:4px solid #d5a84b;' : 'border-bottom:1px solid #e1e9e7;');
         var mastheadFont = newspaper ? 'font-family:Georgia,serif;' : '';
         var headlineLabel = masthead.headline_label == null ? defaults.headline_label : String(masthead.headline_label);
         var footerText = masthead.footer == null ? defaults.footer : String(masthead.footer);
         var headlineStyle = newspaper
-            ? 'font-family:Georgia,serif;font-size:28px;font-weight:bold;color:#24221f;line-height:1.2;border-bottom:1px solid #c9c3b7;padding-bottom:14px;'
+            ? 'font-family:Georgia,serif;font-size:28px;font-weight:bold;color:#203b37;line-height:1.2;border-bottom:1px solid #d3e0dd;padding-bottom:14px;'
             : 'font-size:20px;font-weight:bold;color:#111827;line-height:1.3;';
         var contentStyle = newspaper
-            ? 'padding:8px 32px 10px;font-family:Georgia,serif;font-size:16px;line-height:1.75;color:#292722;'
+            ? 'padding:8px 32px 10px;font-family:Georgia,serif;font-size:16px;line-height:1.75;color:#293b38;'
             : 'padding:8px 24px 10px;font-size:15px;line-height:1.7;color:#1f2937;';
+        var signature = (newsletter || newspaper)
+            ? '<div style="margin-top:22px;padding-top:16px;border-top:1px solid #e5e7eb;"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;">Warm regards</div><div style="font-size:18px;font-weight:bold;color:#111827;">' + escapeHtml(senderName || 'School Administration') + '</div><div style="font-size:13px;color:#6b7280;">' + escapeHtml(brandName || 'Bhutanese Language and Culture School') + '</div></div>'
+            : '';
         var logoMarkup = newspaper && masthead.logo
             ? '<div style="margin-bottom:12px;"><img src="' + escapeHtml(masthead.logo) + '" width="140" alt="School logo" style="display:block;width:auto;max-width:140px;max-height:72px;height:auto;border:0;margin:0;"></div>'
             : '';
         var headerImageMarkup = newspaper && masthead.header_image
-            ? '<div style="margin:0 0 14px;"><img src="' + escapeHtml(masthead.header_image) + '" width="656" alt="School newsletter header" style="display:block;width:100%;max-width:656px;max-height:180px;height:auto;object-fit:cover;border:0;margin:0;"></div>'
+            ? '<img src="' + escapeHtml(masthead.header_image) + '" width="720" alt="School newsletter header" style="display:block;width:100%;max-width:720px;height:auto;border:0;margin:0;">'
             : '';
         var mastheadImageMarkup = headerImageMarkup || logoMarkup;
+        var fullHeaderImage = headerImageMarkup !== '';
         return '<div style="margin:0;padding:24px 0;background:' + pageBackground + ';font-family:Arial,sans-serif;color:#1f2937;">' +
-            '<div style="max-width:680px;margin:0 auto;background:' + (newspaper ? '#fffdf7' : '#fff') + ';border:1px solid ' + (newspaper ? '#c9c3b7' : '#e5e7eb') + ';border-radius:' + (newspaper ? '0' : '12px') + ';overflow:hidden;">' +
-                '<div style="background:' + mastheadBackground + ';padding:22px 28px;color:' + mastheadColor + ';' + mastheadRule + '">' +
+            '<div style="max-width:' + (newspaper ? '720px' : '700px') + ';margin:0 auto;background:#fff;border:1px solid ' + (newspaper ? '#cddbd8' : '#dce5e3') + ';border-radius:10px;box-shadow:0 12px 36px rgba(31,55,52,.09);overflow:hidden;">' +
+                '<div style="background:' + mastheadBackground + ';' + (fullHeaderImage ? 'padding:0;' : 'padding:22px 28px;') + 'color:' + mastheadColor + ';' + (fullHeaderImage ? '' : mastheadRule) + '">' +
                     mastheadImageMarkup +
-                    (brandName !== '' ? '<div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:' + (newspaper ? '#7b1f1a' : '#f4dfac') + ';font-weight:bold;">' + escapeHtml(brandName) + '</div>' : '') +
-                    (heading !== '' ? '<div style="' + mastheadFont + 'font-size:' + (newspaper ? '34px' : '22px') + ';font-weight:bold;line-height:1.2;margin-top:8px;">' + escapeHtml(heading) + '</div>' : '') +
-                    (subtitle !== '' ? '<div style="font-size:12px;letter-spacing:.08em;color:' + (newspaper ? '#4c4942' : '#f5e6c5') + ';margin-top:8px;">' + escapeHtml(subtitle) + '</div>' : '') +
+                    (fullHeaderImage ? '<div style="background:#174b46;padding:18px 28px 22px;border-top:4px solid #c8a85b;">' + (brandName !== '' ? '<div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#e7c987;font-weight:bold;">' + escapeHtml(brandName) + '</div>' : '') + (heading !== '' ? '<div style="font-family:Georgia,serif;font-size:34px;font-weight:bold;color:#fff;line-height:1.2;margin-top:8px;">' + escapeHtml(heading) + '</div>' : '') + (subtitle !== '' ? '<div style="font-size:12px;letter-spacing:.08em;color:#d7e7e3;margin-top:8px;">' + escapeHtml(subtitle) + '</div>' : '') + '</div>' : '') +
+                    (!fullHeaderImage && brandName !== '' ? '<div style="font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:' + (newspaper ? '#e7c987' : (newsletter ? '#f4dfac' : '#6f2521')) + ';font-weight:bold;">' + escapeHtml(brandName) + '</div>' : '') +
+                    (!fullHeaderImage && heading !== '' ? '<div style="' + mastheadFont + 'font-size:' + (newspaper ? '34px' : '22px') + ';font-weight:bold;line-height:1.2;margin-top:8px;">' + escapeHtml(heading) + '</div>' : '') +
+                    (!fullHeaderImage && subtitle !== '' ? '<div style="font-size:12px;letter-spacing:.08em;color:' + (newspaper ? '#d7e7e3' : (newsletter ? '#f5e6c5' : '#6b7280')) + ';margin-top:8px;">' + escapeHtml(subtitle) + '</div>' : '') +
                 '</div>' +
                 '<div style="padding:22px 24px 10px;">' +
-                    '<div style="font-size:11px;color:#7b1f1a;margin-bottom:8px;text-transform:uppercase;letter-spacing:.14em;font-weight:bold;">' + headlineLabel + '</div>' +
+                    '<div style="font-size:11px;color:' + (newspaper ? '#80652f' : '#7b1f1a') + ';margin-bottom:8px;text-transform:uppercase;letter-spacing:.14em;font-weight:bold;">' + headlineLabel + '</div>' +
                     '<div style="' + headlineStyle + '">' + safeSubject + '</div>' +
                 '</div>' +
-                '<div style="' + contentStyle + '">' + safeBody + '</div>' +
+                '<div style="' + contentStyle + '"><div style="margin:0 0 14px;">' + safeBody + '</div>' + signature + '</div>' +
                 '<div style="padding:16px 24px 22px;">' +
                     '<div style="height:1px;background:#e5e7eb;margin-bottom:10px;"></div>' +
                     '<div style="font-size:12px;color:#6b7280;line-height:1.5;">' + escapeHtml(footerText) + '</div>' +
@@ -1490,12 +1505,10 @@ $(function () {
                 image.style.display = 'block';
                 image.style.width = '100%';
                 image.style.maxWidth = '640px';
-                image.style.maxHeight = '160px';
                 image.style.height = 'auto';
-                image.style.objectFit = 'cover';
                 $('#headerImagePreview').empty().append(image).show();
                 $('#removeHeaderImageButton').prop('hidden', false);
-                $('#headerImageStatus').text('Header image added. It will replace the logo in the email.');
+                $('#headerImageStatus').text('Full-width header added. Editable masthead wording will appear in a green band below.');
             })
             .catch(function (error) {
                 $('#headerImageStatus').text(error.message || 'Header image upload failed.');
@@ -1664,11 +1677,13 @@ $(function () {
         }
 
         var sampleName = recipients[0].name || 'Parent';
-        var subject = applyPreviewTokens($('#subjectInput').val() || 'Sample Subject', sampleName);
+        var senderName = $('#senderNameInput').val();
+        var subject = applyPreviewTokens($('#subjectInput').val() || 'Sample Subject', sampleName, senderName);
         syncEditorBody();
         var bodyHtml = applyPreviewTokens(
             $('#bodyInput').val() || plainTextToEditorHtml('This is a sample message preview.\nPlease update the message before sending.'),
-            sampleName
+            sampleName,
+            senderName
         );
 
         var presetKey = $('#presetSelect').val();
@@ -1686,7 +1701,7 @@ $(function () {
         };
         $('#previewSubjectText').text(subject);
         $('#previewRecipientCount').text('Recipients in scope: ' + recipients.length);
-        $('#previewEmailContent').html(buildPreviewHtml(subject, bodyHtml, templateStyle, previewMasthead));
+        $('#previewEmailContent').html(buildPreviewHtml(subject, bodyHtml, templateStyle, previewMasthead, $('#senderNameInput').val()));
         $('#emailPreviewCard').show();
 
         var previewTop = $('#emailPreviewCard').offset();
