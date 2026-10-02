@@ -110,3 +110,14 @@ Mail settings:
 - `MAIL_FROM_NAME` (default: `Bhutanese Centre Canberra`)
 - `MAIL_DEBUG` (`1` to enable SMTP debug)
 - `MAIL_LOG_FILE` (optional log file path)
+- `MAIL_QUEUE_ENABLED` (`1` to deliver emails through the database queue; required for bulk campaigns)
+
+### cPanel Mail Queue
+
+Bulk campaigns are stored in `mail_queue` and delivered by `process-mail-queue.php`. Configure a cPanel Cron Job to run every minute so delivery continues after the compose page is closed. Use the PHP binary and absolute application path shown by your hosting account:
+
+```sh
+*/1 * * * * /usr/local/bin/php /home/CPANEL_USER/path/to/app/process-mail-queue.php --limit=50 >> /home/CPANEL_USER/mail-queue.log 2>&1
+```
+
+Replace `/usr/local/bin/php` and both `/home/CPANEL_USER/...` paths with the values for your account. Keep `MAIL_QUEUE_ENABLED=1`. The worker marks rows as sending before delivery so overlapping cron invocations do not send the same queue row twice.

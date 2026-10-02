@@ -568,11 +568,25 @@ if (!$isAdmin) {
 
 $emailAction = (string)($_POST['email_action'] ?? '');
 $isNewsletterAssetUpload = $_SERVER['REQUEST_METHOD'] === 'POST'
-    && in_array($emailAction, ['upload_inline_image', 'upload_newsletter_logo', 'upload_newsletter_header'], true);
+    && in_array($emailAction, ['upload_inline_image', 'upload_newsletter_logo', 'upload_newsletter_header', 'upload_parent_email_attachment'], true);
 if ($isNewsletterAssetUpload) {
     verify_csrf();
     header('Content-Type: application/json; charset=utf-8');
     try {
+        if ($emailAction === 'upload_parent_email_attachment') {
+            $attachment = pe_store_attachment((array)($_FILES['attachment'] ?? []));
+            if (!$attachment) {
+                throw new RuntimeException('Choose an attachment before continuing.');
+            }
+            $attachmentToken = bin2hex(random_bytes(24));
+            $_SESSION['parent_email_bulk_attachments'][$attachmentToken] = [
+                'attachment' => $attachment,
+                'created_at' => time(),
+            ];
+            echo json_encode(['ok' => true, 'token' => $attachmentToken, 'name' => $attachment['name']]);
+            exit;
+        }
+
         $fileKey = match ($emailAction) {
             'upload_newsletter_logo' => 'newsletter_logo',
             'upload_newsletter_header' => 'newsletter_header',
@@ -795,7 +809,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if (!in_array($emailAction, ['preview', 'send'], true)) {
+    if (!in_array($emailAction, ['preview', 'send', 'queue_email_batch', 'process_bulk_email_batch', 'bulk_email_status'], true)) {
         http_response_code(400);
         exit('Choose Preview Email, Download PDF, or Send Email.');
     }
@@ -818,6 +832,118 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     $senderName = $senderNameInput;
+
+    if ($emailAction === 'queue_email_batch') {
+        header('Content-Type: application/json; charset=utf-8');
+        try {
+            $batchId = trim((string)($_POST['batch_id'] ?? ''));
+            if (!preg_match('/^pe_[a-f0-9]{32}$/i', $batchId)) {
+                throw new RuntimeException('The bulk send session is invalid. Start the send again.');
+            }
+            if ($subject === '' || $body === '' || !$recipients || count($recipients) > 5) {
+                throw new RuntimeException('Each batch needs a subject, message, and 1 to 5 eligible parents.');
+            }
+
+            $attachment = null;
+            $attachmentToken = trim((string)($_POST['attachment_token'] ?? ''));
+            if ($attachmentToken !== '') {
+                $pendingAttachment = $_SESSION['parent_email_bulk_attachments'][$attachmentToken] ?? null;
+                if (!is_array($pendingAttachment)
+                    || (int)($pendingAttachment['created_at'] ?? 0) < time() - 21600
+                    || empty($pendingAttachment['attachment']['path'])
+                    || !is_file((string)$pendingAttachment['attachment']['path'])) {
+                    throw new RuntimeException('The attachment upload expired. Please choose the attachment again.');
+                }
+                $attachment = (array)$pendingAttachment['attachment'];
+            }
+
+            $queueEnabled = bbcc_mail_queue_is_truthy(bbcc_env('MAIL_QUEUE_ENABLED', '1'));
+            if (!$queueEnabled) {
+                throw new RuntimeException('Bulk email requires MAIL_QUEUE_ENABLED=1 and the cPanel mail queue cron job.');
+            }
+            if (!bbcc_mail_queue_ensure_table()) {
+                throw new RuntimeException('The mail queue is unavailable. Please contact the administrator.');
+            }
+            $metadata = ['source' => 'parent-email', 'created_by' => $sessionUserId, 'batch_id' => $batchId, 'defer_drain' => true];
+            $existing = $pdo->prepare("SELECT id FROM mail_queue
+                WHERE source = 'parent-email' AND created_by = :created_by AND batch_id = :batch_id AND to_email = :to_email LIMIT 1");
+            $accepted = 0;
+            $sentNow = 0;
+            $failedNow = 0;
+            $skipped = 0;
+
+            foreach ($recipients as $parent) {
+                $email = trim((string)($parent['email'] ?? ''));
+                $name = trim((string)($parent['full_name'] ?? 'Parent'));
+                if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $skipped++;
+                    continue;
+                }
+                $existing->execute([':created_by' => $sessionUserId, ':batch_id' => $batchId, ':to_email' => $email]);
+                if ($existing->fetchColumn()) {
+                    $accepted++;
+                    continue;
+                }
+
+                $subjectFinal = pe_apply_tokens($subject, $name, $senderName);
+                $bodyFinal = pe_apply_tokens($body, $name, $senderName);
+                $html = pe_build_email_html($name, $subjectFinal, $bodyFinal, $senderName, in_array($templateStyle, ['school_letter', 'newsletter', 'newspaper'], true) ? $templateStyle : 'standard', $masthead);
+
+                if (bbcc_queue_mail($email, $name, $subjectFinal, $html, 5, $attachment, $metadata)) {
+                    $accepted++;
+                } else {
+                    $skipped++;
+                }
+            }
+
+            $totals = ['sent' => 0, 'queued' => 0, 'retry' => 0, 'failed' => 0, 'sending' => 0];
+            $statusStmt = $pdo->prepare("SELECT status, COUNT(*) AS total FROM mail_queue
+                WHERE source = 'parent-email' AND created_by = :created_by AND batch_id = :batch_id GROUP BY status");
+            $statusStmt->execute([':created_by' => $sessionUserId, ':batch_id' => $batchId]);
+            foreach ($statusStmt->fetchAll(PDO::FETCH_ASSOC) as $statusRow) {
+                $statusKey = strtolower((string)($statusRow['status'] ?? ''));
+                if (isset($totals[$statusKey])) $totals[$statusKey] = (int)$statusRow['total'];
+            }
+
+            echo json_encode(['ok' => true, 'accepted' => $accepted, 'skipped' => $skipped, 'queue_enabled' => true, 'totals' => $totals]);
+        } catch (Throwable $e) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    if (in_array($emailAction, ['process_bulk_email_batch', 'bulk_email_status'], true)) {
+        header('Content-Type: application/json; charset=utf-8');
+        try {
+            $batchId = trim((string)($_POST['batch_id'] ?? ''));
+            if (!preg_match('/^pe_[a-f0-9]{32}$/i', $batchId)) {
+                throw new RuntimeException('The bulk send session is invalid.');
+            }
+            $statusStmt = $pdo->prepare("SELECT status, COUNT(*) AS total FROM mail_queue
+                WHERE source = 'parent-email' AND created_by = :created_by AND batch_id = :batch_id GROUP BY status");
+            $statusStmt->execute([':created_by' => $sessionUserId, ':batch_id' => $batchId]);
+            $totals = ['sent' => 0, 'queued' => 0, 'retry' => 0, 'failed' => 0, 'sending' => 0];
+            foreach ($statusStmt->fetchAll(PDO::FETCH_ASSOC) as $statusRow) {
+                $statusKey = strtolower((string)($statusRow['status'] ?? ''));
+                if (isset($totals[$statusKey])) $totals[$statusKey] = (int)$statusRow['total'];
+            }
+            if (array_sum($totals) === 0) {
+                throw new RuntimeException('No messages were found for this bulk send.');
+            }
+
+            $doneForNow = $totals['queued'] === 0 && $totals['sending'] === 0 && $totals['retry'] === 0;
+            if ($doneForNow && $totals['retry'] === 0) {
+                $attachmentToken = trim((string)($_POST['attachment_token'] ?? ''));
+                if ($attachmentToken !== '') unset($_SESSION['parent_email_bulk_attachments'][$attachmentToken]);
+            }
+            echo json_encode(['ok' => true, 'done_for_now' => $doneForNow, 'totals' => $totals]);
+        } catch (Throwable $e) {
+            http_response_code(400);
+            echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        }
+        exit;
+    }
 
     if ($emailAction === 'preview') {
         $sampleRecipient = trim((string)(($recipients[0]['full_name'] ?? 'Parent')));
@@ -1104,7 +1230,7 @@ if (!$isAdmin) {
                         <h6 class="m-0 font-weight-bold text-primary">Compose Message</h6>
                     </div>
                     <div class="card-body">
-                        <form method="POST" enctype="multipart/form-data">
+                        <form id="parentEmailForm" method="POST" enctype="multipart/form-data">
                             <?= csrf_field() ?>
                             <?php if (!$isAdmin): ?>
                                 <input type="hidden" name="class_id" value="<?= (int)$classId ?>">
@@ -1276,6 +1402,17 @@ if (!$isAdmin) {
                                 <small class="text-muted">Maximum 10 MB. PDF, Office documents, JPG, PNG, or TXT. Preview does not upload or clear the selected file.</small>
                             </div>
 
+                            <div id="bulkSendProgress" class="border rounded p-3 mb-3" hidden aria-live="polite">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <strong id="bulkSendProgressText">Preparing bulk email</strong>
+                                    <span id="bulkSendProgressCount" class="text-muted">0 / 0</span>
+                                </div>
+                                <div class="progress" style="height:8px;">
+                                    <div id="bulkSendProgressBar" class="progress-bar bg-success" role="progressbar" style="width:0%;" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+                                </div>
+                                <small id="bulkSendProgressDetail" class="form-text text-muted"></small>
+                            </div>
+
                             <button type="button" id="previewEmailButton" class="btn btn-outline-primary" <?= empty($parents) ? 'disabled' : '' ?>>
                                 <i class="fas fa-eye mr-1"></i> Preview Email
                             </button>
@@ -1287,7 +1424,7 @@ if (!$isAdmin) {
                                     <i class="fas fa-save mr-1"></i> Save Info Note
                                 </button>
                             <?php endif; ?>
-                            <button type="submit" name="email_action" value="send" class="btn btn-primary" <?= empty($parents) ? 'disabled' : '' ?>>
+                            <button type="submit" id="sendParentEmailButton" name="email_action" value="send" class="btn btn-primary" <?= empty($parents) ? 'disabled' : '' ?>>
                                 <i class="fas fa-paper-plane mr-1"></i> Send Email
                             </button>
                         </form>
@@ -1819,6 +1956,212 @@ $(function () {
         actionInput.value = 'download_pdf';
         form.appendChild(actionInput);
         HTMLFormElement.prototype.submit.call(form);
+    });
+
+    var bulkSendState = null;
+    var sendButtonReady = <?= empty($parents) ? 'false' : 'true' ?>;
+    var defaultSendButtonHtml = $('#sendParentEmailButton').html();
+
+    $('#parentEmailForm').on('input change', 'input, select, textarea, #bodyEditor', function () {
+        if (!bulkSendState || bulkSendState.status !== 'complete') return;
+        bulkSendState = null;
+        $('#bulkSendProgress').prop('hidden', true);
+        $('#sendParentEmailButton').html(defaultSendButtonHtml).prop('disabled', !sendButtonReady);
+    });
+
+    function bulkBatchId() {
+        var bytes = new Uint8Array(16);
+        if (window.crypto && window.crypto.getRandomValues) {
+            window.crypto.getRandomValues(bytes);
+            return 'pe_' + Array.from(bytes).map(function (value) {
+                return value.toString(16).padStart(2, '0');
+            }).join('');
+        }
+        return 'pe_' + Date.now().toString(16).padStart(12, '0') + Math.random().toString(16).slice(2, 22).padEnd(20, '0');
+    }
+
+    function renderBulkProgress(completed, total, totals, message) {
+        var percent = total ? Math.round((completed / total) * 100) : 0;
+        $('#bulkSendProgress').prop('hidden', false);
+        $('#bulkSendProgressText').text(message);
+        $('#bulkSendProgressCount').text(completed + ' / ' + total);
+        $('#bulkSendProgressBar').css('width', percent + '%').attr('aria-valuenow', String(percent));
+        totals = totals || {};
+        $('#bulkSendProgressDetail').text(
+            'Sent: ' + (totals.sent || 0) + ' | Queued: ' + (totals.queued || 0) +
+            ' | Retrying: ' + (totals.retry || 0) + ' | Failed: ' + (totals.failed || 0)
+        );
+    }
+
+    function restoreBulkForm(state, keepSendDisabled) {
+        state.disabledElements.forEach(function (entry) {
+            entry.element.disabled = entry.disabled;
+        });
+        $('#sendParentEmailButton').prop('disabled', keepSendDisabled || !sendButtonReady);
+    }
+
+    function makeBulkChunkFormData(state, start, end) {
+        var formData = new FormData();
+        state.entries.forEach(function (entry) {
+            var name = entry[0];
+            if (['email_action', 'parent_ids[]', 'attachment', 'attachment_token', 'batch_id', 'final_chunk'].indexOf(name) !== -1) return;
+            formData.append(name, entry[1]);
+        });
+        formData.append('email_action', 'queue_email_batch');
+        formData.append('mode', 'selected');
+        formData.append('batch_id', state.batchId);
+        formData.append('attachment_token', state.attachmentToken || '');
+        formData.append('final_chunk', end >= state.recipients.length ? '1' : '0');
+        state.recipients.slice(start, end).forEach(function (recipient) {
+            formData.append('parent_ids[]', String(recipient.id));
+        });
+        return formData;
+    }
+
+    function uploadBulkAttachment(state) {
+        var attachmentEntry = state.entries.find(function (entry) {
+            return entry[0] === 'attachment' && entry[1] instanceof File && entry[1].size > 0;
+        });
+        if (!attachmentEntry || state.attachmentToken) return Promise.resolve();
+
+        renderBulkProgress(0, state.recipients.length, null, 'Uploading attachment');
+        var formData = new FormData();
+        formData.append('email_action', 'upload_parent_email_attachment');
+        var csrfEntry = state.entries.find(function (entry) { return entry[0] === '_csrf'; });
+        if (csrfEntry) formData.append('_csrf', csrfEntry[1]);
+        formData.append('attachment', attachmentEntry[1]);
+        return fetch(window.location.href, {method:'POST', body:formData, credentials:'same-origin'})
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    if (!response.ok || !data.ok) throw new Error(data.error || 'Attachment upload failed.');
+                    state.attachmentToken = data.token;
+                });
+            });
+    }
+
+    function sendBulkChunk(state, start) {
+        if (start >= state.recipients.length) {
+            if (state.queueEnabled) {
+                state.phase = 'delivery';
+                return processBulkDelivery(state);
+            }
+            state.status = 'complete';
+            renderBulkProgress(state.recipients.length, state.recipients.length, state.totals, 'Bulk email complete');
+            restoreBulkForm(state, true);
+            $('#sendParentEmailButton').html('<i class="fas fa-check mr-1"></i> Bulk Email Complete');
+            return Promise.resolve();
+        }
+
+        var end = Math.min(start + 5, state.recipients.length);
+        renderBulkProgress(start, state.recipients.length, state.totals, 'Processing recipient batch');
+        return fetch(window.location.href, {
+            method: 'POST',
+            body: makeBulkChunkFormData(state, start, end),
+            credentials: 'same-origin'
+        }).then(function (response) {
+            return response.json().then(function (data) {
+                if (!response.ok || !data.ok) throw new Error(data.error || 'Bulk email batch failed.');
+                state.totals = data.totals || state.totals;
+                state.queueEnabled = Boolean(data.queue_enabled);
+                state.nextIndex = end;
+                renderBulkProgress(end, state.recipients.length, state.totals, 'Processed recipient batch');
+                return sendBulkChunk(state, end);
+            });
+        });
+    }
+
+    function processBulkDelivery(state) {
+        var formData = new FormData();
+        var csrfEntry = state.entries.find(function (entry) { return entry[0] === '_csrf'; });
+        if (csrfEntry) formData.append('_csrf', csrfEntry[1]);
+        formData.append('email_action', 'bulk_email_status');
+        formData.append('batch_id', state.batchId);
+        formData.append('attachment_token', state.attachmentToken || '');
+        var completed = (state.totals.sent || 0) + (state.totals.failed || 0) + (state.totals.retry || 0);
+        renderBulkProgress(completed, state.recipients.length, state.totals, 'Waiting for cPanel mail worker');
+        return fetch(window.location.href, {method:'POST', body:formData, credentials:'same-origin'})
+            .then(function (response) {
+                return response.json().then(function (data) {
+                    if (!response.ok || !data.ok) throw new Error(data.error || 'Delivery processing failed.');
+                    state.totals = data.totals || state.totals;
+                    if (state.totals.queued > 0 || state.totals.sending > 0 || state.totals.retry > 0) {
+                        state.pollCount++;
+                        if (state.pollCount >= 60) {
+                            state.status = 'queued';
+                            renderBulkProgress(completed, state.recipients.length, state.totals, 'Campaign remains queued');
+                            $('#bulkSendProgressDetail').text('The cPanel cron job must be configured to continue delivery after this page closes.');
+                            restoreBulkForm(state, true);
+                            $('#sendParentEmailButton').html('<i class="fas fa-check mr-1"></i> Campaign Queued');
+                            return;
+                        }
+                        return new Promise(function (resolve) { window.setTimeout(resolve, 10000); })
+                            .then(function () { return processBulkDelivery(state); });
+                    }
+                    state.status = 'complete';
+                    var deliveryMessage = state.totals.retry > 0
+                        ? 'Initial delivery finished; some messages will retry.'
+                        : (state.totals.failed > 0 ? 'Bulk delivery finished with failures.' : 'All bulk emails sent.');
+                    completed = (state.totals.sent || 0) + (state.totals.failed || 0) + (state.totals.retry || 0);
+                    renderBulkProgress(completed, state.recipients.length, state.totals, deliveryMessage);
+                    restoreBulkForm(state, true);
+                    $('#sendParentEmailButton').html('<i class="fas fa-check mr-1"></i> Bulk Email Complete');
+                });
+            });
+    }
+
+    $('#sendParentEmailButton').on('click', function (event) {
+        var form = this.form;
+        var recipients = bulkSendState ? bulkSendState.recipients : previewRecipients();
+        if (recipients.length <= 5) return;
+        event.preventDefault();
+        if (bulkSendState && bulkSendState.status === 'complete') return;
+
+        if (!bulkSendState) {
+            syncEditorBody();
+            if (!$('#subjectInput').val().trim() || !$('#bodyInput').val().trim()) {
+                window.alert('Subject and message are required.');
+                return;
+            }
+            bulkSendState = {
+                batchId: bulkBatchId(),
+                recipients: recipients,
+                entries: Array.from(new FormData(form).entries()),
+                disabledElements: Array.from(form.elements).map(function (element) {
+                    return {element: element, disabled: element.disabled};
+                }),
+                attachmentToken: '',
+                nextIndex: 0,
+                pollCount: 0,
+                status: 'running',
+                totals: {sent:0, queued:0, retry:0, failed:0}
+            };
+        }
+
+        var state = bulkSendState;
+        state.status = 'running';
+        state.disabledElements.forEach(function (entry) {
+            if (entry.element !== this) entry.element.disabled = true;
+        }, this);
+        this.disabled = true;
+        this.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Sending in batches';
+        uploadBulkAttachment(state)
+            .then(function () { return sendBulkChunk(state, state.nextIndex); })
+            .catch(function (error) {
+                state.status = 'paused';
+                renderBulkProgress(state.nextIndex, state.recipients.length, state.totals, 'Bulk send paused');
+                $('#bulkSendProgressDetail').text((error.message || 'The request failed.') + ' Click Resume Bulk Send to continue safely.');
+                state.disabledElements.forEach(function (entry) {
+                    entry.element.disabled = entry.element !== document.getElementById('sendParentEmailButton');
+                });
+                $('#sendParentEmailButton').prop('disabled', false);
+                $('#sendParentEmailButton').html('<i class="fas fa-redo mr-1"></i> Resume Bulk Send');
+            });
+    });
+
+    $('#sendParentEmailButton').on('click', function () {
+        if (bulkSendState && bulkSendState.status === 'paused') {
+            bulkSendState.status = 'running';
+        }
     });
 
     $('#previewEmailButton').on('click', function () {

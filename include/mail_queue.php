@@ -60,6 +60,8 @@ function bbcc_mail_queue_ensure_table(): bool {
                 available_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 sent_at DATETIME NULL,
                 KEY idx_status_available (status, available_at),
+                KEY idx_batch_recipient (batch_id, to_email),
+                KEY idx_batch_status_ready (batch_id, created_by, status, available_at),
                 KEY idx_created (created_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         ");
@@ -73,6 +75,16 @@ function bbcc_mail_queue_ensure_table(): bool {
         ];
         foreach ($attachmentColumns as $column => $alterSql) {
             $check = $pdo->query("SHOW COLUMNS FROM mail_queue LIKE " . $pdo->quote($column));
+            if (!$check || !$check->fetch(PDO::FETCH_ASSOC)) {
+                $pdo->exec($alterSql);
+            }
+        }
+        $queueIndexes = [
+            'idx_batch_recipient' => 'ALTER TABLE mail_queue ADD KEY idx_batch_recipient (batch_id, to_email)',
+            'idx_batch_status_ready' => 'ALTER TABLE mail_queue ADD KEY idx_batch_status_ready (batch_id, created_by, status, available_at)',
+        ];
+        foreach ($queueIndexes as $index => $alterSql) {
+            $check = $pdo->query('SHOW INDEX FROM mail_queue WHERE Key_name = ' . $pdo->quote($index));
             if (!$check || !$check->fetch(PDO::FETCH_ASSOC)) {
                 $pdo->exec($alterSql);
             }
@@ -117,13 +129,15 @@ function bbcc_queue_mail(string $toEmail, string $toName, string $subject, strin
             ':max_attempts' => max(1, $maxAttempts),
         ]);
 
-        // Improve perceived speed: drain only when response can be flushed first.
-        // On many cPanel/shared Apache setups, fastcgi_finish_request() is unavailable,
-        // so draining on shutdown can block the user-facing request.
-        $drainDefault = function_exists('fastcgi_finish_request') ? '1' : '0';
-        if (bbcc_mail_queue_is_truthy(bbcc_env('MAIL_QUEUE_DRAIN_ON_SHUTDOWN', $drainDefault))) {
-            $drainLimit = (int)bbcc_env('MAIL_QUEUE_DRAIN_LIMIT', '3');
-            bbcc_schedule_mail_queue_drain(max(1, min(10, $drainLimit)));
+        if (empty($metadata['defer_drain'])) {
+            // Improve perceived speed: drain only when response can be flushed first.
+            // On many cPanel/shared Apache setups, fastcgi_finish_request() is unavailable,
+            // so draining on shutdown can block the user-facing request.
+            $drainDefault = function_exists('fastcgi_finish_request') ? '1' : '0';
+            if (bbcc_mail_queue_is_truthy(bbcc_env('MAIL_QUEUE_DRAIN_ON_SHUTDOWN', $drainDefault))) {
+                $drainLimit = (int)bbcc_env('MAIL_QUEUE_DRAIN_LIMIT', '3');
+                bbcc_schedule_mail_queue_drain(max(1, min(10, $drainLimit)));
+            }
         }
         return true;
     } catch (Throwable $e) {
@@ -210,7 +224,7 @@ function bbcc_schedule_mail_queue_drain(int $limit = 3): void {
     });
 }
 
-function bbcc_process_mail_queue(int $limit = 20): array {
+function bbcc_process_mail_queue(int $limit = 20, ?string $batchId = null, ?string $createdBy = null): array {
     $limit = max(1, min(200, $limit));
     $stats = ['picked' => 0, 'sent' => 0, 'failed' => 0];
 
@@ -220,22 +234,40 @@ function bbcc_process_mail_queue(int $limit = 20): array {
     $pdo = bbcc_mail_queue_pdo();
     if (!$pdo) return $stats;
 
+    $recover = $pdo->prepare("UPDATE mail_queue
+        SET status='retry', available_at=NOW(), last_error='Recovered a stale send attempt'
+        WHERE status='sending' AND max_attempts > 1 AND created_at < DATE_SUB(NOW(), INTERVAL 10 MINUTE)");
+    $recover->execute();
+
+    $where = "status IN ('queued','retry') AND available_at <= NOW()";
+    $params = [];
+    if ($batchId !== null) {
+        $where .= ' AND batch_id = :batch_id';
+        $params[':batch_id'] = $batchId;
+    }
+    if ($createdBy !== null) {
+        $where .= ' AND created_by = :created_by';
+        $params[':created_by'] = $createdBy;
+    }
     $jobs = $pdo->prepare("
         SELECT *
         FROM mail_queue
-        WHERE status IN ('queued','retry')
-          AND available_at <= NOW()
+        WHERE {$where}
         ORDER BY id ASC
         LIMIT {$limit}
     ");
-    $jobs->execute();
+    $jobs->execute($params);
     $rows = $jobs->fetchAll();
-    $stats['picked'] = count($rows);
 
     foreach ($rows as $row) {
         $id = (int)$row['id'];
         $attempts = (int)$row['attempts'];
         $maxAttempts = (int)$row['max_attempts'];
+        $claim = $pdo->prepare("UPDATE mail_queue SET status='sending'
+            WHERE id=:id AND status IN ('queued','retry') AND available_at <= NOW()");
+        $claim->execute([':id' => $id]);
+        if ($claim->rowCount() !== 1) continue;
+        $stats['picked']++;
         try {
             $queueTimeout = (int)bbcc_env('MAIL_QUEUE_SEND_TIMEOUT', '8');
             $attachments = [];
