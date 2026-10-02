@@ -8,7 +8,10 @@
 require_once __DIR__ . '/include/config.php';
 require_once __DIR__ . '/include/mail_queue.php';
 
-if (PHP_SAPI !== 'cli') {
+$isCommandLineRun = PHP_SAPI === 'cli'
+    || (empty($_SERVER['REQUEST_METHOD']) && empty($_SERVER['HTTP_HOST']));
+
+if (!$isCommandLineRun) {
     require_once __DIR__ . '/include/auth.php';
     require_once __DIR__ . '/include/role_helpers.php';
     require_login();
@@ -19,8 +22,9 @@ if (PHP_SAPI !== 'cli') {
 }
 
 $limit = 20;
-if (PHP_SAPI === 'cli' && !empty($argv)) {
-    foreach ($argv as $arg) {
+if ($isCommandLineRun) {
+    $workerArguments = $argv ?? ($_SERVER['argv'] ?? []);
+    foreach ($workerArguments as $arg) {
         if (strpos($arg, '--limit=') === 0) {
             $limit = (int)substr($arg, 8);
         }
@@ -29,7 +33,7 @@ if (PHP_SAPI === 'cli' && !empty($argv)) {
 
 $stats = bbcc_process_mail_queue($limit);
 
-if (PHP_SAPI === 'cli') {
+if ($isCommandLineRun) {
     echo "Mail Queue Processed\n";
     echo "Picked: {$stats['picked']}\n";
     echo "Sent: {$stats['sent']}\n";
