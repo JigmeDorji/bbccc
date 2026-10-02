@@ -21,7 +21,8 @@ if (!$isCommandLineRun) {
     }
 }
 
-$limit = 20;
+$limit = (int)bbcc_env('MAIL_QUEUE_CRON_LIMIT', '50');
+$limit = max(1, min(200, $limit));
 if ($isCommandLineRun) {
     $workerArguments = $argv ?? ($_SERVER['argv'] ?? []);
     foreach ($workerArguments as $arg) {

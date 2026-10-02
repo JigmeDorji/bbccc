@@ -117,7 +117,7 @@ Mail settings:
 Bulk campaigns are stored in `mail_queue` and delivered by `process-mail-queue.php`. Configure a cPanel Cron Job to run every minute so delivery continues after the compose page is closed. Some GoDaddy cPanel accounts expose `php` as `php-cgi`; use its supported `-q -f` mode to run the worker as a command instead of opening it as a website:
 
 ```sh
-php -q -f /home/CPANEL_USER/public_html/process-mail-queue.php --limit=50 >> /home/CPANEL_USER/mail-queue.log 2>&1
+php -q -f /home/CPANEL_USER/public_html/process-mail-queue.php >> /home/CPANEL_USER/mail-queue.log 2>&1
 ```
 
-Replace `CPANEL_USER` with your cPanel username. In cPanel's Cron Jobs form, set the schedule to once per minute and paste the command without the leading schedule fields. Keep `MAIL_QUEUE_ENABLED=1`. The worker marks rows as sending before delivery so overlapping cron invocations do not send the same queue row twice.
+Replace `CPANEL_USER` with your cPanel username. In cPanel's Cron Jobs form, set the schedule to once per minute and paste the command without the leading schedule fields. The cron worker processes up to 50 messages per run by default; set `MAIL_QUEUE_CRON_LIMIT` to change this. Keep `MAIL_QUEUE_ENABLED=1`. The worker marks rows as sending before delivery so overlapping cron invocations do not send the same queue row twice.
