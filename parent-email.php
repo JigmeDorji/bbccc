@@ -78,6 +78,29 @@ function pe_ensure_info_note_table(PDO $pdo): void {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 }
 
+function pe_ensure_draft_table(PDO $pdo): void {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS parent_email_drafts (
+        user_id VARCHAR(100) NOT NULL PRIMARY KEY,
+        draft_json MEDIUMTEXT NOT NULL,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
+function pe_load_draft(PDO $pdo, string $userId): array {
+    if ($userId === '') return [];
+    try {
+        pe_ensure_draft_table($pdo);
+        $stmt = $pdo->prepare('SELECT draft_json FROM parent_email_drafts WHERE user_id = :user_id LIMIT 1');
+        $stmt->execute([':user_id' => $userId]);
+        $json = $stmt->fetchColumn();
+        $draft = is_string($json) ? json_decode($json, true) : null;
+        return is_array($draft) ? $draft : [];
+    } catch (Throwable $e) {
+        error_log('[Parent Email] Could not load draft: ' . $e->getMessage());
+        return [];
+    }
+}
+
 function pe_load_info_note(PDO $pdo, array $presets): array {
     try {
         pe_ensure_info_note_table($pdo);
@@ -654,8 +677,9 @@ if ($isAdmin) {
 
 $result = null;
 $message = '';
+$savedDraft = $_SERVER['REQUEST_METHOD'] === 'POST' ? [] : pe_load_draft($pdo, $sessionUserId);
 $presets = pe_load_info_note($pdo, pe_presets());
-$presetId = trim((string)($_POST['preset_id'] ?? ''));
+$presetId = trim((string)($_POST['preset_id'] ?? ($savedDraft['preset_id'] ?? '')));
 $templateStyle = match ($presetId) {
     'semester_update' => 'newspaper',
     'general_info_note' => 'newsletter',
@@ -663,20 +687,20 @@ $templateStyle = match ($presetId) {
 };
 $mastheadDefaults = pe_masthead_defaults($templateStyle);
 $masthead = [
-    'name' => array_key_exists('masthead_name', $_POST) ? trim((string)$_POST['masthead_name']) : $mastheadDefaults['name'],
-    'title' => array_key_exists('masthead_title', $_POST) ? trim((string)$_POST['masthead_title']) : $mastheadDefaults['title'],
-    'subtitle' => array_key_exists('masthead_subtitle', $_POST) ? trim((string)$_POST['masthead_subtitle']) : $mastheadDefaults['subtitle'],
-    'headline_label' => array_key_exists('masthead_headline_label', $_POST) ? trim((string)$_POST['masthead_headline_label']) : $mastheadDefaults['headline_label'],
-    'footer' => array_key_exists('masthead_footer', $_POST) ? trim((string)$_POST['masthead_footer']) : $mastheadDefaults['footer'],
-    'logo' => pe_safe_newsletter_asset_url((string)($_POST['masthead_logo_url'] ?? '')),
-    'header_image' => pe_safe_newsletter_asset_url((string)($_POST['masthead_header_image_url'] ?? '')),
+    'name' => array_key_exists('masthead_name', $_POST) ? trim((string)$_POST['masthead_name']) : (string)($savedDraft['masthead']['name'] ?? $mastheadDefaults['name']),
+    'title' => array_key_exists('masthead_title', $_POST) ? trim((string)$_POST['masthead_title']) : (string)($savedDraft['masthead']['title'] ?? $mastheadDefaults['title']),
+    'subtitle' => array_key_exists('masthead_subtitle', $_POST) ? trim((string)$_POST['masthead_subtitle']) : (string)($savedDraft['masthead']['subtitle'] ?? $mastheadDefaults['subtitle']),
+    'headline_label' => array_key_exists('masthead_headline_label', $_POST) ? trim((string)$_POST['masthead_headline_label']) : (string)($savedDraft['masthead']['headline_label'] ?? $mastheadDefaults['headline_label']),
+    'footer' => array_key_exists('masthead_footer', $_POST) ? trim((string)$_POST['masthead_footer']) : (string)($savedDraft['masthead']['footer'] ?? $mastheadDefaults['footer']),
+    'logo' => pe_safe_newsletter_asset_url((string)($_POST['masthead_logo_url'] ?? ($savedDraft['masthead']['logo'] ?? ''))),
+    'header_image' => pe_safe_newsletter_asset_url((string)($_POST['masthead_header_image_url'] ?? ($savedDraft['masthead']['header_image'] ?? ''))),
 ];
-$mode = (string)($_POST['mode'] ?? 'all');
-$subject = trim((string)($_POST['subject'] ?? ''));
-$body = trim((string)($_POST['body'] ?? ''));
-$senderNameInput = array_key_exists('sender_name', $_POST) ? trim(strip_tags((string)$_POST['sender_name'])) : $senderDisplayName;
+$mode = (string)($_POST['mode'] ?? ($savedDraft['mode'] ?? 'all'));
+$subject = trim((string)($_POST['subject'] ?? ($savedDraft['subject'] ?? '')));
+$body = trim((string)($_POST['body'] ?? ($savedDraft['body'] ?? '')));
+$senderNameInput = array_key_exists('sender_name', $_POST) ? trim(strip_tags((string)$_POST['sender_name'])) : (string)($savedDraft['sender_name'] ?? $senderDisplayName);
 $senderNameInput = $senderNameInput !== '' ? $senderNameInput : $senderDisplayName;
-$selectedIds = array_map('intval', (array)($_POST['parent_ids'] ?? []));
+$selectedIds = array_map('intval', (array)($_POST['parent_ids'] ?? ($savedDraft['parent_ids'] ?? [])));
 $previewHtml = '';
 $previewSubject = '';
 $previewCount = 0;
@@ -702,6 +726,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($body === '') {
             $body = (string)$presets[$presetId]['body'];
         }
+    }
+
+    if ($emailAction === 'save_draft') {
+        try {
+            pe_ensure_draft_table($pdo);
+            $allowedRecipientIds = array_map('intval', array_column($parents, 'id'));
+            $draftPayload = [
+                'preset_id' => isset($presets[$presetId]) ? $presetId : '',
+                'mode' => $mode === 'selected' ? 'selected' : 'all',
+                'parent_ids' => array_values(array_unique(array_intersect($selectedIds, $allowedRecipientIds))),
+                'subject' => $subject,
+                'body' => pe_sanitize_email_html($body, $templateStyle),
+                'sender_name' => $senderNameInput,
+                'masthead' => [
+                    'name' => $masthead['name'],
+                    'title' => $masthead['title'],
+                    'subtitle' => $masthead['subtitle'],
+                    'headline_label' => $masthead['headline_label'],
+                    'footer' => $masthead['footer'],
+                    'logo' => $masthead['logo'],
+                    'header_image' => $masthead['header_image'],
+                ],
+            ];
+            $saveDraft = $pdo->prepare("INSERT INTO parent_email_drafts (user_id, draft_json)
+                VALUES (:user_id, :draft_json)
+                ON DUPLICATE KEY UPDATE draft_json = VALUES(draft_json), updated_at = CURRENT_TIMESTAMP");
+            $saveDraft->execute([
+                ':user_id' => $sessionUserId,
+                ':draft_json' => json_encode($draftPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            ]);
+            $_SESSION['parent_email_flash'] = ['result' => 'success', 'message' => 'Draft saved. It will be restored when you reopen this page.'];
+        } catch (Throwable $e) {
+            error_log('[Parent Email] Could not save draft: ' . $e->getMessage());
+            $_SESSION['parent_email_flash'] = ['result' => 'error', 'message' => 'Draft could not be saved. Please try again.'];
+        }
+        header('Location: parent-email');
+        exit;
     }
 
     if ($emailAction === 'save_info_note') {
@@ -1399,7 +1460,7 @@ if (!$isAdmin) {
                                     <input type="file" name="attachment" id="attachmentInput" class="custom-file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.txt">
                                     <label class="custom-file-label" for="attachmentInput">Choose file</label>
                                 </div>
-                                <small class="text-muted">Maximum 10 MB. PDF, Office documents, JPG, PNG, or TXT. Preview does not upload or clear the selected file.</small>
+                                <small class="text-muted">Maximum 10 MB. PDF, Office documents, JPG, PNG, or TXT. Attachments are not retained in saved drafts.</small>
                             </div>
 
                             <div id="bulkSendProgress" class="border rounded p-3 mb-3" hidden aria-live="polite">
@@ -1415,6 +1476,9 @@ if (!$isAdmin) {
 
                             <button type="button" id="previewEmailButton" class="btn btn-outline-primary" <?= empty($parents) ? 'disabled' : '' ?>>
                                 <i class="fas fa-eye mr-1"></i> Preview Email
+                            </button>
+                            <button type="submit" name="email_action" value="save_draft" class="btn btn-outline-secondary">
+                                <i class="fas fa-save mr-1"></i> Save Draft
                             </button>
                             <button type="submit" id="downloadPdfButton" name="email_action" value="download_pdf" class="btn btn-outline-success download-pdf-button">
                                 <i class="fas fa-file-pdf mr-1"></i> Download PDF
