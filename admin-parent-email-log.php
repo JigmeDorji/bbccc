@@ -14,6 +14,22 @@ if (!is_admin_role()) { header("Location: unauthorized"); exit; }
 $pdo = pcm_pdo();
 bbcc_mail_queue_ensure_table();
 
+if (isset($_GET['view_message'])) {
+    $messageId = (int)$_GET['view_message'];
+    $messageStmt = $pdo->prepare("SELECT html_body FROM mail_queue WHERE id = :id AND source = 'parent-email' LIMIT 1");
+    $messageStmt->execute([':id' => $messageId]);
+    $emailHtml = $messageStmt->fetchColumn();
+    if (!is_string($emailHtml)) {
+        http_response_code(404);
+        exit('Message not found.');
+    }
+    header('Content-Type: text/html; charset=utf-8');
+    header("Content-Security-Policy: default-src 'none'; img-src data: http: https:; style-src 'unsafe-inline'; font-src data: http: https:");
+    header('X-Content-Type-Options: nosniff');
+    echo $emailHtml;
+    exit;
+}
+
 $rows = $pdo->query("
     SELECT mq.id, mq.to_email, mq.to_name, mq.subject, mq.status, mq.attempts, mq.max_attempts,
            mq.last_error, mq.created_at, mq.sent_at, mq.attachment_name, mq.created_by, mq.batch_id,
@@ -111,7 +127,7 @@ $pageScripts = [
     <div class="table-responsive">
         <table id="emailLogTable" class="table table-bordered table-hover" style="width:100%">
             <thead class="thead-light">
-                <tr><th>#</th><th>Sent By</th><th>Recipient</th><th>Subject</th><th>Attachment</th><th>Status</th><th>Attempts</th><th>Created</th><th>Sent At</th><th>Error</th></tr>
+                <tr><th>#</th><th>Sent By</th><th>Recipient</th><th>Subject</th><th>Message</th><th>Attachment</th><th>Status</th><th>Attempts</th><th>Created</th><th>Sent At</th><th>Error</th></tr>
             </thead>
             <tbody>
             <?php foreach ($rows as $i => $r): ?>
@@ -139,11 +155,12 @@ $pageScripts = [
                     <td><?= h((string)$r['sender_name']) ?></td>
                     <td><?= h((string)($r['to_name'] ?: $r['to_email'])) ?><br><small class="text-muted"><?= h((string)$r['to_email']) ?></small></td>
                     <td><?= h((string)$r['subject']) ?></td>
+                    <td><button type="button" class="btn btn-sm btn-outline-primary view-email-message" data-message-id="<?= (int)$r['id'] ?>"><i class="fas fa-eye mr-1"></i>View</button></td>
                     <td><?= h((string)($r['attachment_name'] ?: '—')) ?></td>
                     <td><span class="badge badge-<?= $badge ?>"><?= $label ?></span></td>
                     <td><?= (int)$r['attempts'] ?>/<?= (int)$r['max_attempts'] ?></td>
-                    <td class="nowrap"><?= $r['created_at'] ? date('d M Y, g:i A', strtotime($r['created_at'])) : '—' ?></td>
-                    <td class="nowrap"><?= $r['sent_at'] ? date('d M Y, g:i A', strtotime($r['sent_at'])) : '—' ?></td>
+                    <td class="nowrap"><?= $r['created_at'] ? h(bbcc_mail_queue_format_datetime((string)$r['created_at'])) : '—' ?></td>
+                    <td class="nowrap"><?= $r['sent_at'] ? h(bbcc_mail_queue_format_datetime((string)$r['sent_at'])) : '—' ?></td>
                     <td class="text-danger small"><?= h((string)($r['last_error'] ?: '—')) ?></td>
                 </tr>
             <?php endforeach; ?>
@@ -159,13 +176,27 @@ $pageScripts = [
 </div>
 </div>
 
+<div class="modal fade" id="emailMessageModal" tabindex="-1" role="dialog" aria-labelledby="emailMessageModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="emailMessageModalTitle">Sent Message</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe id="emailMessageFrame" title="Email message preview" sandbox="" referrerpolicy="no-referrer" style="display:block;width:100%;height:70vh;border:0;"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 $(function(){
-    var dt = $('#emailLogTable').DataTable({pageLength:25, order:[[7,'desc']]});
+    var dt = $('#emailLogTable').DataTable({pageLength:25, order:[[8,'desc']]});
 
     function applyFilters() {
         var status = $('.filter-btn.active').data('filter') || 'all';
-        dt.column(5).search(status === 'all' ? '' : '^' + status + '\\b', true, false);
+        dt.column(6).search(status === 'all' ? '' : '^' + status + '\\b', true, false);
         var sender = $('#senderFilter').val() || '';
         dt.column(1).search(sender === '' ? '' : '^' + sender.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', true, false);
         dt.draw();
@@ -176,6 +207,23 @@ $(function(){
         applyFilters();
     });
     $('#senderFilter').on('change', applyFilters);
+
+    $('.view-email-message').on('click', function () {
+        var messageId = Number($(this).data('message-id'));
+        if (!messageId) return;
+        fetch('admin-parent-email-log.php?view_message=' + encodeURIComponent(messageId), {credentials:'same-origin'})
+            .then(function (response) {
+                if (!response.ok) throw new Error('This message could not be loaded.');
+                return response.text();
+            })
+            .then(function (html) {
+                document.getElementById('emailMessageFrame').srcdoc = html;
+                $('#emailMessageModal').modal('show');
+            })
+            .catch(function (error) {
+                window.alert(error.message || 'This message could not be loaded.');
+            });
+    });
 });
 </script>
 </body>

@@ -7,6 +7,17 @@ function bbcc_mail_queue_is_truthy(string $value): bool {
     return in_array(strtolower(trim($value)), ['1', 'true', 'on', 'yes'], true);
 }
 
+function bbcc_mail_queue_format_datetime($value, string $format = 'd M Y, g:i A'): string {
+    $value = trim((string)$value);
+    if ($value === '') return '';
+    try {
+        $utcTime = new DateTimeImmutable($value, new DateTimeZone('UTC'));
+        return $utcTime->setTimezone(bbcc_app_timezone())->format($format);
+    } catch (Throwable $e) {
+        return $value;
+    }
+}
+
 function bbcc_mail_queue_pdo(): ?PDO {
     static $pdo = null;
     if ($pdo instanceof PDO) {
@@ -26,6 +37,7 @@ function bbcc_mail_queue_pdo(): ?PDO {
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             ]
         );
+        $pdo->exec("SET time_zone = '+00:00'");
         return $pdo;
     } catch (Throwable $e) {
         bbcc_mail_log('MAIL QUEUE DB ERROR: ' . $e->getMessage());
