@@ -208,10 +208,13 @@ $(function(){
     });
     $('#senderFilter').on('change', applyFilters);
 
-    $('.view-email-message').on('click', function () {
+    $('#emailLogTable').on('click', '.view-email-message', function () {
         var messageId = Number($(this).data('message-id'));
         if (!messageId) return;
-        fetch('admin-parent-email-log.php?view_message=' + encodeURIComponent(messageId), {credentials:'same-origin'})
+        var messageUrl = new URL(window.location.href);
+        messageUrl.search = '';
+        messageUrl.searchParams.set('view_message', String(messageId));
+        fetch(messageUrl.toString(), {credentials:'same-origin'})
             .then(function (response) {
                 if (!response.ok) throw new Error('This message could not be loaded.');
                 return response.text();
