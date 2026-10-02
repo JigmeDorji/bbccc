@@ -1477,7 +1477,7 @@ if (!$isAdmin) {
                             <button type="button" id="previewEmailButton" class="btn btn-outline-primary" <?= empty($parents) ? 'disabled' : '' ?>>
                                 <i class="fas fa-eye mr-1"></i> Preview Email
                             </button>
-                            <button type="submit" name="email_action" value="save_draft" class="btn btn-outline-secondary">
+                            <button type="submit" id="saveParentEmailDraftButton" name="email_action" value="save_draft" class="btn btn-outline-secondary">
                                 <i class="fas fa-save mr-1"></i> Save Draft
                             </button>
                             <button type="submit" id="downloadPdfButton" name="email_action" value="download_pdf" class="btn btn-outline-success download-pdf-button">
@@ -2008,6 +2008,18 @@ $(function () {
     $('#bodyEditor').on('input blur', syncEditorBody);
     $('form[method="POST"]').on('submit', function () {
         if ($(this).find('#bodyEditor').length) syncEditorBody();
+    });
+
+    $('#saveParentEmailDraftButton').on('click', function (event) {
+        event.preventDefault();
+        var form = this.form;
+        syncEditorBody();
+        var actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'email_action';
+        actionInput.value = 'save_draft';
+        form.appendChild(actionInput);
+        HTMLFormElement.prototype.submit.call(form);
     });
 
     $('.download-pdf-button').on('click', function (event) {
