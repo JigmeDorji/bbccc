@@ -1,5 +1,18 @@
 Options -Indexes
 
+# Never serve data dumps, logs, docs, env files or spreadsheets, even if
+# they end up on the server (mail_error.log is written to the web root).
+<FilesMatch "(?i)\.(sql|log|md|csv|xlsx?|env|ini|lock|json)$|^Read me">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+RedirectMatch 404 ^/(templates|migrations|include|storage|vendor/composer)/.*\.(sql|php|json|xlsx?|csv|txt)$
+
 # Raise upload limits above the app's own 5MB proof-upload cap.
 # Guarded with IfModule so this is a no-op (not a fatal error) on hosts
 # where PHP runs via FPM/CGI rather than as an Apache module -- see

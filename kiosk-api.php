@@ -201,6 +201,19 @@ function bbcc_verify_kiosk_mobile_session(): bool {
     return true;
 }
 
+/**
+ * Parent id authenticated by phone + PIN in this session, or 0.
+ * sign/sign_batch must act only for this parent -- never for a
+ * client-supplied parent_id.
+ */
+function bbcc_kiosk_authenticated_parent_id(): int {
+    $parentId = (int)($_SESSION['kiosk_parent_id'] ?? 0);
+    if ($parentId <= 0 || (int)($_SESSION['kiosk_parent_expires'] ?? 0) <= time()) {
+        return 0;
+    }
+    return $parentId;
+}
+
 // ═══════════════════════════════════════════════════════════
 // ACTION: Authenticate parent by phone + PIN
 // ═══════════════════════════════════════════════════════════
@@ -209,6 +222,9 @@ if ($action === 'auth') {
         echo json_encode(['ok' => false, 'message' => 'Session expired. Please scan the QR code again at the door.', 'token_expired' => true]);
         exit;
     }
+    // A new login attempt drops any previous parent on this (possibly shared) device.
+    unset($_SESSION['kiosk_parent_id'], $_SESSION['kiosk_parent_expires']);
+
     $phone = preg_replace('/[^0-9]/', '', $_POST['phone'] ?? '');
     $pin   = trim($_POST['pin'] ?? '');
 
@@ -246,6 +262,10 @@ if ($action === 'auth') {
         echo json_encode(['ok' => false, 'message' => 'Invalid phone number or PIN.']);
         exit;
     }
+
+    session_regenerate_id(true);
+    $_SESSION['kiosk_parent_id'] = (int)$parent['id'];
+    $_SESSION['kiosk_parent_expires'] = time() + 600; // 10 min to finish signing
 
     // Load children with approved enrolments
     $kids = $pdo->prepare("
@@ -303,7 +323,11 @@ if ($action === 'sign_batch') {
         exit;
     }
 
-    $parentId = (int)($_POST['parent_id'] ?? 0);
+    $parentId = bbcc_kiosk_authenticated_parent_id();
+    if ($parentId <= 0 || (int)($_POST['parent_id'] ?? 0) !== $parentId) {
+        echo json_encode(['ok' => false, 'message' => 'Session expired. Please enter your phone and PIN again.', 'auth_expired' => true]);
+        exit;
+    }
     $rawActions = (string)($_POST['actions'] ?? '');
     $actions = json_decode($rawActions, true);
 
@@ -414,7 +438,11 @@ if ($action === 'sign') {
         exit;
     }
 
-    $parentId  = (int)($_POST['parent_id'] ?? 0);
+    $parentId  = bbcc_kiosk_authenticated_parent_id();
+    if ($parentId <= 0 || (int)($_POST['parent_id'] ?? 0) !== $parentId) {
+        echo json_encode(['ok' => false, 'message' => 'Session expired. Please enter your phone and PIN again.', 'auth_expired' => true]);
+        exit;
+    }
     $childId   = (int)($_POST['child_id'] ?? 0);
     $signMode  = $_POST['mode'] ?? ''; // 'in' or 'out'
 

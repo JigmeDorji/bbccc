@@ -31,6 +31,7 @@ jobs:
             include/config.php
             .env
             uploads/**
-            README.md
+            templates/**
+            **/*.log
+            **/*.md
             Read me
-            TECH_STACK.md
